@@ -1,0 +1,35 @@
+# pi-skills
+
+Agent skills for [Pi](https://github.com/anthropics/pi).
+
+## Available skills
+
+| Skill | Description |
+|-------|-------------|
+| [use-clawpatch](skills/use-clawpatch/SKILL.md) | Run clawpatch automated code review: map features, review for findings, fix issues, revalidate, and track progress. |
+
+## Installation
+
+Add to your Pi `settings.json`:
+
+```json
+{
+  "packages": [
+    "git:github.com/dhruvkelawala/pi-skills"
+  ]
+}
+```
+
+Or install a single skill:
+
+```json
+{
+  "skills": [
+    "git:github.com/dhruvkelawala/pi-skills/skills/use-clawpatch"
+  ]
+}
+```
+
+## License
+
+MIT
