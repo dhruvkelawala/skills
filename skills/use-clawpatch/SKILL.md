@@ -14,6 +14,20 @@ Clawpatch is a semantic code review tool. It maps a repo into feature records
 (routes, packages, source groups, configs), reviews each with an AI provider,
 and produces typed findings with severity, evidence, and recommendations.
 
+## IMPORTANT: Autonomous execution
+
+When this skill is invoked, **start working immediately**. Do not ask the user
+what to do. The workflow is fully defined below — run the entire loop
+autonomously until completion.
+
+**The goal is 0 open findings.** Run `clawpatch review`, fix every finding,
+revalidate every finding, then run `clawpatch review` again. Repeat this
+cycle until a review round returns 0 new findings. Do not stop between rounds
+to ask for permission — keep going.
+
+After each round: commit, push, and update the HTML dashboard.
+After all rounds: update the PR body with cumulative results.
+
 ## Preflight
 
 ```bash
