@@ -1,0 +1,4 @@
+interface:
+  display_name: "APR"
+  short_description: "Autoreview, commit, push, and open a ready PR"
+  default_prompt: "Use $apr to autoreview these changes, commit them, push the branch, and open a ready-for-review PR."
