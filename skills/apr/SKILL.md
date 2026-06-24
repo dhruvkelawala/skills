@@ -1,6 +1,6 @@
 ---
 name: apr
-description: Run the combined Autoreview and PR publish flow. Use when the user invokes /apr or asks Codex to review local changes, fix accepted findings until clean, commit, push, and open a ready-for-review GitHub pull request.
+description: Run the combined Autoreview and PR publish flow. Use when the user invokes /apr or asks Codex to review local changes, optionally skip review with /apr --skip-review, commit, push, and open or update a ready-for-review GitHub pull request.
 ---
 
 # APR
@@ -13,6 +13,7 @@ Run a complete closeout flow: structured autoreview first, then intentional comm
   - Run autoreview with Claude by default.
   - If the user invokes `/apr codex`, run autoreview with Codex instead.
   - If the user invokes `/apr claude`, run autoreview with Claude explicitly.
+  - If the user invokes `/apr --skip-review` or `/apr skip-review`, skip autoreview entirely.
   - When the selected engine is Claude, pass `--model claude-opus-4-8`.
   - Pass the selected engine on every autoreview command.
   - Open a ready-for-review PR, never a draft PR.
@@ -22,6 +23,7 @@ Run a complete closeout flow: structured autoreview first, then intentional comm
 - Keep review quality higher priority than publishing speed.
 - Never stage unrelated user changes silently.
 - Do not push if review still has accepted/actionable findings unless the user explicitly overrides after seeing the risk.
+- When review is skipped, say so clearly in the final report and do not claim an autoreview clean result.
 - Do not switch review engines if the selected engine is slow or at capacity; retry the selected engine a few times and report the blocker if it cannot complete.
 
 ## Workflow
@@ -46,10 +48,13 @@ Run a complete closeout flow: structured autoreview first, then intentional comm
      - `/apr` means `claude`.
      - `/apr claude` means `claude`.
      - `/apr codex` means `codex`.
-   - If the user passes any other engine name, stop and ask whether they meant `claude` or `codex`.
+     - `/apr --skip-review` means skip autoreview.
+     - `/apr skip-review` also means skip autoreview.
+   - If the user passes any other engine or option, stop and ask whether they meant `claude`, `codex`, or `--skip-review`.
    - If the selected engine is `claude`, set `model_args="--model claude-opus-4-8"`.
    - If the selected engine is `codex`, leave `model_args` empty unless the user explicitly requested a model.
    - Run relevant formatters/tests first when they are obvious from the repo.
+   - If review is skipped, do not run the autoreview helper; continue to staging and commit after tests/proof.
    - Run the autoreview helper on the current patch:
 
 ```bash
@@ -114,5 +119,5 @@ Include:
 - Commit SHA and subject
 - PR URL and base branch
 - Tests/proof run
-- Autoreview command and clean result
+- Autoreview command and clean result, or `review skipped by /apr --skip-review`
 - Any accepted findings fixed or consciously rejected
