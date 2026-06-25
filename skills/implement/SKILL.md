@@ -1,18 +1,18 @@
 ---
 name: implement
-description: Implement a single GitHub issue or Linear ticket as a small, reviewable vertical slice. Use when the user invokes /implement, asks to implement an issue/ticket, or passes a PRD plus one agent-ready issue from /to-issues or /triage.
+description: Implement a single GitHub issue, Linear ticket, or current plan as a small, reviewable vertical slice. Use when the user invokes /implement, /implement plan, asks to implement an issue/ticket, or passes a PRD plus one agent-ready issue from /to-issues or /triage.
 ---
 
 # Implement
 
-Implement one agent-ready work item in small, reviewable chunks.
+Implement one agent-ready work item or current conversation plan in small, reviewable chunks.
 
-This is the build step in the `/ask-matt` idea-to-ship flow. It usually receives a single issue from `/to-issues`, a `ready-for-agent` issue from `/triage`, a Linear ticket, or a PRD/handoff plus exactly one issue to implement.
+This is the build step in the `/ask-matt` idea-to-ship flow. It usually receives a single issue from `/to-issues`, a `ready-for-agent` issue from `/triage`, a Linear ticket, `/implement plan`, or a PRD/handoff plus exactly one issue to implement.
 
 ## Contract
 
-- Work one issue or ticket at a time.
-- Treat the issue body, linked PRD, plan, and acceptance criteria as the source of truth.
+- Work one issue, ticket, or current plan at a time.
+- Treat `/implement plan` as instructions to act on the plan just made in conversation. Otherwise treat the issue body, linked PRD, plan, and acceptance criteria as the source of truth.
 - If the work item is too broad for one reviewable PR, stop and propose a split instead of silently doing a sprawling implementation.
 - Keep changes scoped to the ticket. Preserve unrelated dirty files.
 - From `main`, `master`, or the default branch, create `{type}/{short-description}` where `{type}` is a conventional commit type such as `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `build`, or `ci`.
@@ -28,7 +28,7 @@ This is the build step in the `/ask-matt` idea-to-ship flow. It usually receives
 
 ### 1. Resolve the work item
 
-Read the full issue or ticket: title, body, comments, labels/status, acceptance criteria, linked PRD/plan/ADR/handoff/parent issue, and any blockers. For GitHub, use the GitHub app when available, otherwise `gh`. For Linear, use the Linear app when available. If the user passes a PRD plus an issue, read both, but implement only the single issue.
+For `/implement plan`, skip issue/ticket lookup and use the current conversation plan plus any referenced PRD, ADR, handoff, or repo docs; if no plan is present, ask for it. Otherwise read the full issue or ticket: title, body, comments, labels/status, acceptance criteria, linked PRD/plan/ADR/handoff/parent issue, and blockers. For GitHub, use the GitHub app when available, otherwise `gh`; for Linear, use the Linear app when available.
 
 ### 2. Establish repo state
 
