@@ -1,6 +1,4 @@
-# pi-skills
-
-Agent skills for [Pi](https://github.com/anthropics/pi).
+# skills
 
 ## Available skills
 
