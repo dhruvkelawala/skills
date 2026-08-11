@@ -1,13 +1,11 @@
+---
+name: code-walkthrough
+description: Guide an interactive, file-by-file codebase walkthrough with orientation, a visual handbook, a living review checklist, fixes, tests, and incremental commits. Use when the user wants to understand or audit an unfamiliar codebase, inherit agent-written code, onboard to a project, or perform a pre-release review at their own pace.
+---
+
 # Code Walkthrough
 
 Guided codebase review for engineers inheriting or auditing agent-written (or unfamiliar) codebases. Walk every file, fix as you go, maintain a living checklist, and produce a visual handbook.
-
-## When to use
-
-- New to a codebase and want to understand it systematically
-- Pre-release audit of agent-built code
-- Onboarding onto a project you didn't write
-- User says "walk me through this codebase", "review this codebase", "I want to understand this code"
 
 ## Principles
 
