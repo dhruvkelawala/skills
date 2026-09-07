@@ -117,7 +117,7 @@ In stacked mode, also recheck the predecessor before declaring ready: `gh pr vie
 - **Standalone without `--merge`:** record `ready` and report the PR.
 - **Standalone with `--merge`:** re-run the gate once more without `--watch`, confirm the HEAD is unchanged, merge with the repository's normal merge method (`gh pr merge --auto` when branch protection enforces it, otherwise `gh pr merge --squash` unless the repo says otherwise), and record `merged`.
 
-Then, only once the run is `ready` or `merged` and nothing is left to push, offer the walkthrough: run `/hunk-walkthrough` on the PR so the user can read the settled diff with numbered notes. Inside Herdr it opens its own tab; elsewhere it asks the user to launch Hunk once and attaches.
+Then, only once the run is `ready` or `merged` and nothing is left to push, offer the walkthrough: run `/hunk-walkthrough` on the PR so the user can read the settled diff with numbered notes. Inside Herdr it opens Hunk in its own tab; elsewhere it posts the notes as clickable file:line references.
 
 Leave the branch and any worktree for the user to clean up.
 
