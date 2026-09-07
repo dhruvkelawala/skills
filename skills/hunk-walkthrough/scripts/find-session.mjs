@@ -44,27 +44,31 @@ export function projectSessions(listing, repoRoot) {
     .map((s) => [s.sessionId, s.repoRoot, s.title ?? "", String(s.pid ?? ""), String(s.fileCount ?? "")].join("\t"));
 }
 
-export function pickNewSession(listing, { repoRoot, knownIds, panePids }) {
+export function pickNewSession(listing, { repoRoot, knownIds, panePids = null }) {
   const known = new Set(knownIds.map(String));
-  const pids = new Set(panePids.map(Number));
+  const pids = panePids === null ? null : new Set(panePids.map(Number));
   return (listing?.sessions ?? [])
     .filter((s) => s.repoRoot === repoRoot)
     .filter((s) => !known.has(String(s.sessionId)))
-    .filter((s) => pids.has(Number(s.pid)))
+    .filter((s) => pids === null || pids.has(Number(s.pid)))
     .map((s) => String(s.sessionId));
 }
 
-export async function identify({ repoRoot, paneId, knownIds, retries = 10, delayMs = 500, runners = defaultRunners, wait }) {
+export async function identify({ repoRoot, paneId = null, knownIds, retries = 10, delayMs = 500, runners = defaultRunners, wait }) {
   const sleep = wait ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const where = paneId ? ` in pane ${paneId}` : "";
   let last = [];
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const [listing, panePids] = await Promise.all([runners.sessions(), runners.panePids(paneId)]);
+    const [listing, panePids] = await Promise.all([
+      runners.sessions(),
+      paneId ? runners.panePids(paneId) : Promise.resolve(null),
+    ]);
     last = pickNewSession(listing, { repoRoot, knownIds, panePids });
     if (last.length === 1) return { ok: true, sessionId: last[0] };
-    if (last.length > 1) return { ok: false, reason: `ambiguous: ${last.length} new sessions in pane ${paneId}` };
+    if (last.length > 1) return { ok: false, reason: `ambiguous: ${last.length} new sessions${where}` };
     if (attempt < retries) await sleep(delayMs);
   }
-  return { ok: false, reason: `no new Hunk session for ${repoRoot} in pane ${paneId} after ${retries + 1} checks` };
+  return { ok: false, reason: `no new Hunk session for ${repoRoot}${where} after ${retries + 1} checks` };
 }
 
 export function parseArgs(argv) {
@@ -93,7 +97,7 @@ function usage() {
   return [
     "usage: find-session.mjs snapshot",
     "       find-session.mjs list --repo <root>",
-    "       find-session.mjs identify --repo <root> --pane <herdr-pane-id> --before <snapshot-file> [--retries N] [--delay-ms N]",
+    "       find-session.mjs identify --repo <root> --before <snapshot-file> [--pane <herdr-pane-id>] [--retries N] [--delay-ms N]",
   ].join("\n");
 }
 
@@ -116,7 +120,7 @@ async function main(argv) {
       return 0;
     }
     case "identify": {
-      if (!args.repoRoot || !args.paneId || !args.before) { console.error(usage()); return 2; }
+      if (!args.repoRoot || !args.before) { console.error(usage()); return 2; }
       let knownIds;
       try {
         knownIds = JSON.parse(readFileSync(args.before, "utf8")).sessionIds ?? [];
@@ -124,7 +128,7 @@ async function main(argv) {
         console.error(`error: cannot read snapshot ${args.before}`);
         return 2;
       }
-      const result = await identify({ repoRoot: args.repoRoot, paneId: args.paneId, knownIds, retries: args.retries, delayMs: args.delayMs });
+      const result = await identify({ repoRoot: args.repoRoot, paneId: args.paneId ?? null, knownIds, retries: args.retries, delayMs: args.delayMs });
       if (!result.ok) { console.error(`error: ${result.reason}`); return 1; }
       console.log(result.sessionId);
       return 0;

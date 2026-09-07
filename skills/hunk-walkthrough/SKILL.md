@@ -1,12 +1,23 @@
 ---
-name: herdr-hunk-walkthrough
-description: Open a branch or pull request’s full changes in Hunk inside a new Herdr tab (or a 50/50 split with `split`), then add a numbered, narrative code walkthrough. Use when the user asks to review, explain, or walk through a diff/PR in Hunk on Herdr, including /herdr-hunk-walkthrough split.
-compatibility: Requires a Herdr-managed pane plus git, gh, herdr, hunk, and node on PATH.
+name: hunk-walkthrough
+description: Open a branch or pull request’s full changes in Hunk with a numbered, narrative code walkthrough. Inside Herdr it opens Hunk in a new tab (or a 50/50 split with `split`); in Claude Code, Codex, T3Code, or any other host it attaches to a Hunk the user launches. Use when the user asks to review, explain, or walk through a diff/PR in Hunk, including /hunk-walkthrough split.
+compatibility: Requires git, gh, hunk, and node on PATH. Herdr surface control needs a Herdr-managed pane and herdr on PATH.
 ---
 
-# Herdr Hunk Walkthrough
+# Hunk Walkthrough
 
-Turn a finished changeset into a guided Hunk review: one Herdr-hosted Hunk surface, the complete diff, and a small set of numbered agent notes that tell the implementation story. Arrange Hunk's file stream in that same story order so next-comment navigation advances monotonically.
+Turn a finished changeset into a guided Hunk review: one Hunk surface the user can see, the complete diff, and a small set of numbered agent notes that tell the implementation story.
+
+## Host
+
+Decide once, before anything else:
+
+```bash
+test "${HERDR_ENV:-}" = 1 && host=herdr || host=plain
+```
+
+- **herdr**: the agent owns the surface. It creates a Herdr tab or split, launches Hunk in it, and focuses it. Every step below applies.
+- **plain** (Claude Code, Codex, T3Code Desktop, a bare terminal): the agent cannot open a pane the user can see, so the user launches Hunk and the agent attaches. Skip step 2's surface work and step 3's `herdr pane run`; follow the **plain host** notes in those steps instead. The pinned range, the ordered file stream, and the comments are identical. Arrange Hunk's file stream in that same story order so next-comment navigation advances monotonically.
 
 ## Boundaries
 
@@ -17,7 +28,7 @@ Turn a finished changeset into a guided Hunk review: one Herdr-hosted Hunk surfa
 
 ## Mode
 
-Default to `tab` mode: open Hunk in a new Herdr tab in the caller's workspace. If the invocation includes a standalone `split` token, as in `/herdr-hunk-walkthrough split`, use `split` mode: open Hunk in a 50/50 pane split beside the caller instead. A PR number, branch name, or other work item may follow the mode token.
+Herdr only. Default to `tab` mode: open Hunk in a new Herdr tab in the caller's workspace. If the invocation includes a standalone `split` token, as in `/hunk-walkthrough split`, use `split` mode: open Hunk in a 50/50 pane split beside the caller instead. A PR number, branch name, or other work item may follow the mode token. On a plain host the token is ignored.
 
 ## 1. Pin the changeset
 
@@ -45,15 +56,9 @@ Set the review range to `refs/herdr/pr-<pr-number>-base...refs/herdr/pr-<pr-numb
 3. For a non-PR branch/range, resolve both endpoints to immutable commit OIDs using the user's target or the merge-base with the default branch, and use `<base-oid>...<head-oid>`.
 4. Record `review_range`, the changed-file list, and diffstat from `git diff "$review_range"`. Done when the immutable range names exactly the intended changes, including a merged PR whose source branch was deleted.
 
-## 2. Establish Herdr
+## 2. Establish the surface
 
-Verify the caller is inside Herdr before controlling layout:
-
-```bash
-test "${HERDR_ENV:-}" = 1
-```
-
-If false, stop and tell the user this workflow must run from a Herdr-managed pane.
+**Plain host:** resolve the bundled files below and take the session snapshot, then skip the rest of this step.
 
 Resolve these bundled files relative to this `SKILL.md` and keep their absolute paths for the run:
 
@@ -63,7 +68,7 @@ Resolve these bundled files relative to this `SKILL.md` and keep their absolute 
 
 Never substitute a repo-controlled extension. Hunk extensions execute with the user's permissions.
 
-Read the installed CLI rather than assuming syntax:
+**Herdr:** read the installed CLI rather than assuming syntax:
 
 ```bash
 herdr tab
@@ -108,9 +113,24 @@ If the user changes mode after the surface exists, keep the Hunk process: move a
 
 ## 3. Load the complete diff
 
-This workflow is the deliberate exception to the generic Hunk-review rule that asks the user to launch Hunk: start the interactive TUI only through `herdr pane run` in its user-visible surface, never directly in the agent's terminal.
+Never start the interactive TUI in the agent's own terminal. In Herdr it starts in the user-visible pane through `herdr pane run`; on a plain host the user starts it.
 
-For a new pane, start Hunk through Herdr with the immutable range:
+**Plain host:** print exactly this one command for the user to run in their terminal, with the real range and absolute extension path filled in, and wait:
+
+```bash
+hunk diff '<review_range>' --mode auto --extension '<absolute-walkthrough-extension>'
+```
+
+Then identify the session without a pane: the helper polls until exactly one session for this repo is new since the snapshot. It keeps polling for up to a minute by default; pass `--retries` for longer.
+
+```bash
+hunk_session_id="$(node <absolute-find-session-script> identify \
+  --repo "$repo_root" --before "$before_sessions" --retries 120)"
+```
+
+A non-zero exit means nothing launched yet or two sessions appeared; ask once, then retry. Continue at "From this point forward".
+
+**Herdr:** for a new pane, start Hunk through Herdr with the immutable range:
 
 ```bash
 herdr pane run <hunk-pane-id> "hunk diff '$review_range' --mode auto --extension '<absolute-walkthrough-extension>'"
@@ -195,7 +215,7 @@ Navigate to waypoint 1:
 hunk session navigate "$hunk_session_id" --file <first-file> --hunk <n>
 ```
 
-Then focus the requested surface. In `tab` mode, focus the Hunk tab:
+Then focus the requested surface. **Plain host:** nothing to focus; Hunk is already in front of the user. Skip to the verification commands. **Herdr**, in `tab` mode, focus the Hunk tab:
 
 ```bash
 herdr tab focus <hunk-tab-id>
@@ -214,7 +234,7 @@ hunk session context "$hunk_session_id" --json
 hunk session comment list "$hunk_session_id"
 ```
 
-For `tab` mode:
+Herdr only, for `tab` mode:
 
 ```bash
 herdr tab get <hunk-tab-id>
@@ -229,8 +249,8 @@ herdr pane layout --pane "$HERDR_PANE_ID"
 Report only:
 
 - loaded range and file count
-- requested Herdr surface: new tab or 50/50 split, and focused Hunk pane/tab
+- surface: Herdr tab or split with the focused pane/tab, or the user-launched Hunk on a plain host
 - walkthrough comment count
 - instruction to use Hunk’s next-comment navigation
 
-The walkthrough is complete when Hunk shows the full pinned changeset, waypoint 1 is selected, agent notes are visible, and the requested Herdr surface has focus.
+The walkthrough is complete when Hunk shows the full pinned changeset, waypoint 1 is selected, agent notes are visible, and, in Herdr, the requested surface has focus.
