@@ -1,12 +1,12 @@
 ---
 name: hunk-walkthrough
-description: Open a branch or pull request’s full changes in Hunk with a numbered, narrative code walkthrough. Inside Herdr it opens Hunk in a new tab (or a 50/50 split with `split`); in Claude Code, Codex, T3Code, or any other host it attaches to a Hunk the user launches. Use when the user asks to review, explain, or walk through a diff/PR in Hunk, including /hunk-walkthrough split.
-compatibility: Requires git, gh, hunk, and node on PATH. Herdr surface control needs a Herdr-managed pane and herdr on PATH.
+description: Walk a branch or pull request’s full changes as a numbered, story-ordered code walkthrough. Inside Herdr it opens the diff in Hunk in a new tab (or a 50/50 split with `split`) with the notes attached; in Claude Code, Codex, T3Code, or any other host it delivers the same notes as clickable file:line references in the host's own diff view. Use when the user asks to review, explain, or walk through a diff/PR, including /hunk-walkthrough split.
+compatibility: Requires git and gh on PATH. The Herdr path also needs herdr, hunk, and node.
 ---
 
 # Hunk Walkthrough
 
-Turn a finished changeset into a guided Hunk review: one Hunk surface the user can see, the complete diff, and a small set of numbered agent notes that tell the implementation story.
+Turn a finished changeset into a guided review: the complete diff in front of the user and a small set of numbered notes that tell the implementation story.
 
 ## Host
 
@@ -16,8 +16,8 @@ Decide once, before anything else:
 test "${HERDR_ENV:-}" = 1 && host=herdr || host=plain
 ```
 
-- **herdr**: the agent owns the surface. It creates a Herdr tab or split, launches Hunk in it, and focuses it. Every step below applies.
-- **plain** (Claude Code, Codex, T3Code Desktop, a bare terminal): the agent cannot open a pane the user can see, so the user launches Hunk and the agent attaches. Skip step 2's surface work and step 3's `herdr pane run`; follow the **plain host** notes in those steps instead. The pinned range, the ordered file stream, and the comments are identical. Arrange Hunk's file stream in that same story order so next-comment navigation advances monotonically.
+- **herdr**: the agent owns the surface. It creates a Herdr tab or split, launches Hunk in it, attaches the notes as Hunk comments, and focuses it. Steps 1 to 5 all apply.
+- **plain** (Claude Code, Codex, T3Code Desktop, a bare terminal): Hunk is not used. The host already renders diffs and turns `path:line` into a clickable link, so the walkthrough is delivered there. Run step 1, then step 4 to build the waypoints, then the **plain host delivery** in step 5. Steps 2 and 3 are Herdr only. Arrange Hunk's file stream in that same story order so next-comment navigation advances monotonically.
 
 ## Boundaries
 
@@ -58,7 +58,7 @@ Set the review range to `refs/herdr/pr-<pr-number>-base...refs/herdr/pr-<pr-numb
 
 ## 2. Establish the surface
 
-**Plain host:** resolve the bundled files below and take the session snapshot, then skip the rest of this step.
+Herdr only.
 
 Resolve these bundled files relative to this `SKILL.md` and keep their absolute paths for the run:
 
@@ -113,24 +113,9 @@ If the user changes mode after the surface exists, keep the Hunk process: move a
 
 ## 3. Load the complete diff
 
-Never start the interactive TUI in the agent's own terminal. In Herdr it starts in the user-visible pane through `herdr pane run`; on a plain host the user starts it.
+Herdr only. Start the interactive TUI only through `herdr pane run` in its user-visible surface, never in the agent's own terminal.
 
-**Plain host:** print exactly this one command for the user to run in their terminal, with the real range and absolute extension path filled in, and wait:
-
-```bash
-hunk diff '<review_range>' --mode auto --extension '<absolute-walkthrough-extension>'
-```
-
-Then identify the session without a pane: the helper polls until exactly one session for this repo is new since the snapshot. It keeps polling for up to a minute by default; pass `--retries` for longer.
-
-```bash
-hunk_session_id="$(node <absolute-find-session-script> identify \
-  --repo "$repo_root" --before "$before_sessions" --retries 120)"
-```
-
-A non-zero exit means nothing launched yet or two sessions appeared; ask once, then retry. Continue at "From this point forward".
-
-**Herdr:** for a new pane, start Hunk through Herdr with the immutable range:
+For a new pane, start Hunk through Herdr with the immutable range:
 
 ```bash
 herdr pane run <hunk-pane-id> "hunk diff '$review_range' --mode auto --extension '<absolute-walkthrough-extension>'"
@@ -165,7 +150,7 @@ The Hunk file set must equal `git diff --name-only "$review_range"`. Reload the 
 
 ## 4. Build and order the walkthrough
 
-Read the review structure first. Inspect raw patches or local files only for the architectural waypoints you need.
+Read the review structure first: in Herdr, `hunk session review`; on a plain host, `git diff "$review_range"` with `--stat` then the patch. Inspect raw patches or local files only for the architectural waypoints you need.
 
 Create **6–10 draft comments** that trace one end-to-end path through the change. Prefer this order:
 
@@ -176,7 +161,7 @@ Create **6–10 draft comments** that trace one end-to-end path through the chan
 5. side effects and idempotency
 6. tests that prove the contract
 
-Make the narrative realizable as one top-to-bottom Hunk stream:
+Make the narrative realizable as one top-to-bottom stream:
 
 - Each annotated file occupies one contiguous waypoint block; do not leave a file and return to it later.
 - Within one file, targets advance by rendered source position. Use at most one waypoint per hunk; consolidate comments when the conceptual order would otherwise move backward or share an anchor.
@@ -184,6 +169,8 @@ Make the narrative realizable as one top-to-bottom Hunk stream:
 - Only after this normalization, number summaries `N/total — <one-sentence waypoint>` in stream order.
 
 Each rationale explains what happens, why this seam owns it, and the invariant or risk to notice. Keep comments instructional rather than evaluative. Do not annotate every hunk. Target changed lines when possible; use `hunkNumber` when the key symbol is unchanged context inside a changed hunk.
+
+**Plain host:** stop here and go to step 5's plain host delivery. The rest of this step attaches the notes to a Hunk session.
 
 Before applying comments, write the complete deduplicated file order — annotated blocks first, then unannotated files — through the bundled helper:
 
@@ -209,13 +196,25 @@ Done when every major behavior belongs to one waypoint, Hunk's file stream match
 
 ## 5. Hand control to the user
 
-Navigate to waypoint 1:
+**Plain host delivery.** Post the walkthrough in chat, in stream order, one entry per waypoint, using the host's clickable reference form (`path:line`, new-side line for changed lines). Shape:
+
+```md
+Walkthrough of <range> (<n> files, <total> waypoints)
+
+1/total — <one-sentence waypoint>
+   `src/entry.ts:42` — <rationale: what happens, why this seam owns it, the invariant or risk>
+2/total — ...
+```
+
+Then one line naming the files changed but not annotated. Do not paste hunks; the host's diff view shows them when the reference is clicked. Done when every waypoint has a clickable reference and the list reads as one story top to bottom.
+
+**Herdr.** Navigate to waypoint 1:
 
 ```bash
 hunk session navigate "$hunk_session_id" --file <first-file> --hunk <n>
 ```
 
-Then focus the requested surface. **Plain host:** nothing to focus; Hunk is already in front of the user. Skip to the verification commands. **Herdr**, in `tab` mode, focus the Hunk tab:
+Then focus the requested surface. In `tab` mode, focus the Hunk tab:
 
 ```bash
 herdr tab focus <hunk-tab-id>
@@ -249,8 +248,8 @@ herdr pane layout --pane "$HERDR_PANE_ID"
 Report only:
 
 - loaded range and file count
-- surface: Herdr tab or split with the focused pane/tab, or the user-launched Hunk on a plain host
+- Herdr: the surface (tab or split) and the focused pane/tab; plain host: nothing beyond the walkthrough itself
 - walkthrough comment count
 - instruction to use Hunk’s next-comment navigation
 
-The walkthrough is complete when Hunk shows the full pinned changeset, waypoint 1 is selected, agent notes are visible, and, in Herdr, the requested surface has focus.
+In Herdr, the walkthrough is complete when Hunk shows the full pinned changeset, waypoint 1 is selected, agent notes are visible, and the requested surface has focus. On a plain host it is complete when the numbered, linked walkthrough is posted.
