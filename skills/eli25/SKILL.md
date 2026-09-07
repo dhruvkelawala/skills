@@ -1,6 +1,6 @@
 ---
 name: eli25
-description: Explain a topic simply and visually to a software engineer as a neo-brutalist HTML page with big pictures and few words, optionally deployed to Tailscale or Vercel. Use when the user invokes /eli25 or asks for a clear picture explainer that is approachable without being childish.
+description: Explain a topic simply and visually to a software engineer as a neo-brutalist HTML page with big pictures and few words, optionally deployed to Tailscale or Vercel; shown in terminal-browser inside Herdr, otherwise in the user's browser. Use when the user invokes /eli25 or asks for a clear picture explainer that is approachable without being childish.
 ---
 
 # eli25
@@ -40,14 +40,14 @@ Three states: system (default), light, dark. The page follows the OS until the r
 ## Deliver
 
 1. Write the page to `~/.agent/diagrams/<topic-slug>-eli25.html`. Verify it renders: open headless, check system, light, and dark via the toggle, no horizontal overflow.
-2. Show it. When `command -v terminal-browser` succeeds, open the page beside the conversation and stop there for the local case:
+2. Show it. Inside Herdr (`test "${HERDR_ENV:-}" = 1`) and with `terminal-browser` on PATH, open the page beside the conversation:
 
      ```bash
      terminal-browser new-tab ~/.agent/diagrams/<topic-slug>-eli25.html
      ```
 
-     That reuses this terminal tab's browser when one is open and otherwise opens one in a split to the right. Without `terminal-browser`, open the file in the OS browser.
-3. Publish per `--deploy`, then open the resulting URL the same way, terminal-browser first:
+     That reuses this terminal tab's browser when one is open and otherwise opens one in a split to the right. Anywhere else (Claude Code, Codex, T3Code, a bare terminal), open the file in the user's default browser with `open` on macOS or `xdg-open` on Linux, even if `terminal-browser` happens to be installed.
+3. Publish per `--deploy`, then open the resulting URL the same way, Herdr terminal-browser or the user's browser:
    - **none:** nothing further; the page is already showing.
    - **tailscale:** serve the diagrams directory on the tailnet and report the page URL. Only devices on the tailnet can reach it.
 
