@@ -28,7 +28,7 @@ branch: <name>
 stage: contract | implemented | reviewed | verified | published | watching | ready | merged | blocked
 head: <sha the stage was proven on>
 repairs: <count used>
-watcher_model: <model the stage-6 subagent ran on, once spawned>
+watcher: <role and model the stage-6 subagent ran as, once spawned>
 pr: <url once published>
 ```
 
@@ -100,7 +100,7 @@ Record the PR URL and HEAD.
 
 This stage is polling plus small repairs, so it runs in a **watcher subagent** on a cheaper model than the orchestrator whenever the host can spawn one. The orchestrator keeps the run record and the final verdict; the watcher does the waiting. Without subagent support, the orchestrator runs `/pr-watch` itself with the same rules.
 
-1. **Spawn the watcher** with a self-contained prompt. Read [the watcher prompt](references/watcher-prompt.md) and fill its slots: repo, PR number and URL, expected HEAD, `base_sha`, branch, mode and predecessor PR, reviewer logins and request comment, remaining repair budget, and the absolute path of `pr-watch/scripts/pr-gate.mjs`. Pick the model from the host's cheaper tier: in Claude Code pass `model: sonnet`; in Pi or Hermes pass the provider's mid-tier model id from the user's enabled models; in Codex use the configured lightweight model. Record the model in the run record.
+1. **Spawn the watcher** with a self-contained prompt. Read [the watcher prompt](references/watcher-prompt.md) and fill its slots: repo, PR number and URL, expected HEAD, `base_sha`, branch, mode and predecessor PR, reviewer logins and request comment, remaining repair budget, and the absolute path of `pr-watch/scripts/pr-gate.mjs`. Spawn it as the host's **cheapest implementation-capable subagent**, on the current branch, not in a fresh worktree. The exact role or model per host is in [watcher hosts](references/watcher-hosts.md); use that mapping rather than judging the task's difficulty, because the prompt already bounds it and escalation covers the rest. Record the role and model in the run record.
 2. **Do not touch the branch while the watcher runs.** Its pushes are the only HEAD changes during this stage.
 3. **Consume the report.** The watcher returns one structured block: final HEAD, gate state, repairs made against the budget, findings rejected with the reply posted, escalations, and reasons still open. Treat it as evidence, not truth: re-run the gate once without `--watch` at the reported HEAD and require exit `0` before recording `ready`.
 4. **Handle escalations yourself.** The watcher escalates instead of repairing when a finding is tagged security, data loss, or credentials; when a fix would touch a path outside `in_scope`; when a repair fails twice; or when a human requested changes. Each escalation is a stage 3 repair: fix, `/code-review` from `base_sha`, `/verify`, `/apr --no-watch`, then spawn a fresh watcher with the remaining budget for the new HEAD.
