@@ -10,7 +10,7 @@
 | [code-walkthrough](skills/code-walkthrough/SKILL.md) | Paced, file-by-file review of an unfamiliar or agent-written codebase, fixing as you go with a living checklist. |
 | [eli25](skills/eli25/SKILL.md) | Explain a topic simply and visually to a software engineer as a neo-brutalist HTML page, optionally deployed to Tailscale or Vercel. |
 | [explain-diff](skills/explain-diff/SKILL.md) | Explain a diff, commit, branch, or PR in plain language as a fixed teaching spine with a concrete end-to-end trace; the spine source for visual-diff. |
-| [herdr-hunk-walkthrough](skills/herdr-hunk-walkthrough/SKILL.md) | Open a full PR diff in a Herdr Hunk tab (or a split with `split`) with a numbered code walkthrough. |
+| [hunk-walkthrough](skills/hunk-walkthrough/SKILL.md) | Open a full PR diff in Hunk with a numbered code walkthrough: a Herdr tab or split inside Herdr, a user-launched Hunk in Claude Code, Codex, or T3Code. |
 | [idea-foundry](skills/idea-foundry/SKILL.md) | Generate or pressure-test ambitious project ideas through research, scoring, red-teaming, and pitching. |
 | [issue-to-pr](skills/issue-to-pr/SKILL.md) | Take one GitHub issue end to end into a merge-ready PR by chaining /build, /code-review until clean, /verify, /apr, and /pr-watch, standalone or stacked. |
 | [product-description](skills/product-description/SKILL.md) | Build a prose "product description" repo describing what the user sees and exactly what happens when they act, drafted from code and tests, then verified and triaged into a bug list. |

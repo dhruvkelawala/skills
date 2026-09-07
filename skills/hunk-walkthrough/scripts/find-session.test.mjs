@@ -46,6 +46,19 @@ test("identify fails closed on ambiguity and on timeout", async () => {
   assert.match(r2.reason, /no new Hunk session/);
 });
 
+test("pickNewSession without a pane uses set difference only", () => {
+  const now = listing([s("old", 10), s("new-a", 11), s("new-other-repo", 12, "/x")]);
+  assert.deepEqual(pickNewSession(now, { repoRoot: REPO, knownIds: ["old"] }), ["new-a"]);
+});
+
+test("identify without a pane never calls panePids", async () => {
+  let paneCalls = 0;
+  const runners = { sessions: async () => listing([s("old", 1), s("fresh", 2)]), panePids: async () => { paneCalls++; return []; } };
+  const result = await identify({ repoRoot: REPO, knownIds: ["old"], retries: 0, runners, wait: async () => {} });
+  assert.deepEqual(result, { ok: true, sessionId: "fresh" });
+  assert.equal(paneCalls, 0);
+});
+
 test("parseArgs reads the identify flags", () => {
   const a = parseArgs(["identify", "--repo", REPO, "--pane", "p9", "--before", "/tmp/x.json", "--retries", "3", "--delay-ms", "100"]);
   assert.equal(a.command, "identify");

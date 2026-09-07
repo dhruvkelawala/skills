@@ -1,6 +1,6 @@
 ---
 name: code-walkthrough
-description: Guide a paced, file-by-file review of an unfamiliar or agent-written codebase, fixing small things as you go, keeping a living checklist, and filing the rest as issues. Use when the user wants to inherit, audit, onboard to, or pre-release review a whole codebase at their own pace. For one changeset use explain-diff or herdr-hunk-walkthrough instead.
+description: Guide a paced, file-by-file review of an unfamiliar or agent-written codebase, fixing small things as you go, keeping a living checklist, and filing the rest as issues. Use when the user wants to inherit, audit, onboard to, or pre-release review a whole codebase at their own pace. For one changeset use explain-diff or hunk-walkthrough instead.
 ---
 
 # Code walkthrough
