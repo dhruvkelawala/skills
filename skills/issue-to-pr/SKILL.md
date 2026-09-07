@@ -28,6 +28,7 @@ branch: <name>
 stage: contract | implemented | reviewed | verified | published | watching | ready | merged | blocked
 head: <sha the stage was proven on>
 repairs: <count used>
+watcher_model: <model the stage-6 subagent ran on, once spawned>
 pr: <url once published>
 ```
 
@@ -97,11 +98,18 @@ Record the PR URL and HEAD.
 
 ## 6. Watch
 
-Load and follow `/pr-watch` with the remaining repair budget. It polls CI and the configured review agents, repairs findings through `/apr --no-watch`, and returns when the gate is green or the budget is spent. Any HEAD change during this stage invalidates stages 3 to 5 for that HEAD. `/pr-watch` covers a repair by handing it to `/apr --no-watch`, which runs focused tests and autoreview once, so a repair here needs no manual return to stage 3 unless the change is large enough that a full `/code-review` is warranted.
+This stage is polling plus small repairs, so it runs in a **watcher subagent** on a cheaper model than the orchestrator whenever the host can spawn one. The orchestrator keeps the run record and the final verdict; the watcher does the waiting. Without subagent support, the orchestrator runs `/pr-watch` itself with the same rules.
+
+1. **Spawn the watcher** with a self-contained prompt. Read [the watcher prompt](references/watcher-prompt.md) and fill its slots: repo, PR number and URL, expected HEAD, `base_sha`, branch, mode and predecessor PR, reviewer logins and request comment, remaining repair budget, and the absolute path of `pr-watch/scripts/pr-gate.mjs`. Pick the model from the host's cheaper tier: in Claude Code pass `model: sonnet`; in Pi or Hermes pass the provider's mid-tier model id from the user's enabled models; in Codex use the configured lightweight model. Record the model in the run record.
+2. **Do not touch the branch while the watcher runs.** Its pushes are the only HEAD changes during this stage.
+3. **Consume the report.** The watcher returns one structured block: final HEAD, gate state, repairs made against the budget, findings rejected with the reply posted, escalations, and reasons still open. Treat it as evidence, not truth: re-run the gate once without `--watch` at the reported HEAD and require exit `0` before recording `ready`.
+4. **Handle escalations yourself.** The watcher escalates instead of repairing when a finding is tagged security, data loss, or credentials; when a fix would touch a path outside `in_scope`; when a repair fails twice; or when a human requested changes. Each escalation is a stage 3 repair: fix, `/code-review` from `base_sha`, `/verify`, `/apr --no-watch`, then spawn a fresh watcher with the remaining budget for the new HEAD.
+
+Any HEAD change during this stage invalidates stages 3 to 5 for that HEAD. The watcher covers its own repairs by handing them to `/apr --no-watch`, which runs focused tests and autoreview once, so a watcher repair needs no manual return to stage 3.
 
 In stacked mode, also recheck the predecessor before declaring ready: `gh pr view <predecessor> --json state,headRefOid`. If its HEAD moved, rebase the layer onto it: `gh stack sync` when tracked, otherwise `git fetch origin <predecessor branch>` then `git rebase --onto origin/<predecessor branch> <old base_sha> <branch>`. Resolve conflicts, push with `--force-with-lease`, update `base_sha`, and return to stage 3. If the predecessor merged, the layer's PR now retargets the trunk; treat that as the new base and continue. If it closed without merging, stop as `blocked`.
 
-**Complete when:** the gate is green at the current HEAD, or the budget or timeout is exhausted with open reasons reported.
+**Complete when:** the orchestrator's own gate run exits `0` at the watcher's reported HEAD, or the budget or timeout is exhausted with open reasons reported.
 
 ## 7. Stop or merge
 
