@@ -40,7 +40,9 @@ Loop:
    finding fails to repair twice.
 6. Each code repair costs one from the budget. Push it by running the
    `/apr --no-watch --base {base_sha}` skill; it runs focused tests,
-   autoreview, commit, and push. Then return to step 1. When the budget is
+   autoreview, commit, and push. Then update the PR body's Verification
+   HEAD and add one line under Risks and follow-ups naming the repair,
+   with `gh pr edit --body-file`. Then return to step 1. When the budget is
    0, stop and report BUDGET.
 
 Report, and nothing else, in this exact shape:

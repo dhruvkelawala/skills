@@ -43,15 +43,15 @@ contract:
 
 Work one acceptance criterion at a time, following `/tdd` at `test_seam`:
 
-1. Write one failing test that states the criterion in the project's domain language. Run it and see it fail for the right reason.
-2. Write the smallest code that passes it, at the real integration point, so the slice moves behavior end to end.
+1. Write one failing test that states the criterion in the project's domain language. Run it and see it fail for the right reason. Keep the failing assertion lines from the runner output; they are the red half of the evidence.
+2. Write the smallest code that passes it, at the real integration point, so the slice moves behavior end to end. Keep the passing summary line; that is the green half.
 3. Run the focused verification command for the touched paths and the typecheck when the project has one.
 4. Commit the slice with a conventional-commit subject. One slice, one commit.
 5. Next criterion.
 
 While editing: follow existing repo patterns, keep abstractions local unless a shared pattern already exists, touch only `in_scope` paths, and leave refactoring to review. If a change genuinely needs a path outside scope, stop and report it as a scope blocker with the reason. If live code has drifted from the work item in a way that changes the product decision, stop and explain the tradeoff.
 
-**Complete when:** every acceptance criterion has a committed slice with a test that failed before it, or an explicit blocker, and `git status` is clean.
+**Complete when:** every acceptance criterion has a committed slice with a test that failed before it and real red and green runner lines kept for the report, or an explicit blocker, and `git status` is clean.
 
 ## 4. Verify
 
@@ -63,7 +63,11 @@ Run `/verify` in full mode once, at the final HEAD. On `red`, fix the cause as o
 Build report:
 - Branch: <name> at <HEAD sha>, base <base_sha>
 - Criteria:
-  - <criterion>: <commit sha> / <test name>   (or: BLOCKED — <reason>)
+  - <criterion>: <test commit sha> → <impl commit sha> / <test name>   (or: BLOCKED — <reason>)
+    red:   <failing assertion line(s), trimmed, pasted from the runner>
+    green: <passing summary line, pasted>
+    reproduce: <exact command from the repo root>
+    behaviour: <before/after output pair when user-visible, else "covered by the test">
 - Verification: green | red | incomplete — <one line>
 - Scope: <paths touched>; deviations, if any
 - Risks and follow-ups:

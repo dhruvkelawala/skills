@@ -7,7 +7,7 @@ description: Autoreview, commit, push, open or update a ready-for-review GitHub 
 
 Autoreview first, then an intentional commit, push, a ready-for-review PR, and a watch loop that repairs what CI and PR reviewers report. Review quality outranks publishing speed: nothing is pushed while an accepted finding is open.
 
-Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<predecessor PR URL>]] [--no-watch] [--max-repairs N]`.
+Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<predecessor PR URL>]] [--no-watch] [--max-repairs N] [--body-file <path>]`.
 
 - Engine defaults to `claude`. `codex` selects Codex. Anything else stops with a question.
 - `--skip-review` skips autoreview. The report then says so and claims no clean result.
@@ -15,6 +15,7 @@ Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<pr
 - `stack [<predecessor PR URL>]` publishes the current branch as a layer on that PR. Without a URL, stacking is detected: the branch is stacked when `gh stack view` succeeds and lists it, and its predecessor is the branch below it.
 - `--no-watch` stops after the PR is published. `/issue-to-pr` and `/pr-watch` pass it because they own the watch loop themselves.
 - `--max-repairs` bounds the watch loop. Default is 10.
+- `--body-file` supplies a prepared PR body. apr uses it verbatim apart from filling the autoreview line, instead of writing its own. `/issue-to-pr` passes one built from its template.
 
 ## 1. Resolve inputs once
 
@@ -95,7 +96,7 @@ node "$PR_WATCH_DIR/scripts/pr-gate.mjs" --repo "$OWNER/$REPO" --pr "$PR_NUMBER"
 
 ## PR body
 
-Real Markdown prose, in this order: what changed, why, user or developer impact, root cause when the PR fixes a bug, and the verification and autoreview command used. When called from `/issue-to-pr`, include the review-ready exceptions and anything `/verify` could not run.
+With `--body-file`, use the supplied body and set its autoreview line to the engine, model, and result from step 4. Otherwise write real Markdown prose, in this order: what changed, why, user or developer impact, root cause when the PR fixes a bug, and the verification and autoreview command used, with exact commands and their results rather than "tests pass".
 
 ## Report
 
