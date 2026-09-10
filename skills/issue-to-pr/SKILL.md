@@ -92,9 +92,11 @@ Exit the loop when a review pass yields no accepted findings.
 
 Load and follow `/apr --no-watch --base <base_sha>`. It skips its own verification because stage 4 just ran it at this HEAD, runs autoreview once as the cross-family second opinion after stage 3, commits anything outstanding, pushes, and opens or updates a ready-for-review PR. The watch loop is stage 6, so apr must not watch. In stacked mode pass `stack <predecessor PR URL>` and the run record's `stack_tracking`, so it publishes with `gh stack submit --open` when tracked or `gh stack link <predecessor PR URL> <branch> --open` when not; the PR's base must be the predecessor's head branch, never the default branch. Verify that with `gh pr view --json baseRefName` and stop if it is wrong.
 
+Before calling apr, write the PR body from [the PR body template](references/pr-body.md) into a temp file and pass it as `--body-file`. Every section is filled from what the run already has: the contract's acceptance criteria and the build report for the criterion table, the `/verify` report for the verification table, the stage 3 and stage 4 outcomes for the review trail. apr adds only the autoreview line, since that runs inside apr. After any later HEAD change, regenerate the body for the new HEAD and update the PR.
+
 Record the PR URL and HEAD.
 
-**Complete when:** an open, non-draft PR exists at the current HEAD with the contracted base branch.
+**Complete when:** an open, non-draft PR exists at the current HEAD with the contracted base branch, and its body has every template section filled with a commit and test per acceptance criterion.
 
 ## 6. Watch
 
