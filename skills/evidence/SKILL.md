@@ -13,9 +13,9 @@ Invoke as `/evidence` to write or refresh `EVIDENCE.md`, or `/evidence plan <fea
 
 Read before writing: `README`, `AGENTS.md` or `CLAUDE.md`, `CONTEXT.md`, the package manifest or build file, CI workflows, and any existing `docs/` on running or demoing the app. Then answer, from the code and configs, not from guesses:
 
-1. **Surfaces.** Which of these the project has: web UI, mobile app, desktop app, terminal UI, CLI, HTTP or RPC API, library, background worker, browser extension. A monorepo can have several; list each with its path.
+1. **Surfaces.** Which of these the project has: web UI, mobile app, desktop app, terminal UI, CLI, HTTP or RPC API, library, background worker, browser extension, chat bot or messaging integration, agent or LLM behaviour with evals, observability. A monorepo can have several; list each with its path.
 2. **Launch.** The exact commands that bring each surface up locally for a demo, with required env, seed data, ports, simulators, or fixtures. If a command needs a secret, say which variable, never its value.
-3. **Drive.** How a feature is exercised on each surface: a URL and clicks, a screen and taps, a command and flags, a request. Name the tools already in the repo: Playwright config, Maestro flows, Storybook, fixtures, a demo script, `xcodebuild` schemes.
+3. **Drive.** How a feature is exercised on each surface and **who drives it**, by the tiers in [the surface recipes](references/surfaces.md#who-drives-the-surface): the repo's own harness first (Playwright config, Maestro flows, XCUITests, fixtures, a demo script, an eval runner), computer-use when the host has it and no harness covers the surface, a manual capture command as the floor. Record the tier per surface.
 4. **Capture.** Which capture method fits each surface. Pick from [the surface recipes](references/surfaces.md) and adapt to what is installed; prefer tools the repo already depends on.
 5. **Publish.** Where captures live so a PR can link them. Default is the `evidence` orphan branch via `scripts/publish-evidence.sh`, which keeps binaries off the main history and yields links that render for anyone who can see the repo. A repo that already keeps evidence somewhere (a `docs/evidence/` convention, an artifacts bucket) keeps its convention.
 6. **Exemptions.** Surfaces where behaviour capture genuinely does not apply, such as a pure library with no runnable example. Exempt narrowly and say why; a library with a CLI or example script is not exempt.
@@ -35,9 +35,11 @@ How to prove a change works in this repository. Agents read this before writing 
 
 ## Surfaces
 
-| Surface | Path | Launch | Drive | Capture |
+| Surface | Path | Launch | Drive (tier) | Capture |
 | --- | --- | --- | --- | --- |
-| <web app> | apps/web | `pnpm dev` → http://localhost:3000 | Playwright (`e2e/`) or browser | Playwright screenshot + video |
+| <web app> | apps/web | `pnpm dev` → http://localhost:3000 | harness: Playwright (`e2e/`) | Playwright screenshot + video |
+| <desktop app> | . | `make run` | computer-use, else manual | `screencapture -l <window>` |
+| <slack bot> | src | `pnpm run mario` against test channel `#<name>` | manual: post trigger message | API thread JSON + client screenshot |
 | ... | | | | |
 
 ## Launch
@@ -61,7 +63,7 @@ How to prove a change works in this repository. Agents read this before writing 
 ## Per-change checklist
 
 1. Launch the surface the change touches.
-2. Drive the exact behaviour each acceptance criterion names, before and after when the change alters existing behaviour.
+2. Drive the exact behaviour each acceptance criterion names, using the surface's recorded tier, before and after when the change alters existing behaviour. Always against a local build at HEAD.
 3. Capture: still for a state, recording for a flow, transcript for a CLI or API, side by side for before/after.
 4. Publish and link from the PR's Evidence section with the HEAD SHA the capture came from.
 ```

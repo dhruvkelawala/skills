@@ -42,7 +42,7 @@ One block per acceptance criterion. Each block proves the criterion with output,
 <the passing summary line for that test, 1–3 lines>
 ```
 
-**Reproduce.** `<exact command a reviewer runs from the repo root to see the passing test>`
+**Reproduce.** `<exact command a reviewer runs from the repo root to regenerate the capture>`, or, when computer-use drove the surface, the numbered steps taken, then the test command.
 
 </details>
 
