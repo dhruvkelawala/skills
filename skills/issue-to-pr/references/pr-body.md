@@ -1,6 +1,6 @@
 # PR body template
 
-Fill every section from the run record and the stage reports already in hand. Handles (commit SHAs, test names, commands) say *where*; the Evidence section says *that it is true*, with bounded excerpts of real output a reviewer can re-run. Write `none` rather than dropping a section, so the reader knows it was considered. Keep the prose under 400 words; evidence excerpts sit in collapsed blocks and do not count.
+Fill every section from the run record and the stage reports already in hand. Handles (commit SHAs, test names, commands) say *where*; the Evidence section says *that it is true*, and its primary proof is the feature seen running: a screenshot, a recording, a transcript, a before/after pair, captured at HEAD and published per the repo's `EVIDENCE.md`. Tests are supporting material below the capture, never the evidence on their own. Write `none` rather than dropping a section, so the reader knows it was considered. Keep the prose under 400 words; evidence excerpts sit in collapsed blocks and do not count.
 
 ```md
 ## Summary
@@ -28,7 +28,11 @@ One block per acceptance criterion. Each block proves the criterion with output,
 <details>
 <summary>AC1 — <criterion text></summary>
 
-**Red → green.** The test failed before the change and passes after it.
+**Seen working** (captured at `<HEAD short sha>`, surface: <web | mobile | desktop | TUI | CLI | API>).
+
+<![after](<published link>) for a state, or a link to the recording for a flow, or a fenced transcript for a CLI or API. For changed behaviour, before at `<base short sha>` and after at HEAD side by side. One or two sentences saying what the reviewer is looking at and which part proves the criterion. If `EVIDENCE.md` exempts this surface: `exempt: <reason>` and the test below is the proof.>
+
+**Supporting test, red → green.** The test failed before the change and passes after it.
 
 ```text
 # before `<impl short sha>` (test committed at `<test short sha>`)
@@ -38,9 +42,7 @@ One block per acceptance criterion. Each block proves the criterion with output,
 <the passing summary line for that test, 1–3 lines>
 ```
 
-**Reproduce.** `<exact command a reviewer runs from the repo root to see the passing test>`
-
-**Behaviour.** <For a user-visible change: one before/after pair of real output, a captured request/response, a CLI invocation with its output, or a screenshot when the issue is about UI. Trimmed to the lines that show the difference. Omit for pure internals and say `covered by the test above`.>
+**Reproduce.** `<exact command a reviewer runs from the repo root to regenerate the capture>`, or, when computer-use drove the surface, the numbered steps taken, then the test command.
 
 </details>
 
@@ -82,7 +84,8 @@ Run at `<HEAD short sha>` against base `<base short sha>`.
 Rules:
 
 - Every criterion row carries a commit and a test, or `blocked` with the reason. A row with neither means stage 2 is not complete.
+- Every Evidence block leads with a capture of the feature running, published and linked with the HEAD it came from, unless `EVIDENCE.md` exempts that surface. A block with only test output is incomplete.
 - The verification table lists every command `/verify` discovered, including the ones that could not run.
 - The HEAD in "Verification" must equal the PR head at publish time. After a watch-stage repair, regenerate the body for the new HEAD and update the PR with `gh pr edit --body-file`.
 - Evidence excerpts are real, trimmed output from this run's HEAD, never paraphrased or typed by hand. If an excerpt cannot be produced (the test could not run), the block says so and the criterion's status is `blocked`.
-- Trim to the lines that carry the proof: the failing assertion, the passing summary, the changed output. No full logs, no diffs (the PR has them), no screenshots unless the change is visual.
+- Trim to the lines that carry the proof: the failing assertion, the passing summary, the changed output. No full logs, no diffs (the PR has them). Captures are stills for states, recordings under 30 seconds for flows, transcripts for CLIs and APIs; pick the lightest a reviewer would accept as seeing it work.
