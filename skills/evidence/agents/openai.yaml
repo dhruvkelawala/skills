@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence"
+  short_description: "Write EVIDENCE.md: how to run features and capture proof in this repo"
+  default_prompt: "Use $evidence to write this repository's EVIDENCE.md describing how to launch each surface, drive a feature, capture screenshots or recordings, and publish them for PRs."

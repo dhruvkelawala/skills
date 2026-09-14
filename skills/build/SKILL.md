@@ -67,7 +67,7 @@ Build report:
     red:   <failing assertion line(s), trimmed, pasted from the runner>
     green: <passing summary line, pasted>
     reproduce: <exact command from the repo root>
-    behaviour: <before/after output pair when user-visible, else "covered by the test">
+    surface: <web | mobile | desktop | TUI | CLI | API | library>; how to drive it for this criterion, for the caller's evidence capture
 - Verification: green | red | incomplete — <one line>
 - Scope: <paths touched>; deviations, if any
 - Risks and follow-ups:
