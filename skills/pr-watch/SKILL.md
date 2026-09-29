@@ -49,6 +49,6 @@ node "$SKILL_DIR/scripts/pr-gate.mjs" --repo "$OWNER/$REPO" --pr "$PR_NUMBER" \
 
 - PR URL and final HEAD SHA
 - Gate result and the reviewers it required
-- Repairs made (count, and one line each)
+- Repairs made (count, and one line per finding with its source thread/check link, reviewed HEAD, and repair commit so `/promote` can consume them)
 - Findings consciously rejected, with the reply posted
 - Reasons still open, if any
