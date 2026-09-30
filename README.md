@@ -15,6 +15,7 @@
 | [idea-foundry](skills/idea-foundry/SKILL.md) | Generate or pressure-test ambitious project ideas through research, scoring, red-teaming, and pitching. |
 | [issue-to-pr](skills/issue-to-pr/SKILL.md) | Take one GitHub issue end to end into a merge-ready PR by chaining /build, /code-review until clean, /verify, /apr, and /pr-watch, standalone or stacked. |
 | [product-description](skills/product-description/SKILL.md) | Build a prose "product description" repo describing what the user sees and exactly what happens when they act, drafted from code and tests, then verified and triaged into a bug list. |
+| [promote](skills/promote/SKILL.md) | Turn recurring or severe agent corrections into structural issues, tested static checks, or approval-only instruction diffs at the highest enforceable layer. |
 | [pr-watch](skills/pr-watch/SKILL.md) | Poll a PR until CI is green, review threads are resolved, and each configured review agent has covered the current HEAD, repairing findings in between. |
 | [recap](skills/recap/SKILL.md) | Write a two-minute brief of the session (goal, shipped, decided, in flight, next) and save it for the next session; `/recap last` reads it back with what moved since. |
 | [research-explainer](skills/research-explainer/SKILL.md) | Research a topic against primary sources via background agents, then generate a self-contained HTML field guide that teaches it from scratch. |
