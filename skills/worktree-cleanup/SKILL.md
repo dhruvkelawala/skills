@@ -10,12 +10,12 @@ description: Audit disk usage, Git worktrees, and stale iOS simulators, then rem
 Record `df -h /`. Resolve this skill's directory, then run:
 
 ```bash
-bash <skill-dir>/scripts/worktree-audit.sh /Users/sumodeus/code
+bash <skill-dir>/scripts/worktree-audit.sh <code-root>   # the directory holding your repos, e.g. ~/code
 # Or limit discovery to one repo:
 bash <skill-dir>/scripts/worktree-audit.sh <repo-path>
 ```
 
-The executable script discovers repositories recursively, deduplicates shared Git directories, and gets every worktree path from `git worktree list --porcelain -z`. This covers `<repo>.sumo-worktrees/<branch-slug>/` on `sumo/<slug>`, `/Users/sumodeus/code/worktrees`, and registered paths outside the scan root. For another checkout layout, pass its parent directory.
+The executable script discovers repositories recursively, deduplicates shared Git directories, and gets every worktree path from `git worktree list --porcelain -z`. This covers `<repo>.sumo-worktrees/<branch-slug>/` on `sumo/<slug>`, any shared `worktrees/` directory under the root, and registered paths outside the scan root. For another checkout layout, pass its parent directory.
 
 Rows use shell-quoted repo/worktree paths so whitespace cannot split items. For each repo with multiple worktrees, report the primary checkout too, but exclude it from cleanup candidates. Classify size in KiB, HEAD commit age (not creation/usage age), ancestry into the default branch, tracked/untracked/ignored state, unpushed commits, and remote branch presence. The script queries `ls-remote` read-only; it never fetches or refreshes the index. Cached/local merge bases are labeled on stderr. Missing remote branches are distinguished as previously tracked versus deleted-or-never-pushed; neither means safe. Squash merges require separate PR/commit evidence. `UNKNOWN` and cached-unpublished counts require investigation, not clearance.
 
