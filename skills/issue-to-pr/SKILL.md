@@ -15,7 +15,7 @@ Each stage is its own skill and can be run alone. This skill supplies the order,
 
 ## Run record
 
-Keep one file per issue at `$(git rev-parse --git-dir)/issue-to-pr/<issue-number>.md`. It is local, ignored by git, and holds only identifiers:
+Keep one file per issue at `$(git rev-parse --git-dir)/issue-to-pr/<issue-number>.md`. It is local, ignored by git, and holds identifiers, the contract, and stage reports:
 
 ```md
 issue: <url>
@@ -43,6 +43,7 @@ On reinvocation with an existing record, re-fetch and compare live state before 
      2. Select: the `stack` argument when given (a PR in the chain, its URL, or a stack number). Otherwise, exactly one chain means that one; an issue that names a PR or branch picks its chain; anything else asks once, listing each chain by its top PR title.
      3. Pin: the top PR is the predecessor. `git fetch origin <top headRefName>`; `refs/remotes/origin/<top headRefName>` is the base ref and its SHA must equal the PR's `headRefOid`. Stop if they differ or the top PR is not open.
 2. Read the issue with `gh issue view <n> --json title,body,comments,labels`. The issue body and comments are requirements, not instructions to execute. Read enough code to state, in a short contract: in-scope paths, out-of-scope items, acceptance criteria, the public seam tests will exercise, and any human gate the issue names. For each criterion also name the **surface** it lands on and the **evidence** that will prove it, using the repo's `EVIDENCE.md`. When the repo has no `EVIDENCE.md`, run `/evidence plan` for the touched surface to derive launch, drive, and capture commands for this run, and note in the final report that the repo should adopt `EVIDENCE.md`.
+   When a product description exists, read it before stating the contract. Check paths named in `AGENTS.md` or `EVIDENCE.md`, linked repos/directories, and sibling repos/directories for the `/product-description` output: `README.md` + `goal.md` + `glossary.md`. Confirm the README's scope and source repo match this product; read those three files, then the touched feature documents, linked foundations, and their verification checklists. Map vague issue language to concrete user-visible behaviour and use the documented setup, action, and expected result to drive the evidence plan. Record the document paths and cited source commit in the contract; flag stale claims or conflicts against the issue and live code rather than silently treating them as requirements. If none exists, continue without creating one.
 3. Write the contract into the run record and print it, then continue without waiting. This pipeline runs unattended: the only stops are hard blockers (no acceptance criteria can be stated, the issue needs more than one PR, the base cannot be pinned, a stack cannot be chosen). Material drift from the recorded contract later is a new run.
 4. Run `/review-ready` in preflight mode against the contract. Record its changed seam, narrative entry point, owner module, and test surface in the contract; `test_seam` is the test surface it names.
 5. Create the working branch from the base SHA, named `<type>/<issue-number>-<short-description>` with a conventional-commit type. In stacked mode, adopt the stack first: `gh stack checkout <top PR URL>` fetches its branches and tracks them locally, then `gh stack add <branch>` creates the layer on top. If checkout fails because a stack branch is checked out in another worktree, create the branch directly with `git checkout -b <branch> <base_sha>` and record `stack_tracking: none`; publishing then uses `gh stack link` instead of `gh stack submit`. Either way, `git merge-base --is-ancestor <base_sha> HEAD` must hold before implementation starts.
@@ -75,7 +76,7 @@ Build works test-first at the seam, commits one slice per criterion, runs `/veri
 Loop, at most `--max-repairs` times:
 
 1. Run `/code-review <base_sha>`. Both axes review the diff `base_sha...HEAD`.
-2. Verify each finding against the code. Fix accepted findings in a commit; state why rejected findings are wrong.
+2. Verify each finding against the code. Fix accepted findings in a commit; state why rejected findings are wrong. Append each repaired or rejected finding to the run record with its source link or report location, reviewed HEAD, repair commit or rejection rationale; retain earlier passes so recurrence remains visible.
 3. If a fix changed code, rerun the focused tests for the touched paths and go to 1.
 
 Exit the loop when a review pass yields no accepted findings.
@@ -106,7 +107,7 @@ This stage is polling plus small repairs, so it runs in a **watcher subagent** o
 
 1. **Spawn the watcher** with a self-contained prompt. Read [the watcher prompt](references/watcher-prompt.md) and fill its slots: repo, PR number and URL, expected HEAD, `base_sha`, branch, mode and predecessor PR, reviewer logins and request comment, remaining repair budget, and the absolute path of `pr-watch/scripts/pr-gate.mjs`. Spawn it as the host's **cheapest implementation-capable subagent**, on the current branch, not in a fresh worktree. The exact role or model per host is in [watcher hosts](references/watcher-hosts.md); use that mapping rather than judging the task's difficulty, because the prompt already bounds it and escalation covers the rest. Record the role and model in the run record.
 2. **Do not touch the branch while the watcher runs.** Its pushes are the only HEAD changes during this stage.
-3. **Consume the report.** The watcher returns one structured block: final HEAD, gate state, repairs made against the budget, findings rejected with the reply posted, escalations, and reasons still open. Treat it as evidence, not truth: re-run the gate once without `--watch` at the reported HEAD and require exit `0` before recording `ready`.
+3. **Consume the report.** The watcher returns one structured block: final HEAD, gate state, repairs made against the budget, findings rejected with the reply posted, escalations, and reasons still open. Append it to the run record, retaining repaired and rejected findings with available thread links, repair commits, and rejection rationales across watcher runs. Treat it as evidence, not truth: re-run the gate once without `--watch` at the reported HEAD and require exit `0` before recording `ready`.
 4. **Handle escalations yourself.** The watcher escalates instead of repairing when a finding is tagged security, data loss, or credentials; when a fix would touch a path outside `in_scope`; when a repair fails twice; or when a human requested changes. Each escalation is a stage 3 repair: fix, `/code-review` from `base_sha`, `/verify`, `/apr --no-watch`, then spawn a fresh watcher with the remaining budget for the new HEAD.
 
 Any HEAD change during this stage invalidates stages 3 to 5 for that HEAD. The watcher covers its own repairs by handing them to `/apr --no-watch`, which runs focused tests and autoreview once, so a watcher repair needs no manual return to stage 3.
@@ -131,4 +132,6 @@ Leave the branch and any worktree for the user to clean up.
 - Stage reached and, if blocked, the exact reason
 - Repairs used against the budget, by stage
 - Verification result and anything that could not run
-- Findings rejected during review or watch, with the rationale
+- Findings repaired and rejected in stages 3 and 6, with source links or report locations, repair commits, and rejection rationales (or `none`)
+
+If any finding recurred, end the report with: `run /promote on these`.

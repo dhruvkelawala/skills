@@ -11,7 +11,7 @@ Invoke as `/evidence` to write or refresh `EVIDENCE.md`, or `/evidence plan <fea
 
 ## 1. Learn how the project runs
 
-Read before writing: `README`, `AGENTS.md` or `CLAUDE.md`, `CONTEXT.md`, the package manifest or build file, CI workflows, and any existing `docs/` on running or demoing the app. Then answer, from the code and configs, not from guesses:
+Read before writing: `README`, `AGENTS.md` or `CLAUDE.md`, `CONTEXT.md`, the package manifest or build file, CI workflows, and any existing `docs/` on running or demoing the app. Look for `.agents/skills/verify-*/SKILL.md`: when present, reuse its launch/doctor/drive and feature map, and link it from `EVIDENCE.md` instead of duplicating those recipes; this document still owns the PR-proof checklist, capture standards, and publish path. When absent, suggest `/create-verification-skill` for a maintained app-driving recipe. Then answer, from the code and configs, not from guesses:
 
 1. **Surfaces.** Which of these the project has: web UI, mobile app, desktop app, terminal UI, CLI, HTTP or RPC API, library, background worker, browser extension, chat bot or messaging integration, agent or LLM behaviour with evals, observability. A monorepo can have several; list each with its path.
 2. **Launch.** The exact commands that bring each surface up locally for a demo, with required env, seed data, ports, simulators, or fixtures. If a command needs a secret, say which variable, never its value.
