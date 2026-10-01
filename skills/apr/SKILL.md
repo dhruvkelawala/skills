@@ -1,6 +1,6 @@
 ---
 name: apr
-description: Autoreview, commit, push, open or update a ready-for-review GitHub pull request, then watch it and repair PR review findings until CI and reviewers are clean. Standalone or a gh stack layer, reviewing from a pinned base. Use when the user invokes /apr, /apr codex, /apr --skip-review, asks to review and publish local changes, or when /issue-to-pr or /pr-watch reaches its publish step.
+description: Autoreview, commit, push, open or update a ready-for-review GitHub pull request, then watch it and repair PR review findings until CI and reviewers are clean. Standalone or a gh stack layer, reviewing from a pinned base. Use when the user invokes /apr, /apr claude, /apr --skip-review, asks to review and publish local changes, or when /issue-to-pr or /pr-watch reaches its publish step.
 ---
 
 # APR
@@ -9,7 +9,7 @@ Autoreview first, then an intentional commit, push, a ready-for-review PR, and a
 
 Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<predecessor PR URL>]] [--no-watch] [--max-repairs N] [--body-file <path>]`.
 
-- Engine defaults to `claude`. `codex` selects Codex. Anything else stops with a question.
+- Engine defaults to `codex`, matching autoreview's own order (OpenAI through Codex before Claude). `claude` selects Claude. Anything else stops with a question.
 - `--skip-review` skips autoreview. The report then says so and claims no clean result.
 - `--base` pins the review range and the PR base. `/issue-to-pr` passes its `base_sha`.
 - `stack [<predecessor PR URL>]` publishes the current branch as a layer on that PR. Without a URL, stacking is detected: the branch is stacked when `gh stack view` succeeds and lists it, and its predecessor is the branch below it.
@@ -21,7 +21,7 @@ Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<pr
 
 1. **Helper.** The review helper is the `autoreview` script. Resolve the first that exists and keep it as `$AUTOREVIEW`:
    `.agents/skills/autoreview/scripts/autoreview`, `.claude/skills/autoreview/scripts/autoreview`, `$AGENTS_HOME/skills/autoreview/scripts/autoreview`, `~/.agents/skills/autoreview/scripts/autoreview`, `~/.claude/skills/autoreview/scripts/autoreview`. If none exists and review was not skipped, stop: autoreview is required and cannot be replaced by an inline review.
-2. **Engine and model.** `claude` runs with `--model claude-opus-5`. `codex` runs with the helper's default model unless the user named one. The chosen engine and model stay fixed for the whole run: on capacity, rate-limit, or latency errors retry the same command up to three times, then report the blocker. Only the helper's own documented account-access fallback may change the model.
+2. **Engine and model.** `codex` runs with `--model gpt-6.1-sol --thinking xhigh`; `claude` runs with `--model claude-sonnet-5-5`. A model or effort the user names replaces these. Keep the pair as `$ENGINE_FLAGS`. The chosen engine and model stay fixed for the whole run: on capacity, rate-limit, or latency errors retry the same command up to three times, then report the blocker. Only the helper's own documented account-access fallback may change the model.
 3. **Base.** `--base` if given. Otherwise the predecessor branch's remote-tracking ref when stacked, else the remote default branch from `gh repo view --json defaultBranchRef`. Record the resolved base SHA with `git rev-parse`.
 4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker.
 
@@ -39,13 +39,13 @@ On `main`, `master`, or the default branch, create `<type>/<short-description>` 
 2. Unless skipped, review the exact change with the helper. In the `/issue-to-pr` path this is deliberately a second opinion after `/code-review`: a different engine family reading the same base-to-HEAD diff once. Uncommitted work:
 
 ```bash
-"$AUTOREVIEW" --mode local --engine <engine> --max-priority P1 [--model claude-opus-5]
+"$AUTOREVIEW" --mode local --engine <engine> $ENGINE_FLAGS --max-priority P1
 ```
 
    Committed work on the branch:
 
 ```bash
-"$AUTOREVIEW" --mode branch --base <base-sha> --engine <engine> --max-priority P1 [--model claude-opus-5]
+"$AUTOREVIEW" --mode branch --base <base-sha> --engine <engine> $ENGINE_FLAGS --max-priority P1
 ```
 
 3. Verify every finding against the real code. Fix accepted findings, rerun the focused tests, rerun the same helper command. Reject a finding only with a stated reason.
