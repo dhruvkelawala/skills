@@ -23,6 +23,7 @@
 | [recap](skills/recap/SKILL.md) | Write a two-minute brief of the session (goal, shipped, decided, in flight, next) and save it for the next session; `/recap last` reads it back with what moved since. |
 | [research-explainer](skills/research-explainer/SKILL.md) | Research a topic against primary sources via background agents, then generate a self-contained HTML field guide that teaches it from scratch. |
 | [review-ready](skills/review-ready/SKILL.md) | Completion gate for code changes: checks a design contract (readable entry points, deep modules, real seams, tests through the interface, comment rules) and writes the gate report. |
+| [ship](skills/ship/SKILL.md) | Order the review queue by what each PR unblocks, record an independent verdict pinned to each PR's patch, and land only the verified run of a stack, bottom up. Works with one GitHub account. (pstack) |
 | [verification-skill](skills/verification-skill/SKILL.md) | Write a project-local `verify-<app>` skill that launches, health-checks and drives the real app with a feature map (`create`), or check every feature from source and live (`check`). (pstack) |
 | [verify](skills/verify/SKILL.md) | Discover and run every verification a project defines and report each as passed, failed, or could-not-run. |
 | [why](skills/why/SKILL.md) | Why code or a decision looks the way it does, from git and the PR with a confidence word, or why the agent took an action this session. `--deep` searches every source. (pstack) |
