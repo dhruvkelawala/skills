@@ -1,74 +1,95 @@
 ---
 name: perf
-description: Use when the user invokes /perf, wants a reproducible performance baseline, or asks to optimize a measured slow path with before/after evidence. For general bug diagnosis or an unexplained regression, start with diagnosing-bugs; for diagnosis without fixes use forensics; for sustained metric optimization use hillclimb.
+description: Use when something is slow ("why so slow", "still slow") or on /perf. Measures the slow path, names the limiter, makes one fix, and measures again. `/perf baseline` only measures. `/perf diagnose`, or a shared CPU profile, trace, heap snapshot, or spindump, explains the cause without changing code.
 ---
 
 # Perf
 
-Own the measurement story for one performance issue. Measure the real path before changing it; source inspection is not evidence of a win.
+Make one slow thing faster and prove it with numbers. The limiter is the stage that takes most of the time. The whole gets faster only when the limiter does. Every report gives one number and names the limiter.
 
-Invoke as `/perf <workload or slow path>` or `/perf baseline <path>` for steps 1–2 only, with no implementation or commits. This skill adds baselines and profiling to `diagnosing-bugs`, not a second bug-fix process. If the symptom is unexplained, load that skill by name first and use these steps for its performance branch. If it is unavailable, reproduce the exact symptom with one runnable command before hypothesizing.
+- `/perf <slow thing>`, or "why so slow": steps 1 to 4.
+- `/perf baseline <thing>`: steps 1 and 2, then report. Change no code.
+- `/perf diagnose <process or artifact>`, or a shared profile or trace file: the read-only diagnose mode below.
+
+A bare `/perf` targets the thing the user last called slow.
+
+For repeated attempts against a target score, use hillclimb. For wrong behaviour rather than slowness, use diagnosing-bugs.
 
 ## 1. Pin the workload
 
-Read project instructions, the perf CI workflow, package scripts, and the relevant entry point and callers. Prefer the project's perf harness over a new benchmark. Read a matching `verify-<app>` skill or `EVIDENCE.md` when present for launch, drive, and capture instructions; keep captures local unless publishing is requested.
+Find one command or one user action that shows the slowness on the real path, with realistic data size and concurrency. Prefer the project's own benchmark or perf script. A `verify-<app>` skill or an `EVIDENCE.md` says how to launch and drive the app. Write down the claim you expect to make, for example "search p50 drops from 2.4 s to 0.8 s on the 60k-row dataset". The target is the user's number; with none, it is halving the limiter's time.
 
-Name the measured surface, realistic input dimensions (size, history, state, concurrency), metric, units, direction, and budget if one exists. Distinguish total work from interactive latency, and synthetic coverage from real-user coverage. Record the source SHA, dirty state, runtime/tool versions, machine, seed/fixture, setup, and cache/warm-up policy. Preserve unrelated work; use a scratch copy when the harness writes reports into the project.
+**Done when** one exact command reproduces the slowness and prints a number with its unit.
 
-**Complete when:** one exact command exercises the named path and emits the metric, and its scope and omissions are recorded.
+## 2. Measure and name the limiter
 
-## 2. Capture the baseline
+Run the command 5 times and take the median and the range. For steady-state work, discard one warm-up run first; for a cold start, use a fresh process each time. Then split the time into stages, such as network, database, model call, parsing, and render, using the project's own timings or temporary timers. Profile in a separate run that you do not report, because profilers slow the work down: `node --cpu-prof`, `py-spy`, macOS `sample`, or a browser trace through the host's browser tool or the Chrome DevTools Protocol.
 
-Run the unmodified workload and save its output plus a trace/profile that explains where time or memory goes. If the harness already emits stage timings, those are a baseline artifact; obtain a deeper profile before a fix when they do not isolate the mechanism. Choose available tools in this order:
+Name the limiter from the stage timings. In one real case the agent first blamed model latency, the user came back with "still extremely slow", and stage timings then showed the time going to database round trips of 156 ms each.
 
-- Project harness and matching surface capture instructions.
-- Browser: native `agent_browser` when available. Discover its supported trace/profiler/record/vitals actions; a recording or vitals summary alone is not CPU attribution. Use agent-browser's CLI only when the project permits it and the tool lacks the needed capture, checking local `--help` for syntax. Otherwise use Chrome DevTools Protocol (CDP) Performance/Profiler/Tracing.
-- Node: `node --cpu-prof --cpu-prof-dir=<artifact-dir> <entry>` for CPU or `node --heap-prof --heap-prof-dir=<artifact-dir> <entry>` for sampled allocations. An allocation profile is not a retained-heap/leak proof; use an inspector heap snapshot for retainers.
-- macOS: `sample`, `spindump`, or Instruments `xctrace` when installed and attachment is permitted. Check local help and record PID, duration, and template.
+**Done when** you have a baseline median with its range and one stage named as the limiter, with its share of the total. `/perf baseline` reports here.
 
-Keep the harness's established sampling protocol. Otherwise use one excluded warm-up for steady-state work, then at least five measured repetitions; cold-start metrics use a fresh process each time, without warming away the cost. Report median and range, and p95 only with its sample count and calculation. Increase repetitions when variation obscures the signal. Freeze inputs, instrumentation, machine conditions, and command for the comparison. Redact secrets in outputs and treat artifacts as potentially sensitive.
+## 3. Make one fix, cheapest first
 
-**Complete when:** baseline number, variability, command, environment, and readable artifact paths exist. Wrong-surface, missing signal, or unstable measurements are **inconclusive**, not a pass. Baseline-only mode reports here and stops.
+Go down this list in order and pick the first item that can meet the target:
 
-## 3. Test one hypothesis
+1. Don't do it. Remove work whose result nothing uses.
+2. Don't do it again. Reuse or cache a result you already computed.
+3. Do it less. Batch, paginate, or shrink the input.
+4. Do it later. Move work off the path the user waits on.
+5. Do it when they're not looking. Run it in idle time or the background.
+6. Do it concurrently. Run independent work in parallel.
+7. Do it cheaper. Use a faster algorithm, query, or library.
 
-Trace the measured cost to its source mechanism and all relevant callers. State a falsifiable prediction and the smallest change that could test it. Use these families only when evidence supports them:
+Before you remove work, confirm in the source that nothing reads its result. Before you add a cache, name what invalidates it. Make one change. Hand a hard change to an `implement-smart` helper and a mechanical one to an `implement-cheap` helper (see Helpers), and read the diff yourself.
 
-- **Eliminate or defer:** unused work can disappear; work not needed yet can wait. Confirm consumers and behavior in source, since a trace cannot prove deletability.
-- **Divide or index:** input-size cost calls for pruning, partitioning, parallel independent work, or a cheaper lookup. Include the extra coordination/index cost.
-- **Cache or batch:** repeated identical inputs or fixed per-operation overhead. Name cache invalidation and measure realistic hit/miss rates, or bound batch size and delay.
-- **Schedule:** necessary work blocks the interactive moment. Measure that latency and any displaced cost, not just total throughput.
-- **Redundancy:** a slow wait dominates and spare capacity exists. Measure added resource load before accepting hedged or replicated work.
+**Done when** one change for one item exists and you have read its diff.
 
-For a boundary-crossing change, settle ownership and correctness invariants before implementation. Keep one attempt in flight on the acceptance branch. Freeze the acceptance harness outside the attempt's write scope.
+## 4. Measure again, then keep or revert
 
-When available, use `subagent_spawn` with `role: "research"` for source/profile reduction, `"advisor"` for design tradeoffs, `"implement-cheap"` for bounded mechanical changes, `"implement-smart"` for difficult changes, and `"review"` for the diff. Give file pointers, scope, prediction, frozen measurement command, regression gate, and stop conditions. Omit `model` to use role defaults; an explicit override is `provider/modelId`. Results arrive automatically; continue independent work instead of immediately waiting or polling. Review the actual diff and artifacts yourself. Without subagents, perform the same bounded steps locally.
+Run the same command on the old and new code, alternating A, B, A, B until each side has 5 runs, and run the tests. Keep the change when the gap is larger than the run-to-run range and the tests pass, and commit it locally with only the files you changed. Otherwise revert it in full. If the target is still out of reach, name the next item worth trying. Then answer the checklist below.
 
-**Complete when:** one scoped candidate implements the prediction and its diff has been reviewed, without unmeasured follow-on changes.
+**Done when** the change is committed or reverted, the tests have run, and every checklist question has an answer.
 
-## 4. Accept or revert
+## Before you report a number
 
-Rerun the identical harness and capture a comparable post-change artifact. Alternate baseline/candidate batches in isolated checkouts if machine drift could explain the delta. Parse large artifacts into a queryable summary (existing viewer, a small script, or SQLite) instead of eyeballing raw JSON. Cite hot frames/stages and source locations; use `forensics trace` for deeper attribution.
+Answer each question from a run, not from reading code:
 
-Report before/after values, absolute delta, and percent improvement: lower-is-better uses `100 * (before - after) / before`; higher-is-better reverses the numerator. A zero baseline has no defined percent delta. Require improvement beyond the observed noise and a green correctness gate at the real behavior seam. Rerun the original workload, including cache misses and boundary cases the change affects.
+1. Why not double? Name the limiter. If a change did not move the number, the limiter explains why.
+2. Was it tuned? Both sides ran as production runs them: release build, real flags, and caches as warm or cold as production sees them.
+3. Did it break limits? Compare the result with disk and network bandwidth and the number of cores. Removing a stage that takes 10% of the time makes the whole at most about 11% faster.
+4. Did it error? Count failures and check that outputs are correct. Errors are often fast.
+5. Does it reproduce? At least 5 alternating runs per side, reported as a median and a range. A gap smaller than the range means no measurable difference.
+6. Does it matter end to end? Measure the path the user waits on, and report a micro result as a share of it.
+7. Did the work happen? Confirm that the timed region did the real work: the request arrived, the rows were written, the result was used.
 
-Accept only a measured win with preserved behavior and justified complexity. Revert rejected or inconclusive attempt changes in full, touching only attempt-owned files; preserve unrelated work. Restore a verified state before another hypothesis. One conventional commit per accepted win, staging explicit paths. Remove temporary probes. Run `/verify` in full mode at final HEAD; if unavailable, discover and run the project's documented checks and report every result. A missing check is **could-not-run**, not green. Commit locally; pushing or opening a PR requires a separate request.
-
-**Complete when:** every attempt is accepted and committed or fully reverted, full verification is recorded, and the artifacts support the claimed result. If blocked, report the blocker instead of claiming completion.
+Call the result inconclusive when you cannot name the limiter, when a side ran untuned, or when questions 4 or 7 have no answer, and say which.
 
 ## Report
 
 ```md
-Perf result:
-- Workload, metric, budget, source SHA, and environment:
-- Reproduce: <exact command, setup, warm-up, repetitions>
-- Baseline → after: <values, units, variability, absolute and percent delta; or baseline only>
-- Evidence: <before/after artifacts, source mechanism, verification results>
-- Outcome: <accepted commit or reverted/inconclusive>; tradeoffs and uncovered surfaces
+<metric>: <before> to <after> (median of 5 per side, range <low> to <high>). Limiter: <stage and cause, path:line>.
+Fix: <list item and the one-line change>, commit <sha>. Or: reverted, because <reason>.
+Command: <exact command>. Tests: <passed | failed | could not run>.
 ```
+
+A baseline report is one line: the metric with its median and range, the limiter, and the command.
+
+## Diagnose mode
+
+Diagnose mode reads and measures only. It changes no product code and commits nothing. Read [references/diagnose.md](references/diagnose.md) for capture tools, artifact formats, and how to narrow each kind of signal.
+
+1. Get the signal. With a supplied artifact, work from it as it is and leave the original untouched. Without one, reproduce the symptom on the live process and capture the smallest artifact that shows it. Ask before attaching to a shared or production process. **Done when** you have a readable artifact and have recorded the capture command and window.
+2. Reduce it to a ranked finding: the hot path, the chain that keeps memory alive, or the blocked thread. Hand a large artifact to a `research` helper (see Helpers). **Done when** the finding has units and a query or script you can rerun.
+3. Map the finding to source: file, symbol, and line at the revision that produced the artifact. **Done when** each finding has a `path:line` or is marked unresolved with the reason.
+4. Rate it: confirmed, when a live probe or a paired before-and-after capture agrees; supported hypothesis; or inconclusive. **Done when** the report states the rating and the next check that would settle it.
+
+Report the signal with its units, the source location, the rating, and the artifact paths. Offer the fix as `/perf <slow thing>`.
+
+## Helpers
+
+Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, do it yourself and say so.
 
 ## Attribution
 
-Upstream license and copyright notice: [LICENSE](LICENSE).
-
-Adapted from pstack by Lauren Tan (MIT), cursor/plugins@fae2c6e.
+Adapted from pstack by Lauren Tan (MIT), cursor/plugins@e5a8186: the perf-issue, benchmark-checklist, runtime-forensics, and trace-forensics material. Diagnose mode replaces the former `forensics` skill. Upstream license: [LICENSE](LICENSE).

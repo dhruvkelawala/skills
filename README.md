@@ -10,12 +10,11 @@
 | [eli25](skills/eli25/SKILL.md) | Explain a topic simply and visually to a software engineer as a neo-brutalist HTML page, optionally deployed to Tailscale or Vercel. |
 | [evidence](skills/evidence/SKILL.md) | Write a repo's EVIDENCE.md: how to launch each surface, drive a feature, capture screenshots, recordings, or transcripts, and publish them so PRs can prove changes work. |
 | [explain-diff](skills/explain-diff/SKILL.md) | Explain a diff, commit, branch, or PR in plain words: the problem, the key idea, and one real input traced through the changed code. |
-| [forensics](skills/forensics/SKILL.md) | Diagnosis-only investigation: capture a live CPU spin, leak, or glitch (runtime mode) or explain a supplied profile or trace (trace mode), with cited findings. (pstack) |
-| [hillclimb](skills/hillclimb/SKILL.md) | Bounded keep-or-revert experiment loop on one metric against a target, with a frozen harness, decision log, and one commit per accepted win. (pstack) |
-| [how](skills/how/SKILL.md) | Explain how a subsystem works or where a change belongs: one input traced end to end, owners, registration seams, and placement tradeoffs. (pstack) |
+| [hillclimb](skills/hillclimb/SKILL.md) | Raise one score toward a target (speed, a critic or eval score, a pass rate, a size) with one change per attempt, keep or revert, and a log. You judge taste scores at checkpoints. (pstack) |
+| [how](skills/how/SKILL.md) | A short answer to how code or a PR works, or where a change belongs, with one real input traced through the code at `path:line`. (pstack) |
 | [idea-foundry](skills/idea-foundry/SKILL.md) | Generate or pressure-test ambitious project ideas through research, scoring, red-teaming, and pitching. |
 | [issue-to-pr](skills/issue-to-pr/SKILL.md) | Take one GitHub issue or Linear ticket to a PR: test-first build, at most two review passes, a captured proof per criterion, a `pr`-format body, and a time-boxed watch, standalone or stacked. `resume` picks up new reviews and moved predecessors. |
-| [perf](skills/perf/SKILL.md) | Measurement-first optimization: pin the workload, baseline with a profile, test one hypothesis, accept only wins beyond noise. (pstack) |
+| [perf](skills/perf/SKILL.md) | Make one slow thing faster: measure, name the limiter, make one cheapest-first fix, and measure again. `baseline` only measures; `diagnose` explains a live process or a profile without changing code. (pstack) |
 | [pr](skills/pr/SKILL.md) | Write a PR body that is fast to review: a diagram summary, before and after evidence, and merge danger with a one-way or two-way door and the blast radius. |
 | [pr-review](skills/pr-review/SKILL.md) | Review a PR, a stack, or your review queue one PR at a time: a read, skim, or skip triage, a plain explanation with a code trace, findings with a suggested verdict, and one batched review. Stops become Hunk notes inside Herdr. |
 | [pr-watch](skills/pr-watch/SKILL.md) | Poll a PR until CI is green, review threads are resolved, and each configured review agent has covered the current HEAD, repairing findings in between. |
@@ -26,7 +25,7 @@
 | [review-ready](skills/review-ready/SKILL.md) | Completion gate for code changes: checks a design contract (readable entry points, deep modules, real seams, tests through the interface, comment rules) and writes the gate report. |
 | [verification-skill](skills/verification-skill/SKILL.md) | Write a project-local `verify-<app>` skill that launches, health-checks and drives the real app with a feature map (`create`), or check every feature from source and live (`check`). (pstack) |
 | [verify](skills/verify/SKILL.md) | Discover and run every verification a project defines and report each as passed, failed, or could-not-run. |
-| [why](skills/why/SKILL.md) | Recover why code took its shape from history across source control, trackers, docs, chat, and telemetry, with a confidence tier on every claim. (pstack) |
+| [why](skills/why/SKILL.md) | Why code or a decision looks the way it does, from git and the PR with a confidence word, or why the agent took an action this session. `--deep` searches every source. (pstack) |
 | [worktree-cleanup](skills/worktree-cleanup/SKILL.md) | Read-only audit of git worktrees and iOS simulators, then removal by approved bucket, with a hold list for anything that could lose work. Branch deletion is a separate approval. (pstack) |
 
 ## Installation
