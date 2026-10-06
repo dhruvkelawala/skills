@@ -10,8 +10,8 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { readFileSync, realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export const MARKER = "ship-verdict:v1";
 const PASSING = new Set(["PASS", "PASS+NOTES"]);
@@ -318,7 +318,10 @@ async function main() {
   throw new Error("usage: ship.mjs queue | verdict record|check | run <bottom-pr>");
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+// Skills are usually reached through a symlinked folder (~/.claude/skills), so compare real paths;
+// comparing the invoked path itself would make the CLI exit 0 having done nothing.
+const invoked = process.argv[1] ? realpathSync(process.argv[1]) : "";
+if (invoked === realpathSync(fileURLToPath(import.meta.url))) {
   main().catch((e) => {
     process.stderr.write(`ship: ${e.message}\n`);
     process.exit(2);

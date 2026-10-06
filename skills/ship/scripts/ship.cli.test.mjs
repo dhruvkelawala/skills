@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { fileURLToPath } from "node:url";
 
@@ -56,4 +56,14 @@ if (args[0] === "pr" && args[1] === "list") {
   assert.equal(cli("verdict", "check", "7").status, "stale");
   // The own-PR rules key on the caller, so the caller must be the authenticated account.
   assert.throws(() => cli("verdict", "check", "7", "--me", "author"), /does not match the authenticated GitHub account/);
+});
+
+test("runs when invoked through a symlinked skills folder, as ~/.claude/skills is", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "ship-link-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const linked = join(dir, "scripts");
+  symlinkSync(dirname(ship), linked);
+  const run = spawnSync(process.execPath, [join(linked, "ship.mjs")], { encoding: "utf8" });
+  assert.equal(run.status, 2, `expected the usage error, got exit ${run.status} with no output`);
+  assert.match(run.stderr, /usage: ship\.mjs/);
 });
