@@ -1,87 +1,82 @@
 ---
 name: hillclimb
-description: Use when the user invokes /hillclimb or wants sustained iterative improvement of one performance metric against a target, with measured keep-or-revert experiments. Use perf for one measured optimization or a baseline; use diagnosing-bugs for an unexplained regression, and forensics for diagnosis without fixes.
+description: Use for /hillclimb, or a request to keep improving one score toward a target, such as speed, a critic or eval score, a pass rate, or a size. Makes one change per attempt, keeps or reverts it, and logs every attempt. `/hillclimb resume` continues from the log. For one slow path use perf.
 ---
 
 # Hillclimb
 
-Own the metric and the experiment's integrity. One hypothesis, one change, one measurement, keep or revert. Source inspection cannot establish a win.
+Raise one score toward a target in small measured attempts. Each attempt makes one change, scores it, and keeps or reverts it before the next one starts.
 
-Invoke as `/hillclimb <workload, metric, target>` or `/hillclimb resume <decision-log>`. This is a bounded experiment loop, not permission to publish or run forever.
+## 1. Set up and start
 
-## 1. Agree the experiment
+Take the thing to improve, the score, the target, the budget, and the gate from the request. A bare `/hillclimb` works on the thing discussed last. Fill any gap with a default:
 
-Read project instructions, perf CI/scripts, the target entry point and callers, and a matching `verify-<app>` skill or `EVIDENCE.md` when present. Ground the workload in realistic size, history, state, and concurrency. It must reproduce the complaint; otherwise construct the repro first using `diagnosing-bugs` when available.
+- Score: what the user named. Otherwise runtime for a slow path, pass rate for a flaky suite, or a critic's 0 to 10 rating for something judged by eye.
+- Target: 10% better than the baseline.
+- Budget: 10 attempts.
+- Gate: the checks that must stay green. These are the project's tests, or for an artifact, that it still builds and renders.
 
-Fix one metric, units, better direction, correctness invariants, and a stop predicate that pairs a target with a minimum attempt count. Use the user's numbers; otherwise propose 10% improvement and at least 10 completed attempts and agree them before changing code. Also agree a maximum attempt/time budget so unattended work is bounded. Baseline discovery can proceed while target agreement is pending.
+Post the thing, score, target, budget, and gate in one line, then start. The user changes them by replying, so the loop runs without waiting for approval.
 
-Record source SHA, dirty state, runtime/tool versions, machine, inputs/seed, and cache policy. Preserve unrelated work and select a clean experiment checkout. Keep generated captures local unless publishing is requested.
+Fix the scoring method and use it for every attempt:
 
-**Complete when:** the workload reproduces the symptom and the target, attempt floor, hard budget, and correctness gate are explicit. A resume reads the existing log and verifies its last accepted SHA and harness before proceeding.
+- A measured score, such as time, size, pass rate, or an eval, comes from one command. For a performance score, load the perf skill, answer its benchmark checklist for this command before you rely on it, and try ideas in its cheapest-first order.
+- A taste score comes from a critic: a helper with the `review` role (see Helpers) that did not make the change and scores the artifact against a short written rubric. The user is the final judge, as step 3 explains.
 
-## 2. Build and freeze the lever
+Score the baseline 3 times, or 5 times for timings, and note the median and the range. An attempt counts as better only when it beats the best kept score by more than that range.
 
-Reuse the project's harness. If none exists, make the smallest runnable harness exercising the real path and reporting the chosen metric. Prove sensitivity using contrasting realistic workloads: the target reproduces the symptom and the easier case separates as expected. Revise a harness that cannot distinguish them, before optimizing.
-
-Prefer the harness's established sampling protocol. Otherwise exclude one steady-state warm-up and measure at least five repetitions, reporting median and range; cold starts use fresh processes without excluded warm-up. Use enough samples to clear noise, naming the calculation and count for p95. Baseline variability sets a conservative acceptance threshold before attempts start.
-
-Use stage timings or profiles to explain the cost: project instrumentation first, native `agent_browser` or permitted agent-browser trace/profiler actions or CDP for browser work, Node `--cpu-prof`/`--heap-prof`, and macOS `sample`/`spindump`/`xctrace` when present. Check available actions/help rather than assuming command syntax. Sampled allocations alone do not prove a leak. `perf` has the longer capture recipe when installed.
-
-Freeze the command, fixture, sampling, environment, and instrumentation outside attempt-owned paths. Record the baseline and a green regression-gate run. If the harness must change later, version it, rebaseline the accepted code, and start a new comparison series; old numbers are not comparable.
-
-**Complete when:** one repeatable command emits a sensitive metric, the baseline clears noise, and the regression gate is green.
-
-## 3. Open the decision log
-
-Default to `.perf/<task>/decision.tsv`. Ensure the directory is ignored with `git check-ignore` before writing; if needed, add only this task directory to the repository's local exclude file located by `git rev-parse --git-path info/exclude`. Commit the log only if the user requests it. A Markdown log with the same fields is also valid.
-
-Use one canonical append-only log, one row per attempt:
+Open the log at `.hillclimb/<task>/log.tsv`. Add `.hillclimb/` to the file that `git rev-parse --git-path info/exclude` names, so git ignores it. Write one row per attempt:
 
 ```tsv
-id	ts	hypothesis	change	before	after	delta	tests	verdict	note	evidence	commit
+id	hypothesis	change	before	after	verdict	judge	commit	note
 ```
 
-Use ISO timestamps, single-line cells, and paths/links for evidence. Escape tabs/newlines and prefix cells beginning with `=`, `+`, `-`, or `@` with a quote when exporting to spreadsheets. Record the frozen command/environment, target, threshold, budget, and baseline artifact in a companion header note. Read the log before each attempt; append corrections instead of rewriting history. On pickup, add a start note naming the prior run and accepted SHA, so runs remain distinguishable.
+**Done when** the one-line setup is posted, the baseline has a median and a range, the gate is green, and the log has a baseline row.
 
-**Complete when:** the baseline and experiment contract are recorded in a verified ignored location, and every previous attempt has a verdict or an explicit interrupted state.
-
-## 4. Loop in verified units
+## 2. Loop
 
 For each attempt:
 
-1. Ground a falsifiable hypothesis in the profile and source mechanism, not a generic "try memoizing" idea. Name the predicted movement and behavior risks. Review the prior log to avoid repeating a rejected idea without new evidence.
-2. Implement only that hypothesis. When `subagent_spawn` exists, use `research` for profile/source reduction, `advisor` for tradeoffs, `implement-cheap` for mechanical edits, `implement-smart` for difficult changes, and `review` for the candidate diff. Supply pointers, owned paths, frozen harness, gate, and stop conditions. Omit `model` for role defaults; overrides use `provider/modelId`. Results arrive automatically; keep doing independent work rather than immediately waiting/polling. Review the real diff and artifacts yourself. Without subagents, do the same work locally. Parallel candidates get separate worktrees from the same accepted SHA; serialize timed runs and evaluate each independently before integrating.
-3. Measure the accepted state and candidate with the frozen harness, then run the correctness gate. Alternate batches if machine drift matters. Report before/after numbers, variability, absolute delta, and percent improvement (`100 * (before - after) / before` for lower-is-better, reversed for higher-is-better; undefined for zero baseline).
-4. Keep only improvement beyond the predeclared noise threshold with preserved behavior and justified complexity. Otherwise revert the attempt in full, restricted to owned changes; preserve unrelated work. Wrong-surface, failed gate, and inconclusive numbers are rejections. Confirm the restored gate before continuing.
-5. Commit each accepted win separately with a conventional subject and explicit staged paths. Log kept/reverted verdict, tests, artifact paths, and accepted SHA either way. An interrupted attempt is not a completed iteration; finish or revert it on resume before another change.
+1. Read the log, then pick one idea that names a cause you measured or saw, such as "the chin looks flat because the light comes from straight ahead". Skip ideas the log already rejected unless you have new evidence.
+2. Make that one change. Hand it to an `implement-cheap` helper, or an `implement-smart` helper for a hard change (see Helpers), and read the diff.
+3. Score it with the same method and run the gate.
+4. Keep it when it beats the best kept score by more than the range, the gate is green, and the gain is worth any added complexity. Commit only its files. Otherwise revert it in full.
+5. Log the row, kept or reverted.
 
-Every attempt ends verified before the next begins. Never stack unmeasured tweaks or modify the acceptance harness to make a candidate pass. A faster result that breaks correctness is reverted, even under deadline pressure.
+After three rejects in a row, change approach: reread the code or the artifact, try a bolder idea, or combine two near misses into one attempt. When the user steers mid-loop, for example "keep it simple but better looking", log the steer as a note, apply it to every later idea, and keep going.
 
-**Complete when:** every completed attempt has comparable evidence, a gate result, a logged verdict, and either one accepted commit or a verified revert.
+**Done when** every attempt has a logged verdict and either a commit or a full revert.
 
-## 5. Stop and verify
+## 3. Checkpoints for taste scores
 
-After several rejects, pivot strategy, reread the hot path, or test a combination of near-misses as one new hypothesis. Correctness and simplicity outrank the number. An independently useful simplification with unchanged performance may be recorded separately as a neutral result; it is not a performance win.
+When a critic gives the score, the user judges at checkpoints: after the baseline, after every third attempt, when the critic's score first reaches the target, and at the end. At each checkpoint, show the best kept version as a screenshot, a rendered page, or a link, with the critic's score, and keep working while you wait.
 
-Stop when target and attempt floor are both met, the hard budget is exhausted, or remaining ideas cost more than their likely value. Surface a stall with its evidence; leave cheap untried hypotheses explicit. Keep the original predicate unchanged and distinguish **target met**, **budget exhausted**, and **stalled**.
+The user's score overrides the critic's. Log it with judge `user`. When it differs from the critic's by more than one point, give the critic the user's score and words as a calibration example before the next attempt. Count the target as met only on the user's score.
 
-Run `/verify` in full mode at final HEAD, or discover and run all project-defined checks locally if that skill is unavailable. Report each passed, failed, or could-not-run. Remove temporary probes and audit this run's log against actual commands, artifacts, and commits; supersede inaccurate rows. If available, use a `review` subagent for this evidence audit, preferably a different model family; otherwise disclose self-review. No push or PR without a separate request.
+**Done when** every checkpoint has shown the artifact and every score the user gave is in the log.
 
-**Complete when:** final metric and correctness results are measured at the accepted HEAD, all attempts are accounted for, and the stop reason and evidence-audit limits are explicit.
+## 4. Stop and report
 
-## Report
+Stop when the target is met, the budget is spent, or the remaining ideas cost more than they are likely to gain. Run `/verify`, or the project's checks, at the final commit. Keep the commits local until the user asks to publish.
 
 ```md
-Hillclimb result:
-- Workload, metric, target + attempt floor, hard budget, and stop reason:
-- Baseline → final: <values, units, variability, percent improvement>
-- Attempts: <completed, kept, reverted, interrupted>; accepted fixes and SHAs
-- Reproduce/evidence: <frozen command, environment note, log and artifact paths, full verification>
-- Attention: <audit reviewer or self-review, risks, tradeoffs, best next hypothesis>
+Hillclimb: <score> <baseline> to <final>, target <target>. Stopped: <target met | budget spent | stalled>.
+Attempts: <n> run, <k> kept. Kept: <one line per change, with its commit>.
+Log: <path>. Next idea: <the best one left>.
 ```
+
+For a taste score, show the final artifact with both the critic's and the user's score.
+
+**Done when** the report is posted, you measured the final score at the last commit, and every attempt is in the log.
+
+## Resume
+
+`/hillclimb resume` reads the log, checks that the last kept commit is HEAD, finishes or reverts any half-done attempt, and continues at step 2.
+
+## Helpers
+
+Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, do it yourself and say so.
 
 ## Attribution
 
-Upstream license and copyright notice: [LICENSE](LICENSE).
-
-Adapted from pstack by Lauren Tan (MIT), cursor/plugins@fae2c6e.
+Adapted from pstack by Lauren Tan (MIT), cursor/plugins@e5a8186. Upstream license: [LICENSE](LICENSE).

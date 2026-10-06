@@ -1,66 +1,57 @@
 ---
 name: why
-description: Investigate why code or a design decision took its current shape, using history and evidence rather than plausible intent. Use for rationale, motivating incidents, regressions, or data-backed thresholds. For runtime mechanics use how; for general primary-source research use research.
+description: Use for /why, a question about why code or a past decision has its current shape, or a challenge to an action you took in this session ("why did you delete X?"). Answers from git and the PR in one to three sentences with a confidence word; `--deep` searches every source. Failures go to diagnosing-bugs, slowness to perf.
 ---
 
 # Why
 
-Recover the forces behind the code, not a tidy justification for it. Every causal claim needs evidence and calibrated confidence. Investigate read-only, including external systems; keep credentials and private payloads out of outputs.
+Pick the mode from what the question is about:
 
-## 1. Anchor the question
+- **Your own action.** The question names something you did in this session: an edit, a deletion, a command, a choice, or stopping. Use "Why did you do that".
+- **Code history.** The question asks why code, a setting, or a past decision looks the way it does. Use "Code history". Run the deep sweep only when the user asks for it with `--deep`, "dig deeper", or by naming more sources.
 
-State an interpretation for a vague target and proceed. Treat an embedded user hypothesis as a candidate to test. Read applicable repo instructions and domain context. Record checkout/revision and relevant dirty files, target file:line ranges, symbols, and the observed behavior. Check whether the premise is true, including exceptions to a purported rejection or limit.
+A bare `/why` asks about your last action if you just acted, and otherwise about the code discussed last. Say which in your first line.
 
-Build the initial lineage with `git blame -L <start>,<end> -- <file>`, `git log --oneline -20 -- <file>`, and `git log --follow -p -- <file>`. Use `git log -S '<literal>'` or `-G '<regex>'` to find introduction/removal, not only the most recent edit. Pickaxe on the current path misses pre-rename history; repeat against historical paths found by `--follow`, or search the relevant tree. Inspect substantive commits with `git show <sha>`; extract PR numbers and ticket IDs from full messages.
+## Why did you do that
 
-**Complete when:** the mechanics and initial commits/PRs/tickets are anchored, or the missing history is recorded as a limitation.
+1. Find the action in this session: the tool call, the edit, or the message where you decided. Quote it in one line.
+2. Give the reason you had at the time, in one to three sentences. Use the reason the session shows, even when a better one comes to mind now.
+3. Judge it. If it was a mistake, start the answer with "That was a mistake." and say what the right action was. Stopping to ask for a confirmation the user already gave counts as a mistake. If it was right, say what would have broken without it.
+4. Leave the files as they are. Offer the fix or the next step in one line, and do it when the user says so.
 
-## 2. Discover evidence access
+**Done when** the answer names the action, the real reason, and whether it was a mistake, and no file changed while answering.
 
-Read [references/sources.md](references/sources.md) before searching. Cover all seven categories: source control, issue tracker, long-form docs, team chat, observability, error tracking, and analytics.
+## Code history
 
-When the `mcp` gateway is exposed, call `mcp({})` for server status, then `mcp({search: "<category or capability>"})` to discover relevant tools. Inspect returned schemas before `mcp({tool: "<discovered name>", args: {...}})`. Discover at run time; server presence does not prove authentication, scope, or historical retention. If no gateway is exposed, say so rather than claiming no servers are configured.
+1. Find the lines in question and the commit that introduced them. `git log -S '<literal>'` or `-G '<regex>'` finds the introduction; `git blame -L <start>,<end> -- <file>` and `git log --follow -- <file>` show later edits. The reason is usually in the commit that introduced the lines, not the latest edit.
+2. Read that commit's message and its PR. Find the PR from the `(#123)` in the subject or from `gh api repos/<owner>/<repo>/commits/<sha>/pulls`. Read it with `gh pr view <n> --json title,body,comments,reviews,closingIssuesReferences`, the inline threads with `gh api repos/<owner>/<repo>/pulls/<n>/comments`, and the linked issue if there is one.
+3. Answer in this shape:
 
-Also discover local access: git history, repo docs/ADRs, `gh`, and the `linear` CLI. Inspect CLI help and repo/workspace association before querying. Local docs and GitHub Issues count even without MCP. A binary's presence does not establish access. Use explicit `gh --repo <owner/repo>` targeting where repo inference is ambiguous. Avoid querying unrelated private workspaces.
+```md
+<the answer, one to three sentences>
 
-Build a coverage map with one entry per category: available source(s), planned query, or a reason it cannot be searched. An ambiguous source gets a primary category and a note; do not count one document as independent corroboration twice.
+Evidence: <commit SHA, PR link, issue link, or path:line, with a short quote of the deciding sentence>
+Confidence: <Direct | Supported | Inferred | Speculative | Unknown>
+```
 
-**Complete when:** every category has an access/query plan or an explicit gap.
+Choose the confidence word from the evidence:
 
-## 3. Investigate by category
+- **Direct.** An author wrote the reason down in a commit, PR, issue, or doc. Quote it.
+- **Supported.** Several separate clues agree, but nobody wrote the reason down. A PR that repeats a doc counts as one clue.
+- **Inferred.** A reasonable reading of the code and history. Name the clues.
+- **Speculative.** More than one story fits thin evidence. Give the best one and call it a guess.
+- **Unknown.** The search did not answer the question. Say where you looked.
 
-Default to independent category searches in parallel when `subagent_spawn` is exposed. Use role `research` for cheap read-only investigation. Give each the original question, repo/revision, code anchor, assigned category and accessible tools, plus the matching section of sources.md and this return contract:
+Write "because" only at Direct or Supported. Code shows what happens; author text shows why someone chose it. If the question comes before a change, add one line on what to keep and what the change could break.
 
-- Exact queries, scope/time window, items fully read, and pagination or access limits.
-- Direct quotes with file:line, commit, PR/ticket URL, or stable record ID; author/date where known.
-- Indirect evidence with its inference chain, contradictions, null results, and unsearched leads.
+**Done when** the answer has at most three sentences, at least one evidence link, and a confidence word that matches that evidence.
 
-Each investigator owns a category, which may require several tools. Results arrive automatically; do not poll. Verify that delegates can access assigned MCP/CLI sources; if not, search those inline. With no subagents, execute the same category queries sequentially. Record fallback or failures without downgrading coverage silently.
+## Deep sweep
 
-Read full relevant bodies and discussion threads, not search previews. For long histories, scope by target symbols/files/dates and chunk large responses; record unreviewed threads or result caps. A fetched payload is not a consulted source until read. Follow cross-category links in a follow-up pass assigned to that category. Search available sources unless the user explicitly narrowed scope or a source is demonstrably irrelevant; record either reason in coverage. For defensive code, look for incidents/postmortems and action items around the introduction date. Bounded read-only telemetry may corroborate a timeline; correlation alone does not establish motivation.
+Read [references/sources.md](references/sources.md), then search each source this session can reach: git and PRs, the issue tracker, docs, team chat, observability, error tracking, and analytics. Hand each source to a helper agent with the `research` role: on Pi or SumoCode spawn role `research`; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, search the sources yourself one after another and say so.
 
-**Complete when:** each planned category has findings or a documented null/failure/skip, and material linked leads are followed or recorded as open.
+Answer in the same shape, with one confidence word per claim, then one coverage line per source.
 
-## 4. Calibrate and synthesize
+**Done when** all seven sources have a coverage line and every claim has its own confidence word.
 
-Read [references/evidence.md](references/evidence.md) before synthesis. Reconcile evidence without hiding disagreements or preferring the newest commit automatically. Verify decisive citations against originals. Code establishes mechanics; explicit author text establishes intent.
-
-When useful and available, use role `review` for citation/technical checking or `advisor` for competing explanations, passing the question, anchor, all findings including gaps, and evidence.md. Different roles/models provide diversity; optional `model` is a known available `provider/modelId`, never a guessed slug. Otherwise perform this check inline.
-
-**Complete when:** each causal claim has a confidence tier and adjacent evidence or an explicit uncertainty label; contradictions and unavailable records remain visible.
-
-## 5. Present
-
-Lead with the shortest supported answer, then use this shape, omitting empty optional sections:
-
-- **The question / code in question:** target and verified mechanics, including premise corrections.
-- **What we found:** `[Direct]` and `[Supported]` claims with adjacent citations and relevant quotes.
-- **What we can reasonably infer / competing hypotheses:** hedged chains and alternatives, when warranted.
-- **What we don't know:** specific unanswered questions, null searches, and access/retention gaps. Always include this, even if only to state that no material rationale gap remains within the searched scope.
-- **Sources consulted / confidence summary:** one coverage entry per category, with actual queries/items or skip/failure reasons; finish with confidence in the core rationale versus details.
-
-If the question precedes a change, add **Preserve / Change / Avoid / Risk** constraints derived from the lineage. Do not implement the change. Save an output only if asked, at the requested path or an agreed scratch location.
-
-**Complete when:** evidence per claim, all seven coverage entries, confidence separation, and material gaps survive the final wording.
-
-Adapted from pstack by Lauren Tan (MIT), cursor/plugins@fae2c6e.
+Adapted from pstack by Lauren Tan (MIT), cursor/plugins@e5a8186. Upstream license: [LICENSE](LICENSE).

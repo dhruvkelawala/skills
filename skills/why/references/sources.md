@@ -1,39 +1,42 @@
-# Category searches
+# Deep sweep sources
 
-Read before discovery/search. Use discovered MCP schemas or CLI help, not hardcoded vendor tool names. Query only sources associated with the target repo/team. Start with symbols, feature names, exact error strings, PR URLs, ticket IDs, authors, and introduction dates; broaden vocabulary when the first search is empty.
+Read this before a `/why --deep` sweep. Search only sources tied to this repo or team. Start from the anchor: symbols, file paths, exact error strings, PR and issue numbers, authors, and the date the code arrived. Widen the search words when a search comes back empty.
 
-## Source control
+First find what this session can reach. List the host's MCP servers and tools. On Pi the `mcp({})` gateway lists them; in Claude Code and Codex they appear in the tool list. Check local CLIs such as `gh` and `linear` with `--help`. A configured server or an installed CLI does not prove that you can log in or that old records still exist.
 
-Use blame, rename-aware file history, pickaxe (`git log -S/-G`), full commit messages/diffs, co-changed files, comments, and tests. Trace introduction and later policy changes. Note shallow history or missing remotes; local git does not guarantee PR access.
+Give each helper the question, the anchor, its one source, and the matching section below. Each helper returns its queries, the items it read in full, direct quotes with links, and any leads that belong to another source.
 
-For substantive PRs, use `gh pr view <n> --json title,body,author,createdAt,mergedAt,closingIssuesReferences,comments,reviews,files`. Fetch inline review comments/threads separately through `gh api` (paginate) or a discovered MCP tool: `comments` and `reviews` do not include every inline discussion. If commit messages lack PR numbers, use the GitHub commit-to-PR association endpoint `repos/<owner>/<repo>/commits/<sha>/pulls` or a bounded PR search. Read linked issues under the issue category. Quote rationale, not merely the patch.
+## Git and PRs
+
+Run `git log -S` and `-G` on the current path and on old paths from `git log --follow`. Read full commit messages, files changed in the same commit, and tests. For each PR that matters, read `gh pr view <n> --json title,body,comments,reviews,closingIssuesReferences` and the inline threads from `gh api repos/<owner>/<repo>/pulls/<n>/comments --paginate`. Quote the reasoning, not the patch.
 
 ## Issue tracker
 
-Prefer linked issues, then keyword searches across open and closed items. With GitHub, use `gh issue view` including comments and `gh issue list --state all --search '<query>'`; record result limits. With Linear, inspect `linear --help` and its subcommands before use, verify the associated workspace, and fetch description/comments through supported commands or discovered MCP tools. Follow parents, duplicate chains, project docs, labels, and scope changes. Generic template text and labels alone are weak rationale.
+Start with linked issues, then search open and closed ones: `gh issue list --state all --search '<words>'`, or Linear through its CLI or MCP after checking it is the right workspace. Follow parent and duplicate links. Labels and template text are weak evidence.
 
-## Long-form docs
+## Docs
 
-Search local `docs/adr`, RFCs, plans, runbooks, and release notes even without remote docs access. Then search available document services by feature, symbol, author, and date. Read complete candidates and linked alternatives/action items; capture section/line or stable URL, author/date, and draft/accepted/superseded status. Check doc/code drift and distinguish an intended plan from the shipped policy.
+Search the repo's `docs/`, ADRs, RFCs, plans and runbooks, then any doc service the host can reach. Note whether each doc is a draft, accepted, or replaced, and whether the code still matches it.
 
 ## Team chat
 
-Search feature/error strings, PR URLs, and author/date windows in engineering/project channels. Fetch whole threads with permalinks and attribution. For defensive code, include incident channels near its introduction. Record authentication failures, retention cliffs, inaccessible DMs, and unsearched channels. Casual suggestions are not necessarily decisions.
+Search feature names, error strings, and PR links in the weeks around the date the code arrived. Read whole threads and keep permalinks. A suggestion in chat is not a decision.
 
-## Observability
+## Observability and error tracking
 
-Identify service/team first. Search dashboards, monitors, incidents, and postmortems before bounded metrics/logs/traces around the change date. Capture IDs, owner/date, exact query/threshold, time window, and compact results. Read incident action items. A matching alert or before/after spike supports a hypothesis, not proof that this line was caused by it. Account for neighboring releases and missing retention.
-
-## Error tracking
-
-Confirm project/org, then search exceptions, symbols, file paths, and exact error strings. Inspect representative events/stacks and issue comments; capture first/last seen, frequency/sampling, affected releases, and stable IDs. Compare with ship dates. Manual resolution, changed grouping, upstream fixes, or sampled counts can mimic a fix. AI-generated root-cause summaries are hypotheses, not primary evidence.
+Find the service first. Look for incidents, postmortems, monitors, and the first-seen date of a matching error near the change date. A spike that lines up with a change supports a story but does not prove the author's reason. Treat AI summaries inside these tools as guesses.
 
 ## Analytics
 
-Discover schema/table/column names before querying. Use read-only, time-bounded aggregates around the change: counts, percentiles, exposure/outcome distributions, first/last seen. Prefer typed/deduplicated models and record fully qualified tables and exact queries. Check refresh lag, instrumentation/schema changes, duplicate events, sampling, and retention. Correlate rollout/threshold evidence with author rationale; warehouse rows alone rarely establish intent. Record unavailable notebooks as gaps.
+Find table and column names before querying. Run read-only, time-bounded counts around the change. Data rarely shows intent, so pair it with author text.
 
-## Follow-up and coverage
+## Calibrating the answer
 
-Each category returns quotes/citations, queries/items fully read, contradictions, nulls/access limits, and cross-category leads. Assign linked leads to their owning category for follow-up; avoid duplicate searches. For defensive code, pursue incident/postmortem references within every available category, without assuming an incident occurred.
+- A PR that says "fixes timeouts" records the goal. It does not show that timeouts stopped.
+- When sources disagree, quote both with their dates instead of picking the newest.
+- For defensive code such as retries, timeouts, null guards, and rate limits, look for an incident near the date it arrived.
+- Record a failed or unavailable search as a gap, separate from a search that found nothing.
 
-Report all seven categories separately as searched (with scope/results), unavailable (with failure reason), or intentionally skipped (user-scoped or demonstrably irrelevant). Never turn a failed query into "no evidence".
+## Coverage lines
+
+Write one line per source, in one of three forms: searched, with the queries and time window; unavailable, with the reason; or skipped, with the reason.
