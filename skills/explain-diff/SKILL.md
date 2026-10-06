@@ -46,11 +46,11 @@ End with two or three labelled zoom-in choices, and ask which part is still uncl
 
 - Plain English: short active sentences, real names and values, and a short gloss on any term the reader may not know, at first use.
 - Use the repository's own names for things; read `CONTEXT.md` when it exists.
-- Every trace step points at a file and a line.
+- Every trace step is a Markdown link to the file and line at the explained revision, such as `[store.ts:31](/abs/path/src/intake/store.ts:31)`, so the host opens it in its own editor. For a PR that is not checked out, make the read-only review checkout from pr-review step 1 first and link into it, never to GitHub.
 
 Example:
 
 > **Problem:** Each source sends a different format, and we need one internal shape that never drops a field.
 > **Key idea:** `.passthrough()` keeps unknown fields instead of deleting them.
-> **Trace:** `POST /intake {..., weirdField: 123}` is checked by `src/intake/schema.ts:14`, stored by `src/intake/store.ts:31`, and read back after a restart by `src/intake/load.ts:9` with `weirdField` still present.
+> **Trace:** `POST /intake {..., weirdField: 123}` is checked by [schema.ts:14](/repo/src/intake/schema.ts:14), stored by [store.ts:31](/repo/src/intake/store.ts:31), and read back after a restart by [load.ts:9](/repo/src/intake/load.ts:9) with `weirdField` still present.
 > **Zoom in?** (a) where the run log is stored (b) why passthrough matters (c) the restart test

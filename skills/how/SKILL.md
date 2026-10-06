@@ -12,7 +12,7 @@ Answer a "how does this work" or "where should this go" question from the real c
 - A question names the target. If it could mean two things, say which one you picked in one line and go on.
 - A bare `/how` while the conversation holds a list, such as a PR stack or a review queue, means the next item after the last one explained. Name that item in your first line.
 - A bare `/how` with no list means the thing discussed last.
-- For a PR, read the code at its head commit. Use the PR's local worktree if one exists, with its absolute paths. Otherwise use `gh pr diff <n>` and `git show <head-sha>:<path>`.
+- For a PR, read the code at its head commit. Use the PR's local checkout if one exists, such as pr-review's review checkout at `~/.agent/pr-review/<repo>/<n>`. Otherwise make that read-only checkout the way pr-review step 1 does, so every pointer opens locally.
 
 Then choose one input to trace: a real request, command, event, or record. Take it from a test, a fixture, or the PR description before inventing one.
 
@@ -56,7 +56,7 @@ Use this shape and these headings, so that other skills such as `pr-review` can 
 **Watch out.** Surprises, failure paths, over-engineering, and unverified links. One line each, at most three.
 ```
 
-Aim for 300 to 600 words. Go longer only when the user asks for depth. Write plain words, as one engineer explains code to another. Use the repo's own names, and define a new term in the sentence where it first appears. Point with `path:line` instead of pasting code, and quote a few lines only when the exact text matters.
+Aim for 300 to 600 words. Go longer only when the user asks for depth. Write plain words, as one engineer explains code to another. Use the repo's own names, and define a new term in the sentence where it first appears. Point with Markdown links to the local file and line, such as `[fire.ts:118](/abs/path/src/fire.ts:118)`, instead of pasting code, and quote a few lines only when the exact text matters.
 
 **Done when** the answer comes first, the trace follows one input, every pointer is a `path:line`, and the length is within 600 words unless the user asked for depth.
 
