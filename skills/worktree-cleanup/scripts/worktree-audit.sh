@@ -78,8 +78,8 @@ worktree_row() {
     elif [ "$unpushed" != 0 ]; then bucket=HOLD-UNPUSHED-OR-UNKNOWN
     elif [ "$merged" = YES ]; then bucket=CANDIDATE-CHECK-USAGE
     fi
-    printf '%q\t%q\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$repo" "$wt" "${branch:-DETACHED}" "$size" "$age" "$merged" "$dirty" "$unpushed" "$remote_state" "$bucket"
+    printf '%q\t%q\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$repo" "$wt" "${branch:-DETACHED}" "$size" "$age" "$merged" "$dirty" "$unpushed" "$remote_state" "$bucket" "${head:-UNKNOWN}"
     rows=$((rows + 1))
 }
 
@@ -168,7 +168,7 @@ discover() {
     done
 }
 
-printf 'REPO\tWORKTREE\tBRANCH\tSIZE_KIB\tHEAD_AGE_DAYS\tMERGED\tDIRTY\tUNPUSHED\tREMOTE\tBUCKET\n'
+printf 'REPO\tWORKTREE\tBRANCH\tSIZE_KIB\tHEAD_AGE_DAYS\tMERGED\tDIRTY\tUNPUSHED\tREMOTE\tBUCKET\tHEAD\n'
 discover "$(cd "$root" && pwd -P)"
 printf 'SUMMARY repos_with_worktrees=%s worktrees=%s errors=%s skipped_invalid_git_markers=%s (read-only; nothing removed)\n' "$repos" "$rows" "$errors" "$skipped" >&2
 [ "$errors" -eq 0 ]

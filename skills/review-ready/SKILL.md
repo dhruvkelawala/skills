@@ -1,76 +1,49 @@
 ---
 name: review-ready
-description: Completion gate to run before declaring any implementation, refactor, test change, API/handler, CLI command, workflow, migration, integration adapter, or agent-instruction change complete. Enforces a design contract (deep modules, narrative entry points, real seams, interface-oriented tests) and produces a review-ready report. Use automatically before handing work back, or when the user asks for the code-quality / review-ready gate.
+description: Use before declaring any code, test, workflow or agent-instruction change complete, in preflight before implementing one, or when the user asks for the review-ready gate. Checks the change against a design contract (readable entry points, deep modules, real seams, tests through the interface, no comment noise) and writes the gate report.
 ---
 
 # Review-ready gate
 
-This skill is a **completion gate** for code changes. The change is not ready to
-hand back until the gate report is complete and every concrete violation has
-either been fixed in the changed scope or recorded as an intentional exception.
-
-It is deliberately thin: it selects the mode, points at the governing contract,
-and shapes the report. The *rules* live in a contract document, not here.
+Run this gate before handing back a code change. The change is ready when the report below is complete and every concrete violation is fixed in the changed scope or recorded as an exception in the PR description. The rules live in the contract.
 
 ## Load the contract
 
-Resolve the governing contract in this order and use the first that exists:
+Use the first contract that exists:
 
-1. A project override named in the task or repo config (e.g. a path passed by
-   the user, or one referenced from `AGENTS.md` / `CLAUDE.md`).
-2. A repo contract at one of: `docs/agents/code-quality.md`,
-   `docs/code-quality.md`, `.agents/code-quality.md`, or `CONTRACT.md`.
-3. The bundled default: `contract.md` next to this file.
+1. A contract the task names, or one that the repo's `AGENTS.md` or `CLAUDE.md` points to.
+2. In the repo: `docs/agents/code-quality.md`, `docs/code-quality.md`, `.agents/code-quality.md` or `CONTRACT.md`.
+3. [contract.md](contract.md), next to this file.
 
-Then:
+Read it completely. Find the changed seam from the task and `git diff --name-only`. When the diff falls outside the contract's "When it applies" section, report that the gate does not apply, say why, and stop.
 
-1. Read the resolved contract completely.
-2. Identify the changed seam from the task and `git diff --name-only`.
-3. If the diff falls outside the contract's `## When it applies` scope, say the
-   gate is not applicable and why.
+Complete when you know the contract path and the changed seam, or have reported why the gate does not apply.
 
-State which contract you loaded (path) in the report.
+## Preflight
 
-## Preflight mode
+Run this before implementing, while the change is still taking shape. Write this note, then implement with it in view and within the contract's scope:
 
-Use this **before** implementation, while the change is still being shaped.
-Produce a short preflight note:
+```md
+Preflight:
+- Changed seam: <the behaviour boundary the change moves>
+- Entry point: <the file, handler, command or workflow a reader follows top to bottom>
+- Owner: <the module that owns new types, policy, lifecycle, validation and errors>
+- Test seam: <the caller-facing interface the tests exercise>
+```
 
-- **Changed seam**: the behavior boundary being changed.
-- **Narrative entry point**: the file/function/handler/command/workflow the
-  reader should be able to follow top-to-bottom.
-- **Owner**: the module that should own new domain types, policy, lifecycle,
-  validation, and errors.
-- **Test surface**: the caller-facing interface or declarative seam that tests
-  should exercise.
+## Final gate
 
-Then implement with that seam in view, within the contract's scope rule.
-
-## Final gate mode
-
-Run this **after** implementation and before the final response. Treat the
-contract's review-ready gate section as the single source of truth for the gate
-procedure; this skill only selects the mode and shapes the report.
-
-When applying the contract:
-
-- Follow the documented gate in order, including its timing, verification,
-  simplification, and exception-recording rules.
-- Use the four contract test names as headings for your notes: caller-knowledge,
-  deletion, ownership, and test-surface.
-
-## Required report
-
-Include this report before declaring the work complete. For `Exceptions`, write
-`None` or point to the PR-description entry required by the contract.
+Run this after implementing and before the final response. Follow the contract's gate section in order, including its timing, verification, simplification and exception rules. Then include this report:
 
 ```md
 Review-ready gate:
-- Contract:
+- Contract: <path>
 - Changed seam:
-- Trace:
-- Four tests:
-- Simplification pass:
-- Verification:
-- Exceptions:
+- Trace: <the input traced, and what the entry point showed>
+- Four tests: <one line per test the contract names>
+- Simplification pass: <what was removed, with comment lines cut and kept>
+- Verification: <each command and its result>
+- Exceptions: <None, or a pointer to the PR-description entry>
 ```
+
+Complete when the report is filled in and every concrete violation is fixed or recorded as an exception.
