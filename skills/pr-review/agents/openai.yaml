@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR review"
+  short_description: "Triage, explain, and comment on a PR or a stack, one PR at a time"
+  default_prompt: "Use $pr-review on the current PR. For a stack, start from its bottom PR."

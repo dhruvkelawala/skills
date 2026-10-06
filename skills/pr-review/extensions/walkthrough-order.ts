@@ -13,7 +13,7 @@ function readWalkthroughOrder(cwd: string): WalkthroughOrder | null {
 	try {
 		const gitPath = execFileSync(
 			"git",
-			["rev-parse", "--git-path", "hunk-walkthrough-order.json"],
+			["rev-parse", "--git-path", "pr-review-order.json"],
 			{ cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
 		).trim();
 		const parsed = JSON.parse(readFileSync(resolve(cwd, gitPath), "utf8")) as Partial<WalkthroughOrder>;

@@ -45,7 +45,7 @@ if (
 	usage('stdin must be {"files":["path", ...]} with unique non-empty paths');
 }
 
-const gitPath = execFileSync("git", ["rev-parse", "--git-path", "hunk-walkthrough-order.json"], {
+const gitPath = execFileSync("git", ["rev-parse", "--git-path", "pr-review-order.json"], {
 	cwd: repo,
 	encoding: "utf8",
 	stdio: ["ignore", "pipe", "inherit"],
