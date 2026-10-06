@@ -1,6 +1,6 @@
 # Stops as Hunk notes in Herdr
 
-Use this only inside Herdr (`HERDR_ENV=1`). It opens the pinned range in Hunk and attaches the stops from step 3 as numbered notes, so Hunk's next-note key walks the story in order.
+Use this only inside Herdr (`HERDR_ENV=1`). It opens the pinned range in Hunk and attaches step 3's notes as numbered Hunk notes: one per design change at the line where it is decided, plus the line stops when the implementation layer is shown. Hunk's next-note key then walks the story in order. Below, "stops" means all of these notes.
 
 Resolve these bundled files relative to the skill's `SKILL.md`, and keep their absolute paths for the run:
 
