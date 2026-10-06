@@ -27,4 +27,4 @@ Either mismatch stops the run as blocked, with both values in the report. Run th
 
 ## After publishing
 
-A stack merges bottom up, by a human, so this skill never merges a layer. When the predecessor moves or merges, follow the predecessor case in [resume](resume.md).
+A stack merges bottom up through `/ship land <bottom PR>`, one verified and approved layer at a time. With `--merge`, this skill lands a layer only once it is the bottom of its stack, as stage 7 describes. When the predecessor moves or merges, follow the predecessor case in [resume](resume.md).
