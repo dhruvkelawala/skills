@@ -1,4 +1,0 @@
-interface:
-  display_name: "Herdr Hunk Walkthrough"
-  short_description: "Guide a PR review in Hunk as Hunk notes in Herdr or file:line links elsewhere"
-  default_prompt: "Use $hunk-walkthrough to give me a numbered code walkthrough of the current PR. Inside Herdr add `split` for a 50/50 split instead of a new tab."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Visual Diff"
-  short_description: "Explain code changes as an interactive visual story"
-  default_prompt: "Use $visual-diff to explain the current branch changes as a visual HTML page."
