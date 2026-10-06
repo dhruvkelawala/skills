@@ -37,7 +37,7 @@ On `main`, `master` or the default branch, create `<type>/<short-description>` w
 ## 4. Verify and review
 
 1. Run `/verify` in focused mode, or the project's obvious formatter and focused tests when it is unavailable. Skip this when the exact current HEAD already has a `/verify` result from earlier in this session, as it does when `/issue-to-pr` or `/pr-watch` calls in.
-2. With `--run-record`, read its `autoreview` line. When the result is clean and its tree equals `git rev-parse HEAD^{tree}`, skip the helper and carry that engine, model and result into the report and the PR body. `/issue-to-pr` runs autoreview once in its own review stage, and this keeps apr from repeating it.
+2. With `--run-record`, read its `autoreview` line. When the result is clean, its tree equals `git rev-parse HEAD^{tree}`, and `git status --porcelain` prints nothing (no staged, unstaged or untracked changes), skip the helper and carry that engine, model and result into the report and the PR body. `/issue-to-pr` runs autoreview once in its own review stage, and this keeps apr from repeating it.
 3. Otherwise, unless review was skipped, review the exact change with the helper. Uncommitted work:
 
 ```bash
