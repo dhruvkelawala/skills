@@ -1,42 +1,44 @@
 ---
 name: apr
-description: Autoreview, commit, push, open or update a ready-for-review GitHub pull request, then watch it and repair PR review findings until CI and reviewers are clean. Standalone or a gh stack layer, reviewing from a pinned base. Use when the user invokes /apr, /apr claude, /apr --skip-review, asks to review and publish local changes, or when /issue-to-pr or /pr-watch reaches its publish step.
+description: Use when the user invokes /apr, /apr claude or /apr --skip-review, asks to review and publish local changes, or when /issue-to-pr or /pr-watch reaches its publish step. Autoreviews from a pinned base, commits, pushes, opens or updates a ready-for-review GitHub PR, standalone or as a stacked layer, then watches it with /pr-watch until CI and reviewers are clean.
 ---
 
 # APR
 
-Autoreview first, then an intentional commit, push, a ready-for-review PR, and a watch loop that repairs what CI and PR reviewers report. Review quality outranks publishing speed: nothing is pushed while an accepted finding is open.
+apr runs autoreview first, then makes an intentional commit, pushes, opens a ready-for-review PR, and watches it while CI and PR reviewers report findings. It pushes nothing while an accepted review finding is open.
 
-Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<predecessor PR URL>]] [--no-watch] [--max-repairs N] [--body-file <path>]`.
+Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<predecessor PR URL>]] [--no-watch] [--max-repairs N] [--body-file <path>] [--run-record <path>]`.
 
 - Engine defaults to `codex`, matching autoreview's own order (OpenAI through Codex before Claude). `claude` selects Claude. Anything else stops with a question.
 - `--skip-review` skips autoreview. The report then says so and claims no clean result.
 - `--base` pins the review range and the PR base. `/issue-to-pr` passes its `base_sha`.
-- `stack [<predecessor PR URL>]` publishes the current branch as a layer on that PR. Without a URL, stacking is detected: the branch is stacked when `gh stack view` succeeds and lists it, and its predecessor is the branch below it.
-- `--no-watch` stops after the PR is published. `/issue-to-pr` and `/pr-watch` pass it because they own the watch loop themselves.
-- `--max-repairs` bounds the watch loop. Default is 10.
-- `--body-file` supplies a prepared PR body. apr uses it verbatim apart from filling the autoreview line, instead of writing its own. `/issue-to-pr` passes one built from its template.
+- `stack [<predecessor PR URL>]` publishes the current branch as a layer on that PR. Without a URL, apr treats the branch as stacked when `gh stack view` succeeds and lists it, and takes the branch below it as the predecessor.
+- `--no-watch` stops after the PR is published. `/issue-to-pr` and `/pr-watch` pass it because they own the watch themselves.
+- `--max-repairs` is the repair budget for the watch. The default is 10.
+- `--body-file` supplies a prepared PR body. apr uses it as written apart from filling the autoreview line. `/issue-to-pr` passes one built from its template.
+- `--run-record` names an `/issue-to-pr` run record. When it holds a clean autoreview for the current tree, step 4 reuses that result instead of reviewing again.
 
 ## 1. Resolve inputs once
 
 1. **Helper.** The review helper is the `autoreview` script. Resolve the first that exists and keep it as `$AUTOREVIEW`:
-   `.agents/skills/autoreview/scripts/autoreview`, `.claude/skills/autoreview/scripts/autoreview`, `$AGENTS_HOME/skills/autoreview/scripts/autoreview`, `~/.agents/skills/autoreview/scripts/autoreview`, `~/.claude/skills/autoreview/scripts/autoreview`. If none exists and review was not skipped, stop: autoreview is required and cannot be replaced by an inline review.
-2. **Engine and model.** `codex` runs with `--model gpt-6.1-sol --thinking xhigh`; `claude` runs with `--model claude-sonnet-5-5`. A model or effort the user names replaces these. Keep the pair as `$ENGINE_FLAGS`. The chosen engine and model stay fixed for the whole run: on capacity, rate-limit, or latency errors retry the same command up to three times, then report the blocker. Only the helper's own documented account-access fallback may change the model.
+   `.agents/skills/autoreview/scripts/autoreview`, `.claude/skills/autoreview/scripts/autoreview`, `$AGENTS_HOME/skills/autoreview/scripts/autoreview`, `~/.agents/skills/autoreview/scripts/autoreview`, `~/.claude/skills/autoreview/scripts/autoreview`. If none exists and review was not skipped, stop, because autoreview is required and an inline review cannot replace it.
+2. **Engine and model.** `codex` runs with `--model gpt-6.1-sol --thinking xhigh`; `claude` runs with `--model claude-sonnet-5-5`. A model or effort the user names replaces these. Keep the pair as `$ENGINE_FLAGS`. The engine and model stay fixed for the whole run. On capacity, rate-limit or latency errors, retry the same command up to three times, then report the blocker. Only the helper's own documented account-access fallback may change the model.
 3. **Base.** `--base` if given. Otherwise the predecessor branch's remote-tracking ref when stacked, else the remote default branch from `gh repo view --json defaultBranchRef`. Record the resolved base SHA with `git rev-parse`.
 4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker.
 
 ## 2. Confirm scope
 
-Run `git status -sb` and read the diff. If the worktree mixes this change with unrelated files, ask which files belong in the PR; never stage the rest. If nothing is changed and nothing is unpushed, stop: there is nothing to publish.
+Run `git status -sb` and read the diff. If the worktree mixes this change with unrelated files, ask which files belong in the PR, and stage only those. If nothing is changed and nothing is unpushed, stop, because there is nothing to publish.
 
 ## 3. Branch
 
-On `main`, `master`, or the default branch, create `<type>/<short-description>` with a conventional-commit type, for example `fix/handle-empty-import-rows`. On a feature branch, stay. In `stack` mode with no stack yet, run `gh stack init` on the trunk first, then `gh stack add <branch>`.
+On `main`, `master` or the default branch, create `<type>/<short-description>` with a conventional-commit type, for example `fix/handle-empty-import-rows`. On a feature branch, stay. In `stack` mode with no stack yet, run `gh stack init` on the trunk first, then `gh stack add <branch>`.
 
 ## 4. Verify and review
 
 1. Run `/verify` in focused mode, or the project's obvious formatter and focused tests when it is unavailable. Skip this when the exact current HEAD already has a `/verify` result from earlier in this session, as it does when `/issue-to-pr` or `/pr-watch` calls in.
-2. Unless skipped, review the exact change with the helper. In the `/issue-to-pr` path this is deliberately a second opinion after `/code-review`: a different engine family reading the same base-to-HEAD diff once. Uncommitted work:
+2. With `--run-record`, read its `autoreview` line. When the result is clean, its tree equals `git rev-parse HEAD^{tree}`, and `git status --porcelain` prints nothing (no staged, unstaged or untracked changes), skip the helper and carry that engine, model and result into the report and the PR body. `/issue-to-pr` runs autoreview once in its own review stage, and this keeps apr from repeating it.
+3. Otherwise, unless review was skipped, review the exact change with the helper. Uncommitted work:
 
 ```bash
 "$AUTOREVIEW" --mode local --engine <engine> $ENGINE_FLAGS --max-priority P1
@@ -48,10 +50,10 @@ On `main`, `master`, or the default branch, create `<type>/<short-description>` 
 "$AUTOREVIEW" --mode branch --base <base-sha> --engine <engine> $ENGINE_FLAGS --max-priority P1
 ```
 
-3. Verify every finding against the real code. Fix accepted findings, rerun the focused tests, rerun the same helper command. Reject a finding only with a stated reason.
-4. Heartbeat lines from the helper mean it is working. Do not kill a review under thirty minutes.
+4. Check every finding against the real code. Fix accepted findings, rerun the focused tests, and rerun the same helper command. Reject a finding only with a stated reason.
+5. Heartbeat lines mean the helper is still working. Give a review at least thirty minutes before stopping it.
 
-**Complete when:** the helper exits 0 with no accepted or actionable findings for the current tree, or review was skipped by flag.
+**Complete when:** the helper exits 0 with no accepted or actionable findings for the current tree, the run record holds a clean autoreview for the current tree, or review was skipped by flag.
 
 ## 5. Commit
 
@@ -62,7 +64,12 @@ Stage only the in-scope files. Commit with a conventional-commit subject that wi
 Check for an existing PR first: `gh pr view --json url,state,baseRefName,headRefOid`.
 
 - **Stacked, tracked locally** (`gh stack view` lists the branch): `gh stack push`, then `gh stack submit --open` to create or update every PR in the stack as ready for review.
-- **Stacked, not tracked** (branch created outside gh stack, common in a fresh worktree): `git push -u origin "$(git branch --show-current)"`, then `gh stack link <predecessor PR URL> "$(git branch --show-current)" --open`, which creates or updates the PR with the predecessor's head branch as base and joins the stack on GitHub without local tracking.
+- **Stacked, not tracked** (a branch created outside gh stack, common in a fresh worktree): `git push -u origin "$(git branch --show-current)"`, then create the PR with the predecessor's head branch as its base, or update the existing one:
+
+```bash
+gh pr create --title "$title" --body-file "$body_file" --head "$(git branch --show-current)" --base "$predecessor_head_branch"
+```
+
 - For both, confirm with `gh pr view --json baseRefName` that this branch's PR targets the predecessor branch, not the trunk. If it targets the trunk, stop and report.
 - **Standalone, no PR yet:** `git push -u origin "$(git branch --show-current)"`, then:
 
@@ -70,39 +77,27 @@ Check for an existing PR first: `gh pr view --json url,state,baseRefName,headRef
 gh pr create --title "$title" --body-file "$body_file" --head "$(git branch --show-current)" --base "$base_branch"
 ```
 
-- **Standalone, PR exists:** push the new commits and update the body with `gh pr edit --body-file`. Never open a duplicate.
+- **Standalone, PR exists:** push the new commits and update the body with `gh pr edit --body-file`. Update the existing PR rather than opening a second one.
 
-Always ready for review, never draft. No `[codex]` or other tag in the title.
+Open every PR ready for review, not as a draft, and with no `[codex]` or other tag in the title.
 
-**Complete when:** `gh pr view --json headRefOid` equals the local HEAD and the PR is open and non-draft.
+**Complete when:** `gh pr view --json headRefOid` equals the local HEAD and the PR is open and ready for review.
 
 ## 7. Watch and repair
 
-Skip with `--no-watch`. Otherwise loop until the PR is clean or the budget is spent:
+Skip with `--no-watch`. Otherwise load and follow `/pr-watch <PR URL> --max-repairs <N>` for this PR, with the remaining budget from `--max-repairs`. It resolves reviewers, the request comment and ignored checks from its own configuration, and it hands each repair back to `/apr --no-watch`.
 
-1. Run the gate from `/pr-watch`, configuring reviewers the way that skill describes:
-
-```bash
-node "$PR_WATCH_DIR/scripts/pr-gate.mjs" --repo "$OWNER/$REPO" --pr "$PR_NUMBER" \
-  --expected-head "$(git rev-parse HEAD)" [--reviewer <login>]... [--request-comment "<text>"] --watch --json
-```
-
-2. Exit `0`: the PR is clean. Stop.
-3. Exit `1` (timeout): report the open reasons and stop. Waiting longer is the user's call.
-4. Exit `2` (blocked): classify each reason as `/pr-watch` does. Failed checks and unresolved threads are repairs; a draft, closed, or mismatched-HEAD PR is a stop. For each repair, verify the finding against the code, fix it or reply with why it is wrong, and resolve the thread only after the fix is pushed or the rejection is posted.
-5. A repair that changed code counts one against the budget. Rerun step 4 in branch mode from the same base, then step 5 and step 6 to push and update the PR, then return to step 1 with the new HEAD.
-
-**Complete when:** the gate exits `0` for the current HEAD, or the budget or timeout is exhausted and the report lists every reason still open.
+**Complete when:** `/pr-watch` reports the gate exiting `0` for the current HEAD, or reports the budget or timeout spent with every reason still open.
 
 ## PR body
 
-With `--body-file`, use the supplied body and set its autoreview line to the engine, model, and result from step 4. Otherwise write real Markdown prose, in this order: what changed, why, user or developer impact, root cause when the PR fixes a bug, and the verification and autoreview command used, with exact commands and their results rather than "tests pass".
+With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, model and result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: a Summary with one diagram, Evidence before and after, and Merge danger with the door and the blast radius. Under Evidence, give the exact verification and autoreview commands with their results, rather than "tests pass". For a fix, name the root cause in the Summary.
 
 ## Report
 
 - Branch, commit SHA and subject
 - PR URL, base branch, and whether it is a stack layer
 - Tests run
-- Autoreview command and clean result, or `review skipped by --skip-review`
-- Gate result, reviewers required, and repairs made against the budget, or `watch skipped by --no-watch`
+- Autoreview command and clean result, the clean result reused from `--run-record`, or `review skipped by --skip-review`
+- `/pr-watch`'s gate result, the reviewers it required and the repairs it made against the budget, or `watch skipped by --no-watch`
 - Findings fixed, and findings rejected with the reason

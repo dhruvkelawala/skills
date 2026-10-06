@@ -1,4 +1,4 @@
 interface:
   display_name: "APR"
   short_description: "Autoreview, commit, push, and open a ready PR"
-  default_prompt: "Use $apr to autoreview these changes from the base, commit them, push the branch or stack, and open a ready-for-review PR."
+  default_prompt: "Use $apr to autoreview these changes from the base, commit them, push the branch or stack, open a ready-for-review PR, and watch it with $pr-watch until it is clean."
