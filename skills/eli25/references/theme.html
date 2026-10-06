@@ -1,0 +1,86 @@
+<!--
+  Theme kit for an eli25 page built from research-explainer/templates/explainer-template-arcade.html.
+  It gives three states: system (the default), light and dark. Paste the four parts where each comment says.
+  The render check (references/render-check.mjs) expects the id "theme-toggle" and the storage key "eli25-theme".
+-->
+
+<!-- Part 1. The first child of <head>, above every <link> and <style>, so the stored pick applies before paint. -->
+<script>
+  try {
+    const pick = localStorage.getItem("eli25-theme");
+    if (pick === "light" || pick === "dark") document.documentElement.dataset.theme = pick;
+  } catch (e) {}
+</script>
+
+<!--
+  Part 2. In the template's <style>: delete its three .band--* lines and all four
+  @media (prefers-color-scheme: dark) blocks, then paste this at the end of the <style>.
+  Light values live on :root. Dark values are written twice: under the media query, guarded so an
+  explicit light pick wins, and under [data-theme="dark"], so an explicit dark pick wins on a light OS.
+  To re-skin for a topic, change the accent hexes here and in the Mermaid classDef lines.
+-->
+<style>
+  :root {
+    --paper-bg: #f5efdb; --paper-fg: #171b20; --paper-dim: #6b6754; --paper-line: #171b20; --paper-card: #fdf8ea;
+    --coal-bg: #171b20; --coal-fg: #f5efdb; --coal-dim: #9aa0ab; --coal-line: #f5efdb; --coal-card: #1f252d;
+    --blue-bg: #6b8afd; --blue-fg: #10131c; --blue-dim: #29335a; --blue-line: #171b20; --blue-card: #7d98ff;
+    --nav-bg: #f5efdb; --tab: #8d8874; --hero-copy: #ffd23f; --hero-art: #6b8afd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper-bg: #1d232c; --paper-fg: #ece6d3; --paper-dim: #98917d; --paper-line: #ece6d3; --paper-card: #242b36;
+      --coal-bg: #12161c; --coal-fg: #f5efdb; --coal-dim: #9aa0ab; --coal-line: #f5efdb; --coal-card: #1b212a;
+      --blue-bg: #3d53b4; --blue-fg: #eef1ff; --blue-dim: #b9c3ee; --blue-line: #10131c; --blue-card: #4d64c9;
+      --nav-bg: #1d232c; --tab: #7d7967; --hero-copy: #e3b921; --hero-art: #3d53b4;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper-bg: #1d232c; --paper-fg: #ece6d3; --paper-dim: #98917d; --paper-line: #ece6d3; --paper-card: #242b36;
+    --coal-bg: #12161c; --coal-fg: #f5efdb; --coal-dim: #9aa0ab; --coal-line: #f5efdb; --coal-card: #1b212a;
+    --blue-bg: #3d53b4; --blue-fg: #eef1ff; --blue-dim: #b9c3ee; --blue-line: #10131c; --blue-card: #4d64c9;
+    --nav-bg: #1d232c; --tab: #7d7967; --hero-copy: #e3b921; --hero-art: #3d53b4;
+  }
+  .band--paper { background: var(--paper-bg); --fg: var(--paper-fg); --fg-dim: var(--paper-dim); --band-line: var(--paper-line); --card-bg: var(--paper-card); }
+  .band--coal { background: var(--coal-bg); --fg: var(--coal-fg); --fg-dim: var(--coal-dim); --band-line: var(--coal-line); --card-bg: var(--coal-card); }
+  .band--blue { background: var(--blue-bg); --fg: var(--blue-fg); --fg-dim: var(--blue-dim); --band-line: var(--blue-line); --card-bg: var(--blue-card); }
+  .topnav { background: var(--nav-bg); }
+  .topnav a.tab { color: var(--tab); }
+  .hero__copy { background: var(--hero-copy); }
+  .hero__art { background-color: var(--hero-art); }
+
+  .theme-toggle {
+    position: fixed; right: 16px; bottom: 16px; z-index: 900;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    color: #171b20; background: var(--yellow); border: 3px solid #171b20; box-shadow: 4px 4px 0 #171b20;
+    padding: 8px 12px; cursor: pointer;
+  }
+  .theme-toggle:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #171b20; }
+</style>
+
+<!-- Part 3. The button, as the first child of <body>. -->
+<button id="theme-toggle" class="theme-toggle" type="button">Theme: system</button>
+
+<!-- Part 4. The last child of <body>. -->
+<script>
+  (() => {
+    const root = document.documentElement;
+    const button = document.getElementById("theme-toggle");
+    const order = ["system", "light", "dark"];
+    const show = () => {
+      const pick = root.dataset.theme || "system";
+      button.textContent = "Theme: " + pick;
+      button.setAttribute("aria-label", "Colour theme: " + pick + ". Click to change.");
+    };
+    button.addEventListener("click", () => {
+      const next = order[(order.indexOf(root.dataset.theme || "system") + 1) % order.length];
+      if (next === "system") delete root.dataset.theme;
+      else root.dataset.theme = next;
+      try {
+        if (next === "system") localStorage.removeItem("eli25-theme");
+        else localStorage.setItem("eli25-theme", next);
+      } catch (e) {}
+      show();
+    });
+    show();
+  })();
+</script>
