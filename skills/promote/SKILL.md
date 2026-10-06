@@ -1,6 +1,6 @@
 ---
 name: promote
-description: Use when the user invokes /promote or says an agent keeps repeating a corrected mistake, or when /issue-to-pr finds a recurring review finding (`--report-only`). Turns each repeated or severe correction from PR threads, run records, transcripts and memory files into the highest check that can stop it: a structural fix, a lint or CI check, an agent rule, a skill edit or a style-guide entry.
+description: Use when the user invokes /promote or says an agent keeps repeating a corrected mistake, or when /issue-to-pr finds a recurring review finding (`--report-only`). Turns each repeated or severe correction from PR threads, run records, transcripts and memory files into the highest check that can stop it, such as a structural fix, a lint or CI check, an agent rule, a skill edit or a style-guide entry.
 ---
 
 # Promote
