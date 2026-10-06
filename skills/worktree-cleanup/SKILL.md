@@ -1,48 +1,86 @@
 ---
 name: worktree-cleanup
-description: Audit disk usage, Git worktrees, and stale iOS simulators, then remove only individually approved items. Use when the user invokes /worktree-cleanup or asks to reclaim worktree or simulator space.
+description: Use when the user invokes /worktree-cleanup or asks to reclaim space from Git worktrees or iOS simulators. Audits everything read-only, sorts it into buckets the user approves by name, and keeps anything that could lose work on a hold list. Branch deletion is a separate approval.
 ---
 
 # Worktree cleanup
 
-## 1. Audit read-only
+The user approves buckets, not single worktrees, for example "remove merged and pr-merged". Anything that could lose work goes on a hold list, and a held item is removed only when the user names it.
 
-Record `df -h /`. Resolve this skill's directory, then run:
+## 1. Audit worktrees
+
+Record `df -h /`, then run the audit over the folder that holds the repos, or over one repo:
 
 ```bash
-bash <skill-dir>/scripts/worktree-audit.sh <code-root>   # the directory holding your repos, e.g. ~/code
-# Or limit discovery to one repo:
-bash <skill-dir>/scripts/worktree-audit.sh <repo-path>
+bash <skill-dir>/scripts/worktree-audit.sh <code-root or repo>
 ```
 
-The executable script discovers repositories recursively, deduplicates shared Git directories, and gets every worktree path from `git worktree list --porcelain -z`. This covers `<repo>.sumo-worktrees/<branch-slug>/` on `sumo/<slug>`, any shared `worktrees/` directory under the root, and registered paths outside the scan root. For another checkout layout, pass its parent directory.
+The script is read-only. It prints a header and one tab-separated row per worktree, including `MERGED` (HEAD is in the default branch), the dirty counts, a suggested `BUCKET` and the `HEAD` SHA. Its stderr names repos whose remote it could not read.
 
-Rows use shell-quoted repo/worktree paths so whitespace cannot split items. For each repo with multiple worktrees, report the primary checkout too, but exclude it from cleanup candidates. Classify size in KiB, HEAD commit age (not creation/usage age), ancestry into the default branch, tracked/untracked/ignored state, unpushed commits, and remote branch presence. The script queries `ls-remote` read-only; it never fetches or refreshes the index. Cached/local merge bases are labeled on stderr. Missing remote branches are distinguished as previously tracked versus deleted-or-never-pushed; neither means safe. Squash merges require separate PR/commit evidence. `UNKNOWN` and cached-unpublished counts require investigation, not clearance.
+Then gather two kinds of evidence in bulk:
 
-**Complete when:** every discovered worktree has a row or a named audit error. Buckets are advice, never approval.
+- Merged PRs. For each repo, run `gh pr list --repo <owner/name> --state merged --limit 1000 --json number,headRefName,headRefOid`. A worktree has PR evidence when a merged PR's `headRefOid` equals its HEAD. This finds squash merges and deleted remote branches, which the `MERGED` column misses.
+- In use. List the working directories of running processes and of agent sessions active in the last day:
 
-## 2. Check usage and propose items
+  ```bash
+  lsof -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | sort -u
+  find ~/.claude/projects ~/.pi/agent/sessions ~/.codex/sessions -name '*.jsonl' -mtime -1 -print0 2>/dev/null \
+    | xargs -0 grep -ho '"cwd":"[^"]*"' | sort -u
+  ```
 
-Ask the user which Pi sessions, agents, or other worktrees are active or pinned; include sibling repro/background trees. Inspect session metadata only when available and relevant. Age, merge status, and a deleted remote branch do not prove inactivity.
+  A worktree is in use when either list holds its path or a path inside it, or when the user says so.
 
-For each proposed item show its exact path, branch, size, merge evidence, dirtiness (including ignored artifacts), unpushed/unknown status, usage evidence, and what removal would lose. Show dirty diffs and name untracked files before seeking approval. Preserve locked, primary, and in-use worktrees. Name uncommitted-data loss and unpublished-commit recovery risks explicitly; branch preservation alone is not a backup.
+Complete when every worktree has a row or a named audit error, and the PR and use checks covered every repo.
 
-**Complete when:** the user explicitly approves each exact item and operation. A general cleanup request or a `CANDIDATE` bucket is not per-item approval. Branch deletion is a separate approval, never implied by worktree approval.
+## 2. Audit simulators
 
-## 3. Remove only approved items
+When `xcrun simctl help` fails, note that the simulator audit is unavailable and move on. Otherwise read `xcrun simctl list devices`, `xcrun simctl --set testing list devices` and `xcrun simctl runtime list`. Hold booted devices.
 
-Immediately recheck status, HEAD, remote/unpushed state, and usage. Changed evidence invalidates approval: ask again. Use `git -C <repo> worktree remove -- <approved-path>` for an approved clean item. If dirty or ignored files block removal, stop; `--force` requires explicit approval naming those losses. Respect locks. Use Git's registered path, not a reconstructed slug.
+Complete when every device and runtime is in a bucket or held, or the audit is noted as unavailable.
 
-Preserve branches by default. Only a separately approved, named branch may be deleted; forcing an unmerged branch requires separate risk approval. Stop on command failure: no `rm -rf` fallback, bulk deletion, or automatic prune of unrelated registrations.
+## 3. Propose buckets
 
-## 4. Audit simulators when available
+| Bucket | Contents |
+| --- | --- |
+| `merged` | Worktrees the script marks `CANDIDATE-CHECK-USAGE` (no changes, nothing unpushed, HEAD in the default branch) that are not in use |
+| `pr-merged` | Worktrees with zero tracked and untracked changes, PR evidence, and no primary, locked or in-use flag |
+| `unavailable` | Simulator devices whose runtime is gone |
+| `test-clones` | Simulator devices in the testing set |
+| `unused-runtimes` | Simulator runtimes that no remaining device uses |
 
-If `xcrun` is absent or `xcrun simctl help` fails, report simulator audit unavailable and continue. Otherwise read `xcrun simctl list devices`, `xcrun simctl --set testing list devices`, and `xcrun simctl runtime list`. Identify unavailable devices, testing clones, and old runtimes; show each name/UDID, state, and runtime, with size only where measurable. Old is not automatically stale. Hold booted or in-use devices.
+Every other worktree goes on the hold list with one reason: primary, locked, in use, uncommitted changes, unpushed commits, unmerged with no PR evidence, or unknown state.
 
-Require explicit per-device/runtime approval naming app-data loss or runtime impact, then recheck usage and identity. Delete only the approved UDID with `xcrun simctl [--set testing] delete <UDID>` or approved runtime ID with `xcrun simctl runtime delete <ID>`. Never use `delete all` or bulk `delete unavailable`. Package caches, DerivedData, and other unrelated disk cleanup are outside this skill.
+For each bucket, show the count and the total size where it can be measured. For worktree buckets, also name the ignored files that removal would delete beyond dependencies and build output, such as `.env` files (`git -C <path> ls-files -o -i --exclude-standard --directory`). Show the hold list grouped by reason, with paths. Ask once which buckets to remove and whether any held paths should go too. For each held path the user names, show its diff, untracked files and unpushed commits, and wait for a yes on that path.
+
+Complete when the user has named the buckets to remove, or named them in the invocation, and has confirmed each held path they want removed.
+
+## 4. Remove
+
+Work through the approved items one at a time. Just before each worktree removal, recheck its status, HEAD and use. An item whose evidence changed moves to the hold list, and the run continues.
+
+```bash
+git -C <repo> worktree remove -- <path>
+```
+
+Take `<path>` from git's own worktree list. When git refuses, for example because changes appeared, hold the item with git's message and continue. Use `--force` only on a held path the user confirmed. A locked worktree stays until the user unlocks it. Leave every other registration as it is, with no `rm -rf` fallback and no `git worktree prune`.
+
+Delete each approved simulator item by its own ID, so the deletion matches the list the user saw: `xcrun simctl [--set testing] delete <UDID>` or `xcrun simctl runtime delete <ID>`. Never use `delete all` or `delete unavailable`.
+
+Complete when every approved item is removed or on the hold list with a reason.
+
+## 5. Offer branch deletion
+
+Branches stay unless the user approves deleting them in a separate answer. List the local branches of removed worktrees in two groups: merged branches, deleted with `git branch -d`, and PR-merged branches, deleted with `git branch -D`, which is safe because the merged PR keeps the commits. Delete only the groups the user approves.
+
+Complete when the user has answered, and each approved branch is deleted or reported with its error.
 
 ## Report
 
-Audit summary and uncertainty; individually approved/removal results (including branches); held items with reasons; simulator availability/results; `df -h /` before and after with observed space reclaimed. For audit-only runs, say **nothing removed** and do not claim reclaimed space.
+- `df -h /` before and after.
+- Removed count and size per bucket, and branches deleted.
+- The hold list, grouped by reason.
+- Simulator results, or why the simulator audit was unavailable.
 
-Adapted from pstack by Lauren Tan (MIT), cursor/plugins@fae2c6e.
+On an audit-only run, say that nothing was removed.
+
+Adapted from pstack's worktree-cleanup playbook by Lauren Tan (MIT), cursor/plugins@e5a8186.

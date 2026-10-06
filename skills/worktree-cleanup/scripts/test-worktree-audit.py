@@ -96,6 +96,9 @@ assert by_branch["locked"]["BUCKET"] == "HOLD-LOCKED"
 assert by_branch["DETACHED"]["REMOTE"] == "detached"
 assert by_branch["DETACHED"]["BUCKET"] == "HOLD-UNPUSHED-OR-UNKNOWN"
 assert all(int(row["SIZE_KIB"]) > 0 and int(row["HEAD_AGE_DAYS"]) >= 0 for row in rows)
+# HEAD lets callers match a worktree to a merged PR's head commit.
+assert by_branch["unpushed"]["HEAD"] == git(paths["unpushed"], "rev-parse", "HEAD")
+assert by_branch["sumo/merged"]["HEAD"] == git(repo, "rev-parse", "trunk")
 
 # A repo-root invocation still lists sibling trees; invalid paths fail clearly.
 subprocess.run(["bash", str(SCRIPT), str(repo)], env=ENV, check=True, capture_output=True)
@@ -111,4 +114,4 @@ assert before_offline == snapshot(), "Offline audit wrote to the fixture"
 assert "WARN remote unavailable:" in offline.stderr
 assert "WARN cached/local merge base:" in offline.stderr
 assert "\tUNKNOWN\tUNKNOWN\tHOLD-UNPUSHED-OR-UNKNOWN" in offline.stdout
-print(f"PASS: 8 classifications, offline safety, invalid markers, deduplication, whitespace paths, trunk, read-only; fixtures retained at {ROOT}")
+print(f"PASS: 8 classifications, HEAD SHAs, offline safety, invalid markers, deduplication, whitespace paths, trunk, read-only; fixtures retained at {ROOT}")
