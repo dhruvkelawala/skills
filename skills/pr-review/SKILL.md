@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a pull request, a stack, or the PRs waiting on the user, one PR at a time. Each PR gets the few architecture and system-design changes worth judging, each with a before-and-after sketch and the question to answer, then findings, a suggested verdict and one batched set of comments. Implementation detail comes only on request. Use when the user invokes /pr-review, asks to review or walk through a PR, a stack or a diff before approving, or asks what to review next.
+description: Review a pull request, a stack, or the PRs waiting on the user, one PR at a time. Each PR gets the few architecture and system-design changes worth judging, each with a before-and-after sketch and the question to answer, then findings, a suggested verdict and one batched set of comments. Implementation detail comes only on request, and `try` runs the PR for hands-on testing. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next.
 compatibility: Requires git and gh. Inside Herdr it also uses herdr, hunk and node.
 ---
 
@@ -130,7 +130,16 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 | `what else` | List the smaller findings that were only counted |
 | `how` | Explain one part in full with `/how`, or the whole change with `/explain-diff` |
 | any comment | Add it to the ledger for this PR |
+| `try` | Run the PR so the user can test it by hand, as below |
 | `stop` | Finish with the report |
+
+**Try it yourself.** When the user says `try`, run the app at this PR's head from its review checkout. The PR's code runs on the user's machine with their env files, so for a PR from a fork (`isCrossRepository` in `gh pr view`), say so and wait for a yes first.
+
+1. Find the launch recipe, in this order: the repo's `verify-<app>` skill (`.agents/skills/verify-*/`) and its launch and doctor steps, then `EVIDENCE.md`, then the README and package scripts.
+2. Prepare the review checkout: install dependencies with the repo's own package manager and lockfile, and copy the ignored env files the app needs (such as `.env` and `.env.local`) from the user's own checkout. Never print their values.
+3. Start the app in the background on a free port, so it does not clash with anything the user is already running, and wait for its ready signal. Over ssh (`SSH_CONNECTION` set), put a web app on the tailnet with `tailscale serve` and give that URL. A mobile or desktop app builds and opens on the simulator or device the recipe names.
+4. Hand over the URL, or how to open the app, and two to four things worth trying in this PR, taken from its design changes and its claims, each with the expected result.
+5. Keep it running while the user tests. When they say `next`, `approve`, `stop`, or `try` on another PR, stop only the processes this review started. Add anything they report to the PR's ledger.
 
 **Complete for a PR when** the user has given their word and the `seen` ref points at the head they reviewed.
 
