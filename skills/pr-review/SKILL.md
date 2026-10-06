@@ -29,11 +29,21 @@ git update-ref refs/pr-review/<n>-base <baseRefOid>
 git update-ref refs/pr-review/<n>-head <headRefOid>
 ```
 
-Review the range `refs/pr-review/<n>-base...refs/pr-review/<n>-head`. These refs touch only Git metadata. Read old code with `git show`, never by checking out or rewriting files. For a plain range, resolve both ends to commit IDs the same way.
+Review the range `refs/pr-review/<n>-base...refs/pr-review/<n>-head`. For a plain range, resolve both ends to commit IDs the same way.
+
+Then give each PR a read-only checkout of its head, so every link in the walkthrough opens a real local file in the host's editor:
+
+```bash
+dir="$HOME/.agent/pr-review/<repo>/<n>"            # <repo> is the repository's name
+git worktree add --detach "$dir" refs/pr-review/<n>-head 2>/dev/null \
+  || git -C "$dir" checkout --detach refs/pr-review/<n>-head
+```
+
+Read the head side from that checkout and the base side with `git show`. Make no edits or commits there, and leave the user's own checkout on its branch. When the PR's head is already checked out in the current checkout, use that instead.
 
 If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen an earlier version. Use step 4 for that PR.
 
-**Complete when** every PR in scope has a pinned range, and its file list matches `gh pr view <n> --json files`.
+**Complete when** every PR in scope has a pinned range and a review checkout at its head, and its file list matches `gh pr view <n> --json files`.
 
 ## 2. Triage
 
@@ -86,7 +96,7 @@ For the current PR:
 Deliver the stops where the user reads diffs:
 
 - **Inside Herdr** (`test "${HERDR_ENV:-}" = 1`), attach them as numbered Hunk notes too, following [references/hunk.md](references/hunk.md).
-- **Elsewhere,** the chat message is the walkthrough. Every `path:line` must be clickable. Use absolute paths when the checkout is a worktree, because relative links fail there.
+- **Everywhere else,** the chat message is the walkthrough. Write every code reference, in the trace, the stops, the findings and the triage, as a Markdown link to the file in the review checkout, with the line after a colon: `[fire.ts:118](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/fire.ts:118)`. T3 Code, Codex and Claude Code open these links in their own editor. A bare path is not clickable in every host and a GitHub link leaves the host, so code links always point at the local checkout. For a line range, link the first line and put the range in the label.
 
 Show progress with each PR ("3 of 6"), then wait for the user's word:
 
@@ -102,7 +112,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 ## 4. Return visits
 
-When a PR's head has moved since `refs/pr-review/<n>-seen`, show only what changed since the user last looked:
+When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, then show only what changed since the user last looked:
 
 - If the branch was rebased, use `git range-diff <old base>..<seen> <base>..<head>`.
 - Otherwise, use `git diff <seen>..<head>`.
@@ -132,6 +142,9 @@ Post, approve or request changes only on the user's explicit word for that PR.
 **Complete when** every ledger item is fixed, posted, or dropped by the user.
 
 ## Report
+
+First remove the review checkouts of PRs that were approved, merged or closed: `git worktree remove "$HOME/.agent/pr-review/<repo>/<n>"`. Keep the checkout of a PR still waiting on changes, for the return visit.
+
 
 - For each PR: the decision, the posted review URL or "not posted", and the findings still open.
 - For a stack or a queue: how many PRs are done, and what is left.
