@@ -1,65 +1,88 @@
 ---
 name: eli25
-description: Explain a topic simply and visually to a software engineer as a neo-brutalist HTML page with big pictures and few words, optionally deployed to Tailscale or Vercel; shown in terminal-browser inside Herdr, otherwise in the user's browser. Use when the user invokes /eli25 or asks for a clear picture explainer that is approachable without being childish.
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in terminal-browser inside Herdr, the user's browser elsewhere, or a tailnet URL over ssh.
 ---
 
 # eli25
 
-Explain like I'm a software engineer who knows general programming but nothing about this specific topic. Big pictures, few words, real terms kept.
+An eli25 page explains the user's own work in progress to an engineer who can program but has not seen this topic. The reader judges it by eye, so it leads with big figures, runs to about 400 words, and states every claim in plain English.
 
-Invoke as `/eli25 <topic> [--deploy tailscale|vercel|vercel-work]`. The topic is everything after the invocation that is not a flag. With no `--deploy`, the page is written locally and opened.
+Invoke as `/eli25 <topic>`. The topic can be a PR number, a stack, a plan file, a spike, or a phrase. With no topic, explain the work in this conversation.
 
-## The reader
+## 1. Pick the shape
 
-Knows how to program. Does not know this topic. Wants a mental model first, then enough of the real mechanism to trust it. Keep the technical terms and explain unfamiliar domain terms in plain language the first time. This is not a code review, a field guide, or a reference manual; for that depth, `/research-explainer`.
+Read the source first: the diff and PR body, the plan file, the code, the measurements. Then pick the row for what the reader must understand after reading. Each cell names a section's job, not its title.
 
-## Shape
+| Topic | Sections, in order |
+| --- | --- |
+| PR or stack | Before and after. One real request traced through the change. One "Not in this change" line. A review route of three to six files to read in order, ending with "Next: `/pr-review <PR>`". A stack gets one before-and-after block per PR in stack order, then one route. |
+| Plan | Today versus target. Build order. Open decisions. The next action and what is left. |
+| System | A picture of the parts. One worked example through them. |
+| Spike or assessment | What was measured and what was assumed. The recommendation. The next action and what is left. |
+| Incident | Timeline. Cause. Fix. How to spot it next time. |
+| Concept | The mental model. An example. The common misconception, if a real one exists. |
 
-Four panels, in this order, each one screen or less:
+**Done when** you can name the row, the sections, and the one real example the page will trace, with its real names and numbers.
 
-1. **What it is.** One sentence, then one figure that is the whole mental model. A reader who stops here should still be right about the topic.
-2. **How it works.** Two or three panels, each one mechanism with one figure and at most three sentences. Real names for the parts.
-3. **Where it bites you.** The one or two mistakes an engineer new to this makes, stated as what happens and why.
-4. **Glossary.** Every domain term used above, one honest sentence each.
+## 2. Write the page
 
-Figures are inline SVG, large, and readable at a glance. Mermaid only when a flow genuinely has more than four nodes.
+- **Opener.** One sentence and one figure that hold the whole model. A reader who stops there is still right about the topic.
+- **Claim titles.** Each section title states what the section shows, as in "One thread, one notebook" or "The app checks every ticket the model cites".
+- **Figures.** Pick each one by what it shows, and use the smallest view that makes the point: a call tree for runtime flow, a sequence for messages between parts, a file tree for ownership, a box diagram for the parts of a system, and a before and after or a diff sketch (a call tree, file tree or state with added and removed lines) for a change. A section gets a figure only when a picture makes its point faster than words. Put each figure next to the two or three sentences it supports, inside a `<figure>` element.
+  - Draw diagrams as inline SVG with a viewBox about 480 units wide and labels of 13 units or more, so they stay readable on a phone. Lists of steps or cards can be HTML boxes that stack on narrow screens instead.
+  - Set trees and diff sketches in a `<pre>` on the figure panel, with lines under 40 characters.
+  - Use Mermaid only for a flow with more than four nodes.
+- **Terms.** Gloss each real term in plain words in the sentence that first uses it. Add a glossary only for terms the page uses three or more times.
+- **Misconceptions.** Include one only when engineers really make that mistake, as one sentence beside the mechanism it concerns. Scope notes go in the single "Not in this change" line.
+- **Length.** About 400 words of prose, counting captions but not figure labels, plus about 100 for each extra PR in a stack. When the user asks for detail, write a linked second page, `<slug>-eli25-detail.html`, and keep the first page short.
+- **Ending.** A plan or spike ends with one next action concrete enough to run, then a short list of what is left.
 
-## Style
+Prose rules:
+- Put the claim first, then the evidence.
+- Write short active sentences with a named actor: "The watcher polls GitHub every minute."
+- Write whole sentences with their articles and verbs. Where an arrow would go, write the verb it stands for.
+- Use plain words and literal statements. Taglines, metaphor chains, em dashes, en dashes, text arrows, and "What happens" and "Why it fails" templates make a page stiff.
 
-Neo-brutalist: thick dark borders, hard offset shadows, flat high-contrast colours, oversized heavy typography, blocky layout, little or no border radius. Pick a small palette that fits the topic instead of the same accent every time. Start from the machinery in `research-explainer/templates/explainer-template-arcade.html` in this repo and replace its content; that keeps the two skills visually consistent.
+Before and after, from `support-report-pr-349-eli25.html`:
 
-## Theme
+> Before. **Meaning stays behind a lock.** Configured Jira projects and archived QA/release Slack channels only. Startup checks every Slack source exists and is accessible; collection then scrubs fixed credential formats [...] and caps size.
+>
+> After. **The model reads the messages, and the app decides what gets posted.** The report reads two things: Jira tickets, and last week's messages from the QA and release Slack channels. Before it reads anything, it checks that every channel exists and that the bot can open it. Then it strips anything that looks like a password or token, keeps only Monday to Sunday, and cuts the pile to a fixed size.
 
-Three states: system (default), light, dark. The page follows the OS until the reader picks one, and remembers the pick.
+**Done when** the page has its opener, every section of the shape sits under a claim title, and a plan or spike ends on one next action.
 
-- Define every colour as a token on `:root` for light. Redefine only the tokens under `@media (prefers-color-scheme: dark)` guarded as `:root:not([data-theme="light"])`, and again under `:root[data-theme="dark"]`, so an explicit choice wins in both directions. The arcade template's dark blocks are media-query only; add the two guards when you copy them.
-- A small fixed toggle button in a corner, styled in the same brutalist idiom, cycles system → light → dark and shows the current state with one glyph or word. Three states, not two, so the reader can return to following the OS.
-- Persist the choice in `localStorage` under one key, inside try/catch, and apply it from an inline script in `<head>` before the stylesheet paints so there is no flash. Missing or unreadable storage means system.
-- Both schemes must pass the render check: figures, borders, and shadows legible in each, and nothing that only exists inside one media block.
+## 3. Build and check
 
-## Deliver
+1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same file in place, so the open tab and any deployed URL show the new version.
+2. Start from `research-explainer/templates/explainer-template-arcade.html` in the sibling skill folder and replace its content. Keep its neo-brutalist look: thick dark borders, hard offset shadows, flat high-contrast colours, oversized heavy type, square corners, and figures on the fixed dark panel. Give each topic its own small palette by swapping the accent hexes. Drop template parts the shape does not use.
+3. Give the page three theme states: system by default, then light, then dark.
+   - Define every colour as a token on `:root` for light. Redefine only the tokens under `@media (prefers-color-scheme: dark)` guarded as `:root:not([data-theme="light"])`, and again under `:root[data-theme="dark"]`, so an explicit pick wins in both directions. The template's dark blocks are media-query only, so replace them.
+   - A small fixed `#theme-toggle` button in a corner, in the same brutalist style, cycles from system to light to dark and back to system, and shows the current state as a word.
+   - Store the pick in `localStorage` under `eli25-theme` inside try and catch, and apply it from an inline script at the top of `<head>`, before any stylesheet, so the page never flashes. Missing or unreadable storage means system.
+   - `references/theme.html` has the code for all three.
+4. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
+5. Look at the light and dark screenshots at 1280 pixels.
 
-1. Write the page to `~/.agent/diagrams/<topic-slug>-eli25.html`. Verify it renders: open headless, check system, light, and dark via the toggle, no horizontal overflow.
-2. Show it. Inside Herdr (`test "${HERDR_ENV:-}" = 1`) and with `terminal-browser` on PATH, open the page beside the conversation:
+**Done when** the render check passes, the prose word count is within the budget, every printed heading reads as a claim, and both screenshots look right to you.
 
-     ```bash
-     terminal-browser new-tab ~/.agent/diagrams/<topic-slug>-eli25.html
-     ```
+## 4. Deliver
 
-     That reuses this terminal tab's browser when one is open and otherwise opens one in a split to the right. Anywhere else (Claude Code, Codex, T3Code, a bare terminal), open the file in the user's default browser with `open` on macOS or `xdg-open` on Linux, even if `terminal-browser` happens to be installed.
-3. Publish per `--deploy`, then open the resulting URL the same way, Herdr terminal-browser or the user's browser:
-   - **none:** nothing further; the page is already showing.
-   - **tailscale:** serve the diagrams directory on the tailnet and report the page URL. Only devices on the tailnet can reach it.
+Show the page:
+- Inside Herdr (`HERDR_ENV=1`) with `terminal-browser` on PATH, run `terminal-browser new-tab <path>`. It reuses this tab's browser or opens one in a split.
+- Over ssh (`SSH_CONNECTION` set), a browser would open on the remote machine where nobody sees it. Unless the user named another target, serve the page on the tailnet and print its URL instead.
+- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux, even when terminal-browser is installed.
 
-     ```bash
-     tailscale serve --bg --set-path /eli25 ~/.agent/diagrams
-     host=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
-     echo "https://$host/eli25/<topic-slug>-eli25.html"
-     ```
+Deploy when the user names a target in plain words, now or in a later message. The commands are in `references/deploy.md`.
 
-     If `/eli25` is already served, the file is live as soon as it is written; do not re-run serve.
-   - **vercel:** deploy under the personal Vercel scope. Copy the page to a temp directory as `index.html` and run `vercel deploy --yes` there; report the URL it prints. Anyone with the URL can view it.
-   - **vercel-work:** same, with `--scope "$VERCEL_WORK_SCOPE"`. If that variable is unset, run `vercel teams ls`, ask which team once, and tell the user to export it for next time. The team's deployment protection may require a Vercel login to view; say so with the URL.
-4. Report the local path, the URL if deployed, where it was opened, and the four panel titles.
+| The user says | Target |
+| --- | --- |
+| "tailscale", "my tailnet" | Tailscale serve, reachable only on the tailnet |
+| "argentlabs vercel", "work vercel", "company vercel" | Vercel, work scope |
+| "personal vercel", "my vercel" | Vercel, personal scope |
+| "vercel" alone | Work scope for an argentlabs repo, personal scope otherwise |
 
-**Complete when:** the page passes the render check and the user has a path or URL they can open now.
+A deploy of a page that already passed the render check skips the check, and the URL needs no test fetch.
+
+Report the local path and each URL as a plain URL on its own line, where the page opened, and the section titles.
+
+**Done when** the user has a path or URL they can open now.

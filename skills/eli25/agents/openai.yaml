@@ -1,4 +1,4 @@
 interface:
   display_name: "ELI25"
-  short_description: "Picture-first explainer for engineers, optionally deployed"
-  default_prompt: "Use $eli25 to explain this topic to me as a neo-brutalist visual page with a mental model first."
+  short_description: "Short visual page that explains a PR, stack, plan or system, optionally hosted"
+  default_prompt: "Use $eli25 to explain this work to me as a short visual page shaped by its topic, with a picture of the whole model first."
