@@ -76,6 +76,72 @@ test("blocked: a failed check", () => {
   assert.ok(result.reasons.some((r) => r.includes("FAILURE")));
 });
 
+// --- required and optional checks --------------------------------------------
+
+const REQUIRED_CI = { name: "ci", status: "COMPLETED", conclusion: "SUCCESS", required: true };
+
+test("ready: a failing check that is not required becomes a note when required checks exist", () => {
+  const result = evaluateGate(baseSnapshot({
+    pr: { ...baseSnapshot().pr, mergeStateStatus: "UNSTABLE" },
+    checkRuns: [REQUIRED_CI, { name: "Visual Recap", status: "COMPLETED", conclusion: "FAILURE", required: false }],
+  }));
+  assert.equal(result.state, "ready");
+  assert.deepEqual(result.reasons, []);
+  assert.ok(result.notes.some((n) => n.includes("Visual Recap") && n.includes("not required")));
+});
+
+test("ready: a running check that is not required does not hold the gate", () => {
+  const result = evaluateGate(baseSnapshot({
+    checkRuns: [REQUIRED_CI, { name: "Visual Recap", status: "IN_PROGRESS", conclusion: null, required: false }],
+  }));
+  assert.equal(result.state, "ready");
+  assert.ok(result.notes.some((n) => n.includes("Visual Recap")));
+});
+
+test("blocked: a failing required check blocks even beside optional checks", () => {
+  const result = evaluateGate(baseSnapshot({
+    checkRuns: [{ ...REQUIRED_CI, conclusion: "FAILURE" }, { name: "lint", status: "COMPLETED", conclusion: "SUCCESS", required: false }],
+  }));
+  assert.equal(result.state, "blocked");
+  assert.ok(result.reasons.some((r) => r.includes("ci")));
+});
+
+test("blocked: every check counts when none is marked required", () => {
+  const result = evaluateGate(baseSnapshot({
+    checkRuns: [
+      { name: "ci", status: "COMPLETED", conclusion: "SUCCESS", required: false },
+      { name: "lint", status: "COMPLETED", conclusion: "FAILURE", required: false },
+    ],
+  }));
+  assert.equal(result.state, "blocked");
+  assert.ok(result.reasons.some((r) => r.includes("lint")));
+});
+
+test("ready: an ignored check is left out entirely", () => {
+  const result = evaluateGate(baseSnapshot({
+    checkRuns: [
+      { name: "ci", status: "COMPLETED", conclusion: "SUCCESS" },
+      { name: "Visual Recap", status: "COMPLETED", conclusion: "FAILURE" },
+    ],
+  }), { ignoreChecks: ["visual recap"] });
+  assert.deepEqual(result, { state: "ready", reasons: [], threads: [] });
+});
+
+test("pending: ignoring every check leaves nothing to prove readiness", () => {
+  const result = evaluateGate(baseSnapshot(), { ignoreChecks: ["ci"] });
+  assert.equal(result.state, "pending");
+  assert.ok(result.reasons.some((r) => r.includes("ignored")));
+});
+
+test("ready: the UNSTABLE merge state alone does not block", () => {
+  const result = evaluateGate(withPr({ mergeStateStatus: "UNSTABLE" }));
+  assert.deepEqual(result, { state: "ready", reasons: [], threads: [] });
+});
+
+test("blocked: DIRTY merge state blocks", () => {
+  assert.equal(evaluateGate(withPr({ mergeStateStatus: "DIRTY" })).state, "blocked");
+});
+
 test("pending: mergeability unknown", () => {
   const result = evaluateGate(withPr({ mergeable: null, mergeStateStatus: "UNKNOWN" }));
   assert.equal(result.state, "pending");
@@ -147,6 +213,80 @@ test("thread bodies are truncated for prompt safety", () => {
 });
 
 // --- configured reviewers ---------------------------------------------------
+
+// --- written human reviews ----------------------------------------------------
+
+const PR_AUTHOR = "dhruv";
+const HUMAN = "teammate";
+const LATER = "2026-08-28T21:00:00Z";
+const humanReview = (overrides = {}) => ({
+  author: HUMAN, authorType: "User", state: "COMMENTED", commitId: HEAD,
+  submittedAt: REVIEWED_AT, body: "The joiner drops messages sent before the reply.", ...overrides,
+});
+const withReviews = (reviews, extra = {}) => baseSnapshot({
+  pr: { ...baseSnapshot().pr, author: PR_AUTHOR },
+  reviews,
+  ...extra,
+});
+
+test("blocked: an unanswered written review from a person is listed with its text", () => {
+  const result = evaluateGate(withReviews([humanReview()]));
+  assert.equal(result.state, "blocked");
+  assert.ok(result.reasons.some((r) => r.includes(HUMAN)));
+  assert.deepEqual(result.threads, [{
+    kind: "review", path: null, line: null, author: HUMAN, submittedAt: REVIEWED_AT,
+    body: "The joiner drops messages sent before the reply.",
+  }]);
+});
+
+test("ready: a later PR comment from the PR author answers the review", () => {
+  const result = evaluateGate(withReviews([humanReview()], {
+    comments: [{ author: PR_AUTHOR, body: "Fixed in 1a2b3c4: the joiner now reads earlier messages.", createdAt: LATER }],
+  }));
+  assert.equal(result.state, "ready");
+});
+
+test("blocked: an empty review from the PR author (a thread reply) does not answer it", () => {
+  const result = evaluateGate(withReviews([
+    humanReview(),
+    humanReview({ author: PR_AUTHOR, submittedAt: LATER, body: "" }),
+  ]));
+  assert.equal(result.state, "blocked");
+});
+
+test("ready: a later review with text from the PR author answers it", () => {
+  const result = evaluateGate(withReviews([
+    humanReview(),
+    humanReview({ author: PR_AUTHOR, submittedAt: LATER, body: "Fixed in 1a2b3c4." }),
+  ]));
+  assert.equal(result.state, "ready");
+});
+
+test("blocked: a PR author comment older than the review does not answer it", () => {
+  const result = evaluateGate(withReviews([humanReview()], {
+    comments: [{ author: PR_AUTHOR, body: "Ready for review", createdAt: REQUESTED_AT }],
+  }));
+  assert.equal(result.state, "blocked");
+});
+
+test("ready: a newer review from the same reviewer answers the earlier one", () => {
+  const result = evaluateGate(withReviews([
+    humanReview(),
+    humanReview({ state: "APPROVED", submittedAt: LATER, body: "Looks good now" }),
+  ]));
+  assert.equal(result.state, "ready");
+});
+
+test("ready: bot reviews, empty reviews, approvals, and the author's own reviews never block", () => {
+  const result = evaluateGate(withReviews([
+    humanReview({ author: "coderabbitai", authorType: "Bot" }),
+    humanReview({ author: "review-bot[bot]", authorType: undefined }),
+    humanReview({ body: "   " }),
+    humanReview({ state: "APPROVED", body: "Please fix before the flag is enabled" }),
+    humanReview({ author: PR_AUTHOR }),
+  ]));
+  assert.deepEqual(result, { state: "ready", reasons: [], threads: [] });
+});
 
 test("pending: configured reviewer has not covered the current HEAD", () => {
   const result = evaluateGate(baseSnapshot(), WITH_BOT);
@@ -268,6 +408,11 @@ test("parseArgs collects repeated reviewers and lowercases the head", () => {
   assert.equal(args.allowNoChecks, true);
 });
 
+test("parseArgs collects repeated ignored checks", () => {
+  const args = parseArgs(["--ignore-check", "Visual Recap", "--ignore-check", "preview"]);
+  assert.deepEqual(args.ignoreChecks, ["Visual Recap", "preview"]);
+});
+
 test("parseArgs rejects a short head and unknown flags", () => {
   assert.throws(() => parseArgs(["--expected-head", "abc"]), /40-character/);
   assert.throws(() => parseArgs(["--bogus"]), /unknown argument/);
@@ -286,13 +431,23 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
           repository: {
             pullRequest: {
               state: "OPEN", isDraft: false, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
-              reviewDecision: null, headRefOid: HEAD,
-              commits: { nodes: [{ commit: { oid: HEAD, committedDate: HEAD_COMMITTED_AT } }] },
+              reviewDecision: null, headRefOid: HEAD, author: { login: "dhruv" },
+              commits: { nodes: [{ commit: {
+                oid: HEAD,
+                committedDate: HEAD_COMMITTED_AT,
+                statusCheckRollup: { contexts: {
+                  nodes: [
+                    { __typename: "CheckRun", name: "ci", isRequired: true },
+                    { __typename: "StatusContext", context: "legacy", isRequired: false },
+                  ],
+                  pageInfo: { hasNextPage: false },
+                } },
+              } }] },
               reviewThreads: {
                 nodes: [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, comments: { nodes: [{ author: { login: BOT }, body: "fix me" }] } }],
                 pageInfo: { hasNextPage: false },
               },
-              reviews: { nodes: [{ author: { login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
+              reviews: { nodes: [{ author: { __typename: "Bot", login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary", commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
               comments: { nodes: [{ author: { login: "human" }, body: "@review-bot review", createdAt: REQUESTED_AT }], pageInfo: { hasNextPage: false } },
               reactions: { nodes: [{ user: { login: BOT }, content: "THUMBS_UP", createdAt: REVIEWED_AT }], pageInfo: { hasNextPage: false } },
             },
@@ -308,10 +463,12 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
   const snapshot = await fetchSnapshot({ owner: "o", name: "r" }, 4, runGh);
   assert.equal(snapshot.pr.mergeable, true);
   assert.equal(snapshot.pr.headCommittedAt, HEAD_COMMITTED_AT);
+  assert.equal(snapshot.pr.author, "dhruv");
   assert.deepEqual(snapshot.checkRuns, [
-    { name: "ci", status: "COMPLETED", conclusion: "SUCCESS" },
-    { name: "legacy", status: "IN_PROGRESS", conclusion: null },
+    { name: "ci", status: "COMPLETED", conclusion: "SUCCESS", required: true },
+    { name: "legacy", status: "IN_PROGRESS", conclusion: null, required: false },
   ]);
+  assert.deepEqual(snapshot.reviews, [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary" }]);
   assert.deepEqual(snapshot.reviewThreads, [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, author: BOT, body: "fix me" }]);
   assert.deepEqual(snapshot.reactions, [{ author: BOT, content: "+1", createdAt: REVIEWED_AT }]);
   assert.equal(snapshot.truncated, false);

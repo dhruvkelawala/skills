@@ -1,30 +1,38 @@
 #!/usr/bin/env node
 // Deterministic PR readiness gate for the pr-watch skill.
 //
-// Public seam: evaluateGate(snapshot, options) -> { state, reasons, threads }
+// Public seam: evaluateGate(snapshot, options) -> { state, reasons, threads, notes? }
 //   state:   "ready" | "pending" | "blocked"
 //   reasons: human-readable strings explaining a non-ready state
-//   threads: unresolved, non-outdated review threads (what a repair must address)
+//   threads: what a repair must address: unresolved, non-outdated review threads,
+//            and unanswered written reviews from people (marked kind: "review")
+//   notes:   present only when non-empty; checks that are not required and did not
+//            pass. Informational: they never change the state.
 //
 // Snapshot shape (built by fetchSnapshot, or handed in by tests):
 //   pr:            { state, isDraft, mergeable, mergeStateStatus, reviewDecision,
-//                    headRefOid, expectedHead, headCommittedAt }
-//   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion }]
+//                    headRefOid, expectedHead, headCommittedAt, author }
+//   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ isResolved, isOutdated, path, line, author, body }]
-//   reviews:       [{ author, commitId, state, submittedAt }]
+//   reviews:       [{ author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
 //   reactions:     [{ author, content, createdAt }]   // PR-level reactions
+//
+// Checks: when any check on the HEAD is required by the base branch, only required
+// checks hold or block the gate. When none is marked required, every check counts.
 //
 // Options:
 //   reviewers:      logins (with or without "[bot]") that must review the exact HEAD
 //   requestComment: text the orchestrator posts to ask a reviewer for a pass;
 //                   reviewer evidence older than the newest such comment is stale
 //   allowNoChecks:  treat a HEAD with zero check/status contexts as clean
+//   ignoreChecks:   check names (case-insensitive) left out of the gate entirely
 //
 // CLI: node pr-gate.mjs --repo owner/name --pr N --expected-head SHA
 //        [--reviewer LOGIN]... [--request-comment TEXT] [--allow-no-checks]
-//        [--json] [--watch] [--timeout-seconds N] [--interval-seconds N]
+//        [--ignore-check NAME]... [--json] [--watch] [--timeout-seconds N]
+//        [--interval-seconds N]
 // Exit codes: 0 ready, 1 pending/timeout, 2 blocked/invalid.
 // Reads GitHub through the `gh` CLI only (execFile, never a shell); never mutates GitHub.
 
@@ -67,7 +75,9 @@ export function evaluateGate(snapshot, options = {}) {
       || !pr.mergeStateStatus
   ) {
     pending.push(`PR merge state is ${pr.mergeStateStatus ?? "not settled"}`);
-  } else if (pr.mergeStateStatus !== "CLEAN") {
+  } else if (pr.mergeStateStatus !== "CLEAN" && pr.mergeStateStatus !== "UNSTABLE") {
+    // UNSTABLE only means some check did not pass; the check loop below decides
+    // whether that check counts.
     blocked.push(`PR merge state is ${pr.mergeStateStatus}`);
   }
   if (snapshot?.truncated) pending.push("GitHub collections were truncated; readiness cannot be proven");
@@ -85,12 +95,35 @@ export function evaluateGate(snapshot, options = {}) {
     blocked.push(`${activeThreads.length} unresolved review thread(s) on the PR`);
   }
 
+  const unanswered = unansweredReviews(snapshot);
+  for (const review of unanswered) {
+    blocked.push(`Written review from ${review.author} at ${review.submittedAt} has no reply`);
+    activeThreads.push({
+      kind: "review",
+      path: null,
+      line: null,
+      author: review.author,
+      submittedAt: review.submittedAt,
+      body: truncate(review.body),
+    });
+  }
+
+  const notes = [];
+  const ignored = new Set((options.ignoreChecks ?? []).map((name) => String(name).toLowerCase()));
+  const counted = checkRuns.filter((run) => !ignored.has(String(run.name).toLowerCase()));
+  const requiredOnly = counted.some((run) => run.required === true);
   if (checkRuns.length === 0) {
     if (!options.allowNoChecks) pending.push("No check runs found on head commit");
+  } else if (counted.length === 0) {
+    if (!options.allowNoChecks) pending.push("Every check on the head commit is ignored");
   } else {
-    for (const run of checkRuns) {
-      if (run.status !== "COMPLETED") pending.push(`Check "${run.name}" is ${run.status}`);
-      else if (!OK_CONCLUSIONS.has(run.conclusion)) blocked.push(`Check "${run.name}" concluded ${run.conclusion}`);
+    for (const run of counted) {
+      const unfinished = run.status !== "COMPLETED";
+      if (!unfinished && OK_CONCLUSIONS.has(run.conclusion)) continue;
+      const outcome = unfinished ? `is ${run.status}` : `concluded ${run.conclusion}`;
+      if (requiredOnly && run.required !== true) notes.push(`Check "${run.name}" ${outcome} (not required)`);
+      else if (unfinished) pending.push(`Check "${run.name}" ${outcome}`);
+      else blocked.push(`Check "${run.name}" ${outcome}`);
     }
   }
 
@@ -100,9 +133,33 @@ export function evaluateGate(snapshot, options = {}) {
     if (verdict.pending) pending.push(verdict.pending);
   }
 
-  if (blocked.length > 0) return { state: "blocked", reasons: blocked, threads: activeThreads };
-  if (pending.length > 0) return { state: "pending", reasons: pending, threads: activeThreads };
-  return { state: "ready", reasons: [], threads: [] };
+  const withNotes = (result) => (notes.length > 0 ? { ...result, notes } : result);
+  if (blocked.length > 0) return withNotes({ state: "blocked", reasons: blocked, threads: activeThreads });
+  if (pending.length > 0) return withNotes({ state: "pending", reasons: pending, threads: activeThreads });
+  return withNotes({ state: "ready", reasons: [], threads: [] });
+}
+
+// A written review is a COMMENTED review with a body, from a person other than the
+// PR author. It needs a reply: a later PR comment from the PR author, a later review
+// with text from the PR author, or a newer review from the same reviewer. Replying in
+// a thread creates an empty review from the PR author; that answers the thread, not
+// the written review. Bots are left to `reviewers` and threads.
+function unansweredReviews(snapshot) {
+  const prAuthor = snapshot?.pr?.author;
+  const reviews = snapshot?.reviews ?? [];
+  const comments = snapshot?.comments ?? [];
+  const hasText = (item) => String(item.body ?? "").trim() !== "";
+  const isBot = (review) => review.authorType === "Bot" || /\[bot\]$/i.test(String(review.author ?? ""));
+  return reviews.filter((review) => {
+    if (review.state !== "COMMENTED" || !hasText(review)) return false;
+    if (isBot(review) || sameLogin(review.author, prAuthor)) return false;
+    const after = timestamp(review.submittedAt);
+    const authorComment = comments.some((c) => sameLogin(c.author, prAuthor) && timestamp(c.createdAt) > after);
+    const laterReview = reviews.some((other) => other !== review
+      && timestamp(other.submittedAt) > after
+      && (sameLogin(other.author, review.author) || (sameLogin(other.author, prAuthor) && hasText(other))));
+    return !authorComment && !laterReview;
+  });
 }
 
 // A reviewer has covered the exact HEAD when it posted a review object bound to
@@ -181,6 +238,7 @@ function usage() {
     "  --reviewer LOGIN         A review agent that must cover the exact HEAD (repeatable)",
     "  --request-comment TEXT   Comment text used to request a review; older reviewer evidence is stale",
     "  --allow-no-checks        A HEAD with no CI contexts counts as clean",
+    "  --ignore-check NAME      Leave a named check out of the gate (repeatable, case-insensitive)",
     "  --json                   Print { state, reasons, threads } JSON",
     "  --watch                  Poll until blocked or 3 unchanged clean observations (default 30 min)",
     "  --timeout-seconds N      Watch deadline in seconds (default 1800)",
@@ -194,7 +252,7 @@ function usage() {
 export function parseArgs(argv) {
   const args = {
     repo: null, pr: null, expectedHead: null, reviewers: [], requestComment: null,
-    allowNoChecks: false, json: false, watch: false, help: false,
+    allowNoChecks: false, ignoreChecks: [], json: false, watch: false, help: false,
   };
   let i = 0;
   const value = (flag) => {
@@ -220,6 +278,7 @@ export function parseArgs(argv) {
       case "--reviewer": args.reviewers.push(value(arg)); break;
       case "--request-comment": args.requestComment = value(arg); break;
       case "--allow-no-checks": args.allowNoChecks = true; break;
+      case "--ignore-check": args.ignoreChecks.push(value(arg)); break;
       case "--json": args.json = true; break;
       case "--watch": args.watch = true; break;
       case "--timeout-seconds": args.timeoutSeconds = positiveInt(arg); break;
@@ -246,7 +305,17 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){
     pullRequest(number:$number){
       state isDraft mergeable mergeStateStatus reviewDecision headRefOid
-      commits(last:1){ nodes{ commit{ oid committedDate } } }
+      author{ login }
+      commits(last:1){ nodes{ commit{ oid committedDate
+        statusCheckRollup{ contexts(first:100){
+          nodes{
+            __typename
+            ... on CheckRun{ name isRequired(pullRequestNumber:$number) }
+            ... on StatusContext{ context isRequired(pullRequestNumber:$number) }
+          }
+          pageInfo{ hasNextPage }
+        } }
+      } } }
       reviewThreads(first:100){
         nodes{
           isResolved isOutdated path line
@@ -254,7 +323,7 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
         }
         pageInfo{ hasNextPage }
       }
-      reviews(first:100){ nodes{ author{ login } state submittedAt commit{ oid } } pageInfo{ hasNextPage } }
+      reviews(first:100){ nodes{ author{ __typename login } state submittedAt body commit{ oid } } pageInfo{ hasNextPage } }
       comments(first:100){ nodes{ author{ login } body createdAt } pageInfo{ hasNextPage } }
       reactions(first:100){ nodes{ user{ login } content createdAt } pageInfo{ hasNextPage } }
     }
@@ -272,14 +341,21 @@ export async function fetchSnapshot({ owner, name }, prNumber, runGh = gh) {
   const pr = data?.data?.repository?.pullRequest;
   if (!pr) throw new Error(`pull request #${prNumber} not found in ${owner}/${name}`);
 
+  const head = pr.headRefOid;
+  const headCommit = pr.commits?.nodes?.find((node) => node.commit?.oid === head)?.commit;
+  const contexts = headCommit?.statusCheckRollup?.contexts;
+  const requiredNames = new Set((contexts?.nodes ?? [])
+    .filter((ctx) => ctx?.isRequired === true)
+    .map((ctx) => (ctx.__typename === "StatusContext" ? ctx.context : ctx.name)));
+
   let truncated = Boolean(
     pr.reviewThreads?.pageInfo?.hasNextPage
       || pr.reviews?.pageInfo?.hasNextPage
       || pr.comments?.pageInfo?.hasNextPage
       || pr.reactions?.pageInfo?.hasNextPage
+      || contexts?.pageInfo?.hasNextPage
   );
 
-  const head = pr.headRefOid;
   const checksData = await runGh(["api", `repos/${owner}/${name}/commits/${head}/check-runs?per_page=100`]);
   const statusesData = await runGh(["api", `repos/${owner}/${name}/commits/${head}/status?per_page=100`]);
   truncated ||= Number(checksData?.total_count ?? 0) > (checksData?.check_runs ?? []).length;
@@ -294,18 +370,21 @@ export async function fetchSnapshot({ owner, name }, prNumber, runGh = gh) {
       mergeStateStatus: pr.mergeStateStatus,
       reviewDecision: pr.reviewDecision,
       headRefOid: head,
-      headCommittedAt: pr.commits?.nodes?.find((node) => node.commit?.oid === head)?.commit?.committedDate ?? null,
+      headCommittedAt: headCommit?.committedDate ?? null,
+      author: pr.author?.login ?? null,
     },
     checkRuns: [
       ...(checksData?.check_runs ?? []).map((c) => ({
         name: c.name,
         status: String(c.status ?? "").toUpperCase(),
         conclusion: c.conclusion == null ? null : String(c.conclusion).toUpperCase(),
+        required: requiredNames.has(c.name),
       })),
       ...(statusesData?.statuses ?? []).map((s) => ({
         name: s.context,
         status: s.state === "pending" ? "IN_PROGRESS" : "COMPLETED",
         conclusion: s.state === "success" ? "SUCCESS" : s.state === "pending" ? null : "FAILURE",
+        required: requiredNames.has(s.context),
       })),
     ],
     truncated,
@@ -322,9 +401,11 @@ export async function fetchSnapshot({ owner, name }, prNumber, runGh = gh) {
     }),
     reviews: (pr.reviews?.nodes ?? []).map((r) => ({
       author: r.author?.login ?? "",
+      authorType: r.author?.__typename ?? null,
       commitId: r.commit?.oid ?? "",
       state: r.state,
       submittedAt: r.submittedAt,
+      body: r.body ?? "",
     })),
     comments: (pr.comments?.nodes ?? []).map((c) => ({
       author: c.author?.login ?? "",
@@ -408,9 +489,10 @@ function printResult(result, prNumber, json) {
   console.log(`${label}: PR #${prNumber}`);
   for (const reason of result.reasons) console.log(`  - ${reason}`);
   for (const t of result.threads ?? []) {
-    const where = `${t.path ?? "(no path)"}${t.line ? `:${t.line}` : ""}`;
+    const where = t.kind === "review" ? "(written review)" : `${t.path ?? "(no path)"}${t.line ? `:${t.line}` : ""}`;
     console.log(`  * ${where} [${t.author ?? "?"}] ${t.body.split("\n")[0]}`);
   }
+  for (const note of result.notes ?? []) console.log(`  note: ${note}`);
 }
 
 async function main(argv) {
@@ -443,6 +525,7 @@ async function main(argv) {
     reviewers: args.reviewers,
     requestComment: args.requestComment,
     allowNoChecks: args.allowNoChecks,
+    ignoreChecks: args.ignoreChecks,
   };
   const loadSnapshot = async () => {
     const snapshot = await fetchSnapshot(repo, args.pr);
