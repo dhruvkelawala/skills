@@ -274,9 +274,16 @@ async function main() {
   const repo = a.repo;
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
   if (a.policy !== undefined && !POLICIES.includes(a.policy)) throw new Error(`unknown policy "${a.policy}"; use ${POLICIES.join(" or ")}`);
-  const caller = () => a.me ?? sh("gh", ["api", "user", "--jq", ".login"]);
+  const authenticated = () => sh("gh", ["api", "user", "--jq", ".login"]);
+  // verdict check and run grant the own-PR rules to the caller, so the caller is always the
+  // authenticated account; --me may only repeat it. queue uses --me just to sort the list.
+  const caller = () => {
+    const login = authenticated();
+    if (a.me && actor(a.me) !== actor(login)) throw new Error(`--me ${a.me} does not match the authenticated GitHub account ${login}`);
+    return login;
+  };
   if (cmd === "queue") {
-    const me = caller();
+    const me = a.me ?? authenticated();
     const q = planQueue(openPrs(repo), { me, defaultBranch: defaultBranch(repo) });
     return print(q, a.json, textQueue);
   }

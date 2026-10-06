@@ -54,4 +54,6 @@ if (args[0] === "pr" && args[1] === "list") {
   assert.equal(cli("verdict", "check", "7").status, "current");
   publish(commit("first\n \n"));
   assert.equal(cli("verdict", "check", "7").status, "stale");
+  // The own-PR rules key on the caller, so the caller must be the authenticated account.
+  assert.throws(() => cli("verdict", "check", "7", "--me", "author"), /does not match the authenticated GitHub account/);
 });
