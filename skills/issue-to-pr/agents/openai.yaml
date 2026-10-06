@@ -1,4 +1,4 @@
 interface:
   display_name: "Issue to PR"
-  short_description: "Ship one GitHub issue as a reviewed, verified, gated PR"
-  default_prompt: "Use $issue-to-pr to take this issue through implement, code review, verify, apr, and pr-watch into a merge-ready PR."
+  short_description: "Ship one GitHub issue or Linear ticket as a reviewed, proven PR"
+  default_prompt: "Use $issue-to-pr to take this issue through a test-first build, review, captured evidence, a PR and a time-boxed watch."

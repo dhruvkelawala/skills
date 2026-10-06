@@ -1,15 +1,15 @@
 # Watcher hosts
 
-How to spawn the stage-6 watcher on each host. The rule is the same everywhere: the cheapest subagent that can edit files and run commands, on the current branch, with the watcher prompt as its whole context. Pick from this table; do not upgrade because the task "might need judgment". The prompt bounds the work, and anything outside it escalates.
+The watcher is a helper agent with the `implement-cheap` role. It edits files and runs commands in the current checkout, on the current branch, because its pushes must land on the branch the run record names. Use the role in the table even when the task looks like it needs judgement. The prompt bounds the work, and anything outside it escalates.
 
-| Host | Spawn with | Notes |
+| Host | Start the watcher with | Keep it in this checkout by |
 | --- | --- | --- |
-| SumoCode / Pi | `role: implement-cheap`, `worktree: false`, `visible: false` | Roles live in `~/.pi/agent/sumocode/roles.json`. `implement-cheap` is the cheap coding role; the model is whatever that role maps to. Never `implement-smart`, `review`, or `research` for the watcher. |
-| Claude Code | `Agent` tool, `subagent_type: general-purpose`, `model: sonnet` | Runs in the current checkout by default. Do not pass `isolation: worktree`. |
-| Codex | the standard subagent with the configured lightweight model | Same checkout, same branch. |
-| Hermes | the standard delegate with the cheapest coding-capable model enabled | Same checkout, same branch. |
-| No subagent support | none | The orchestrator runs `/pr-watch` inline with the same budget and escalation rules. |
+| Pi or SumoCode | spawn role `implement-cheap`, not visible | passing `worktree: false` |
+| Claude Code | the Agent tool, `subagent_type: general-purpose`, model `sonnet` | leaving out `isolation: worktree` |
+| Codex | the standard subagent | the default |
+| Another host | its standard helper or delegate, cheapest coding option | asking for the current checkout |
+| No helper agents | nothing: run the watcher prompt's loop yourself and say so in the report | |
 
-Record `watcher: <role or model>` in the run record so a deviation is visible afterwards.
+Record `watcher: <role or agent type>` in the run record, so a deviation shows afterwards.
 
-Adding a host: one row, same shape. The core skill does not change.
+To add a host, add one row.

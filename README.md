@@ -6,7 +6,6 @@
 |-------|-------------|
 | [apr](skills/apr/SKILL.md) | Autoreview from a pinned base, commit, push, open or update a ready-for-review PR, then watch and repair PR review findings until clean. |
 | [bro](skills/bro/SKILL.md) | Restate the last message in plain human language, with no jargon. |
-| [build](skills/build/SKILL.md) | Implement one issue, ticket, plan, or confirmed contract as test-first vertical slices from a pinned base, one commit per slice, with review left to /code-review and /apr. |
 | [code-walkthrough](skills/code-walkthrough/SKILL.md) | Paced, file-by-file review of an unfamiliar or agent-written codebase, fixing as you go with a living checklist. |
 | [eli25](skills/eli25/SKILL.md) | Explain a topic simply and visually to a software engineer as a neo-brutalist HTML page, optionally deployed to Tailscale or Vercel. |
 | [evidence](skills/evidence/SKILL.md) | Write a repo's EVIDENCE.md: how to launch each surface, drive a feature, capture screenshots, recordings, or transcripts, and publish them so PRs can prove changes work. |
@@ -15,8 +14,9 @@
 | [hillclimb](skills/hillclimb/SKILL.md) | Bounded keep-or-revert experiment loop on one metric against a target, with a frozen harness, decision log, and one commit per accepted win. (pstack) |
 | [how](skills/how/SKILL.md) | Explain how a subsystem works or where a change belongs: one input traced end to end, owners, registration seams, and placement tradeoffs. (pstack) |
 | [idea-foundry](skills/idea-foundry/SKILL.md) | Generate or pressure-test ambitious project ideas through research, scoring, red-teaming, and pitching. |
-| [issue-to-pr](skills/issue-to-pr/SKILL.md) | Take one GitHub issue end to end into a merge-ready PR by chaining /build, /code-review until clean, /verify, /apr, and /pr-watch, standalone or stacked. |
+| [issue-to-pr](skills/issue-to-pr/SKILL.md) | Take one GitHub issue or Linear ticket to a PR: test-first build, at most two review passes, a captured proof per criterion, a `pr`-format body, and a time-boxed watch, standalone or stacked. `resume` picks up new reviews and moved predecessors. |
 | [perf](skills/perf/SKILL.md) | Measurement-first optimization: pin the workload, baseline with a profile, test one hypothesis, accept only wins beyond noise. (pstack) |
+| [pr](skills/pr/SKILL.md) | Write a PR body that is fast to review: a diagram summary, before and after evidence, and merge danger with a one-way or two-way door and the blast radius. |
 | [pr-review](skills/pr-review/SKILL.md) | Review a PR, a stack, or your review queue one PR at a time: a read, skim, or skip triage, a plain explanation with a code trace, findings with a suggested verdict, and one batched review. Stops become Hunk notes inside Herdr. |
 | [pr-watch](skills/pr-watch/SKILL.md) | Poll a PR until CI is green, review threads are resolved, and each configured review agent has covered the current HEAD, repairing findings in between. |
 | [product-description](skills/product-description/SKILL.md) | Build a prose "product description" repo describing what the user sees and exactly what happens when they act, drafted from code and tests, then verified and triaged into a bug list. |
@@ -53,7 +53,7 @@ Or install a single skill:
 
 ## Credits
 
-Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`.
+Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory.
 
 ## License
 
