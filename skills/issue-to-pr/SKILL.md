@@ -8,7 +8,7 @@ description: Use when the user invokes /issue-to-pr with a GitHub issue or Linea
 Invoke as `/issue-to-pr <issue number | URL | Linear ticket> [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
 
 - `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
-- `--merge` merges a standalone PR in stage 7. This skill never merges a stacked layer.
+- `--merge` lands the PR in stage 7 through the ship skill: an independent `ship verify`, then `ship land`. A stacked layer lands only once it is the bottom of its stack.
 - `--max-repairs` sets the repair budget. The default is 10.
 - `resume` continues a stopped run. Follow [resume](references/resume.md).
 
@@ -120,7 +120,14 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 ## 7. Hand off
 
 1. Run `gh pr view <n> --json state`. When it reports MERGED, record `merged`.
-2. With `--merge` on a standalone PR at `ready`, run the gate once more without `--watch` and confirm the head is unchanged. Merge with `gh pr merge <n> --squash --match-head-commit <head>`, or with the repo's normal merge method and the same pin, never with `--auto`. Confirm that `gh pr view <n> --json state` reports MERGED, then record `merged`.
+2. With `--merge` and the stage at `ready`, land the PR through the ship skill:
+   1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
+   2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
+   3. Load and follow `/ship verify <n>`. A fresh agent runs the gates, the live behaviour and the blast-radius check at the current head, and records the verdict. On FAIL, fix each finding as a repair, counted against the budget, the way the review case in [resume](references/resume.md) does, then verify again.
+   4. Load and follow `/ship land <n>`. On the caller's own PR, `--merge` is the explicit request to land, so it stands in for an approval. ship merges pinned to the verified head and confirms the merge.
+   5. Record `merged` with the merge commit, or `ready` with the blocker ship reports.
+
+   Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>`, and confirm that `gh pr view <n> --json state` reports MERGED.
 3. Write the handoff block into the record and the report:
 
    ```md
@@ -140,6 +147,6 @@ Leave the branch and any worktree for the user to clean up.
 
 - Work item, mode, lane, base SHA, branch, PR URL, final head, and stage, with the reason when blocked
 - Repairs used against the budget, by stage
-- `/verify` result and anything that could not run
+- `/verify` result and anything that could not run, and the ship verdict when `--merge` ran
 - Findings repaired, rejected and deferred as follow-ups, with sources and commits
 - The handoff block, and the `/promote` proposals when a finding recurred
