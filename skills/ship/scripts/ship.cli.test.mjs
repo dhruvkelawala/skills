@@ -41,6 +41,8 @@ if (args[0] === "pr" && args[1] === "list") {
   console.log("[" + fs.readFileSync("pr.json", "utf8") + "]");
 } else if (args[0] === "pr" && args[1] === "view") {
   console.log(JSON.stringify({ comments: JSON.parse(fs.readFileSync("comments.json", "utf8")) }));
+} else if (args[0] === "api" && args[1] === "user") {
+  console.log("reviewer");
 } else if (args[0] === "pr" && args[1] === "comment") {
   fs.writeFileSync("comments.json", JSON.stringify([{ body: args[args.indexOf("--body") + 1], author: { login: "reviewer" }, createdAt: "2026-10-05T12:00:00Z" }]));
 } else {

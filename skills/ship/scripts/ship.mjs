@@ -3,8 +3,8 @@
 //
 //   ship.mjs queue   [--repo o/r] [--me <login>] [--json]
 //   ship.mjs verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes <file>] [--repo o/r]
-//   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--json]
-//   ship.mjs run     <bottom-pr> [--policy approval|verdict] [--trusted a,b] [--repo o/r] [--json]
+//   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
+//   ship.mjs run     <bottom-pr> [--policy approval|verdict] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
 //
 // Nothing here merges, rebases, retargets, or force-pushes. The caller does that, one PR at a time.
 
@@ -113,15 +113,17 @@ export function formatVerdict(v) {
 }
 
 // Trust comes from GitHub, not from the comment text: the verdict is attributed to the commenter's login
-// and ordered by the server's createdAt. Comments by the PR author never count, and when `trusted` is
+// and ordered by the server's createdAt. Comments by the PR author count only on the caller's own PR
+// (`me`), where one account runs both the agents and the review. When `trusted` is
 // non-empty only those logins count. The embedded `by` and `at` are informational.
-export function latestVerdict(comments, { prAuthor, trusted = [] } = {}) {
+export function latestVerdict(comments, { prAuthor, trusted = [], me } = {}) {
+  const ownPr = Boolean(me) && actor(prAuthor) === actor(me);
   const prefix = `<!-- ${MARKER} `;
   const suffix = " -->";
   let best = null;
   for (const c of comments) {
     const login = c.author?.login;
-    if (!login || actor(login) === actor(prAuthor) || (trusted.length && !trusted.map(actor).includes(actor(login)))) continue;
+    if (!login || (actor(login) === actor(prAuthor) && !ownPr) || (trusted.length && !trusted.map(actor).includes(actor(login)))) continue;
     // JSON.stringify keeps the payload on the first LF-delimited line. Slice the outer marker
     // so delimiters or Unicode line separators inside note strings cannot hide a newer FAIL.
     const line = (c.body ?? "").split("\n", 1)[0];
@@ -164,26 +166,30 @@ export function walkStack(prs, bottomNumber) {
 // One-way doors always need human approval. Two-way doors need approval under "approval" policy,
 // or only a current passing verdict from a non-author under "verdict" policy. `approversByNumber`
 // holds humanApprovers() per PR; reviewDecision alone is not trusted, because a bot can approve.
+// GitHub does not let an author approve their own PR, so on the caller's own PR (`me`) the explicit
+// request to land stands in for the approval, and the caller's own verdict counts.
 export const POLICIES = ["approval", "verdict"];
 
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned
 // head cannot be enforced. ship never lands onto a branch with a merge queue.
-export function landableRun(stack, statusByNumber, { policy = "approval", approversByNumber = new Map(), mergeQueue = false } = {}) {
+export function landableRun(stack, statusByNumber, { policy = "approval", approversByNumber = new Map(), mergeQueue = false, me } = {}) {
   if (!POLICIES.includes(policy)) throw new Error(`unknown policy "${policy}"; use ${POLICIES.join(" or ")}`);
   if (mergeQueue && stack.length) return { run: [], ceiling: { number: stack[0].number, blocker: "the target branch uses a merge queue, which merges later heads ship cannot pin" } };
   const run = [];
   for (const p of stack) {
     const s = statusByNumber.get(p.number) ?? { status: "missing" };
     const door = parseDoor(p.body);
+    const ownPr = Boolean(me) && actor(p.author?.login) === actor(me);
     const approvers = approversByNumber.get(p.number) ?? [];
-    const approved = approvers.length > 0;
+    const approvedBy = approvers.length > 0 ? approvers : ownPr ? [`${me} (own PR)`] : [];
+    const approved = approvedBy.length > 0;
     let blocker = null;
     if (s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""}`;
-    else if (!s.recordedBy || actor(s.recordedBy) === actor(p.author?.login)) blocker = "verdict was not recorded by someone other than the PR author";
+    else if (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr)) blocker = "verdict was not recorded by someone other than the PR author";
     else if (door !== "two-way" && !approved) blocker = `${door} door needs human approval`;
     else if (policy === "approval" && !approved) blocker = "policy needs human approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
-    run.push({ number: p.number, head: p.headRefOid, door, verdict: s.verdict, approvedBy: approvers });
+    run.push({ number: p.number, head: p.headRefOid, door, verdict: s.verdict, approvedBy });
   }
   return { run, ceiling: null };
 }
@@ -244,8 +250,8 @@ function prComments(n, repo) {
   return JSON.parse(gh(["pr", "view", String(n), "--json", "comments"], repo)).comments;
 }
 
-function statusFor(pr, repo, trusted) {
-  return verdictStatus(latestVerdict(prComments(pr.number, repo), { prAuthor: pr.author?.login, trusted }), currentPatch(pr));
+function statusFor(pr, repo, trusted, me) {
+  return verdictStatus(latestVerdict(prComments(pr.number, repo), { prAuthor: pr.author?.login, trusted, me }), currentPatch(pr));
 }
 
 function print(obj, json, text) {
@@ -268,8 +274,9 @@ async function main() {
   const repo = a.repo;
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
   if (a.policy !== undefined && !POLICIES.includes(a.policy)) throw new Error(`unknown policy "${a.policy}"; use ${POLICIES.join(" or ")}`);
+  const caller = () => a.me ?? sh("gh", ["api", "user", "--jq", ".login"]);
   if (cmd === "queue") {
-    const me = a.me ?? sh("gh", ["api", "user", "--jq", ".login"]);
+    const me = caller();
     const q = planQueue(openPrs(repo), { me, defaultBranch: defaultBranch(repo) });
     return print(q, a.json, textQueue);
   }
@@ -286,15 +293,16 @@ async function main() {
   if (cmd === "verdict" && sub === "check") {
     const pr = openPrs(repo).find((p) => p.number === Number(rest[0]));
     if (!pr) throw new Error(`PR #${rest[0]} is not open`);
-    return print(statusFor(pr, repo, trusted), a.json, (s) => `#${pr.number}: ${s.status}${s.reason ? ` (${s.reason})` : ""}`);
+    return print(statusFor(pr, repo, trusted, caller()), a.json, (s) => `#${pr.number}: ${s.status}${s.reason ? ` (${s.reason})` : ""}`);
   }
   if (cmd === "run") {
     const prs = openPrs(repo);
     const { stack, stop } = walkStack(prs, Number(sub));
-    const statuses = new Map(stack.map((p) => [p.number, statusFor(p, repo, trusted)]));
+    const me = caller();
+    const statuses = new Map(stack.map((p) => [p.number, statusFor(p, repo, trusted, me)]));
     const approvers = new Map(stack.map((p) => [p.number, humanApprovers(prReviews(p.number, repo), { prAuthor: p.author?.login, reviewDecision: p.reviewDecision })]));
     const mergeQueue = stack.length > 0 && hasMergeQueue(defaultBranch(repo), repo);
-    const result = { ...landableRun(stack, statuses, { policy: a.policy ?? "approval", approversByNumber: approvers, mergeQueue }), stackStop: stop ?? null };
+    const result = { ...landableRun(stack, statuses, { policy: a.policy ?? "approval", approversByNumber: approvers, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
       [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}`).join(" -> ") || "(none)"}`,
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",

@@ -229,3 +229,31 @@ test("landableRun: the author cannot verify their own PR", () => {
   const r = landableRun([pr(1, "main", "a")], new Map([[1, ok("vlad")]]), { policy: "verdict" });
   assert.equal(r.ceiling.blocker, "verdict was not recorded by someone other than the PR author");
 });
+
+// --- one account: the caller runs ship as the author of their own PRs ---------
+
+test("latestVerdict: on the caller's own PR, the caller's verdict counts", () => {
+  const mine = comment({ ...V, verdict: "PASS" }, "dhruv", "2026-10-05T12:00:00Z");
+  assert.equal(latestVerdict([mine], { prAuthor: "dhruv", me: "dhruv" }).verdict, "PASS");
+  assert.equal(latestVerdict([mine], { prAuthor: "dhruv" }), null);
+});
+
+test("latestVerdict: on someone else's PR, their own verdict is still ignored", () => {
+  const forged = comment({ ...V, verdict: "PASS" }, "vlad", "2026-10-05T12:00:00Z");
+  assert.equal(latestVerdict([forged], { prAuthor: "vlad", me: "dhruv" }), null);
+});
+
+test("landableRun: on the caller's own PR, their verdict counts and their land request stands in for approval", () => {
+  const own = pr(1, "main", "a", { author: { login: "dhruv" } });
+  const r = landableRun([own], new Map([[1, ok("dhruv")]]), { policy: "approval", me: "dhruv" });
+  assert.equal(r.ceiling, null);
+  assert.deepEqual(r.run[0].approvedBy, ["dhruv (own PR)"]);
+});
+
+test("landableRun: someone else's PR still needs a human approval and a verdict from another account", () => {
+  const theirs = pr(1, "main", "a");
+  const noApproval = landableRun([theirs], new Map([[1, ok("dhruv")]]), { policy: "approval", me: "dhruv" });
+  assert.deepEqual(noApproval.ceiling, { number: 1, blocker: "policy needs human approval" });
+  const selfVerdict = landableRun([theirs], new Map([[1, ok("vlad")]]), { policy: "verdict", me: "dhruv" });
+  assert.equal(selfVerdict.ceiling.blocker, "verdict was not recorded by someone other than the PR author");
+});

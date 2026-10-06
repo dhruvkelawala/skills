@@ -5,7 +5,7 @@ description: Order the PR review queue, get an independent verdict on each PR, a
 
 # Ship
 
-Merging, not opening, is the hard part of shipping. This skill picks up where `apr` and `pr-watch` stop: once a PR is green, it decides what to review first, who verifies it, and what can land.
+This skill picks up where `apr` and `pr-watch` stop: once a PR is green, it decides what to review first, who verifies it, and what can land.
 
 Invoke as `/ship [queue | verify <pr> | land <bottom-pr>] [--policy approval|verdict] [--trusted login,login] [--repo owner/name]`. With no subcommand, run `queue`.
 
@@ -17,8 +17,9 @@ Choose `--policy`, `--trusted`, and `--repo` once at the start, as `$FLAGS`, and
 
 - **Green is not verified.** Passing CI or an approving bot review does not count as a verdict. A verdict comes from running the change, and it must come from someone other than the author: a fresh subagent or a human.
 - **A verdict covers a patch, not a commit.** The script fingerprints the PR's whole merge-base-to-head diff, keeping whitespace and line positions. Retargeting a stack layer after its parent squash-merges leaves that diff unchanged, so the verdict survives. Anything else that changes the diff, including indentation or where a change sits, makes the verdict stale. The script rejects an unknown `--policy` instead of treating it as the looser one.
-- **GitHub decides who signed.** A verdict counts only if the comment's GitHub author is not the PR's author, and, with `--trusted a,b`, only if it is one of those logins. Comments are ordered by GitHub's timestamp. The `by` and `at` inside the comment are labels, not proof. So a verdict on your own PR has to be recorded from someone else's account.
-- **The door decides who signs.** The door is read from the PR body's `**Door:**` line, which the `pr` skill writes. One-way doors and PRs with no door line always need a human approval. A human approval is a standing APPROVED review from a GitHub user account that is not a bot and not the author. GitHub's overall "approved" status alone does not count, because a bot can produce it. A two-way door needs a human approval under `--policy approval`, which is the default. Under `--policy verdict` a current passing verdict is enough. Only use `verdict` where the repository's owners have agreed to it, and record that agreement in the repository's AGENTS.md.
+- **Who can post a verdict.** GitHub's record of the comment author decides; the `by` and `at` inside the comment are labels, not proof, and comments are ordered by GitHub's timestamp. On someone else's PR, a verdict counts only if the PR's author did not post it. On the caller's own PR, the caller's verdict counts too, because one account runs both the agents and the review; the independence comes from the fresh verifier subagent in `verify`. With `--trusted a,b`, only those logins count.
+- **Who must approve.** The door is read from the PR body's `**Door:**` line, which the `pr` skill writes. One-way doors and PRs with no door line always need a human approval. A human approval is a standing APPROVED review from a GitHub user account that is not a bot and not the author. GitHub's overall "approved" status alone does not count, because a bot can produce it. A two-way door needs a human approval under `--policy approval`, which is the default. Under `--policy verdict` a current passing verdict is enough. Only use `verdict` where the repository's owners have agreed to it, and record that agreement in the repository's AGENTS.md.
+- **The caller's own PRs.** GitHub does not let an author approve their own PR, so on the caller's own PR the explicit request to land stands in for the approval. A one-way door still needs the caller's confirmation in chat before each merge.
 - **Land from the bottom.** Only the contiguous verified run starting at the lowest unmerged PR can land. A verified PR above an unverified one waits.
 - **Never** force-push a shared branch, merge with failing required checks, or approve on GitHub on anyone's behalf.
 
