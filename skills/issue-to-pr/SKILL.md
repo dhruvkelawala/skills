@@ -45,7 +45,7 @@ Ask no questions in this stage. Report a blocker instead.
 
 1. Confirm that `git merge-base --is-ancestor <base_sha> HEAD` holds, the current branch is the contract's branch, and `git status` is clean.
 2. Take one acceptance criterion at a time, following `/tdd` at `test_seam`:
-   1. Write one failing test that states the criterion. Run it, see it fail for the right reason, and keep the failing assertion lines as the red line.
+   1. Write one failing test that states the criterion. Run it, see it go red on its own assertion about the criterion, and keep those assertion lines as the red line. When the code under test does not exist yet, add it as a stub first, so the test reaches that assertion.
    2. Write the smallest code at the real integration point that makes it pass. Keep the passing summary line as the green line.
    3. Run the focused tests for the touched paths, and the typecheck when the project has one.
    4. Commit with a conventional-commit subject, one commit per criterion.
@@ -71,12 +71,12 @@ Ask no questions in this stage. Report a blocker instead.
 
 ## 3. Review, at most two passes
 
-Rate each finding after checking it against the code. P0 breaks normal use, security or data. P1 is a real bug or an unmet criterion. P2 is maintainability or a judgement call, including every `/code-review` baseline smell. P3 is a nit. Fix accepted P0 and P1 findings as repairs, and run the focused tests after each. Put P2 and P3 findings in the follow-ups list for the PR body. Give each rejected finding its reason. Append every finding to the run record with its priority, source, the head it was reviewed at, and its repair commit or rejection.
+Rate each finding after checking it against the code. P0 breaks normal use, security or data. P1 is a real bug or an unmet criterion. P2 is maintainability or a judgement call, including every `/code-review` baseline smell. P3 is a nit. Fix accepted P0 and P1 findings as repairs, and run the focused tests after each. A repair that adds or rewrites a test also gets a red line: swap out the code path its criterion names, such as a worker pool for an inline runner, and keep the assertion that fails. Put P2 and P3 findings in the follow-ups list for the PR body. Give each rejected finding its reason. Append every finding to the run record with its priority, source, the head it was reviewed at, and its repair commit or rejection.
 
 Before each pass, compare `git rev-parse HEAD^{tree}` with the tree the last pass reviewed. When they are the same, as after a pure rebase, skip the pass and record the skip.
 
 1. **Pass 1.** Run `/code-review <base_sha>` with the contract as the spec, and record the tree it reviewed.
-2. **Autoreview, once.** Review `<base_sha>...HEAD` with an engine from a different model family than the one that ran `/code-review`, which is Codex in the usual case. Resolve `$AUTOREVIEW` and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`. Record `autoreview: <engine> <model>, tree <hash>, clean | <n> fixed`. When only the same family is available, skip it and record why.
+2. **Autoreview, once.** Review `<base_sha>...HEAD` with an engine from a different model family than the one that ran `/code-review`, which is Codex in the usual case. Resolve `$AUTOREVIEW` and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`. Record `autoreview: <engine> <model>, tree <hash>, clean | <n> fixed`. When only the same family is available, skip it and record why. Until the helper exits, keep scratch files outside the checkout, because the helper aborts when the worktree changes during a review.
 3. **Pass 2, full lane only.** Run `/code-review <pass 1 head>`, which covers only the repairs since pass 1. Fix its P0 and P1 findings with focused tests. There is no third pass.
 
 Repairs made after the last pass, here or in a later stage, appear in the PR as not re-reviewed.
