@@ -203,12 +203,12 @@ const sh = (cmd, args, { trimOutput = true, ...opts } = {}) => {
   return trimOutput ? output.trim() : output;
 };
 const gh = (args, repo) => sh("gh", repo ? [...args, "--repo", repo] : args);
-const rest = (endpoint, ...args) => JSON.parse(sh("gh", ["api", ...args, endpoint]));
+const restJson = (endpoint) => JSON.parse(sh("gh", ["api", endpoint]));
 const restList = (endpoint) => JSON.parse(sh("gh", ["api", "--paginate", "--slurp", endpoint], { maxBuffer: 1 << 28 })).flat();
 
 // gh pr, gh repo view and gh api graphql spend the GraphQL quota that every agent on the account
 // shares. Once it is spent, gh prints "API rate limit already exceeded" or the RATE_LIMITED type.
-export function isRateLimited(error) {
+function isRateLimited(error) {
   return /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
 }
 
@@ -249,7 +249,7 @@ function fromRestPr(p) {
 function defaultBranch(repo) {
   return graphqlOrRest(
     () => JSON.parse(sh("gh", ["repo", "view", ...(repo ? [repo] : []), "--json", "defaultBranchRef"])).defaultBranchRef.name,
-    () => rest(`repos/${nameWithOwner(repo)}`).default_branch,
+    () => restJson(`repos/${nameWithOwner(repo)}`).default_branch,
   );
 }
 
@@ -272,7 +272,7 @@ function currentPatch(pr) {
 function nameWithOwner(repo) {
   return repo ?? graphqlOrRest(
     () => JSON.parse(sh("gh", ["repo", "view", "--json", "nameWithOwner"])).nameWithOwner,
-    () => rest("repos/{owner}/{repo}").full_name,
+    () => restJson("repos/{owner}/{repo}").full_name,
   );
 }
 
@@ -288,7 +288,7 @@ function hasMergeQueue(branch, repo) {
     () => sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`, "--jq", ".data.repository.mergeQueue.id // empty"]).length > 0,
     () => {
       try {
-        return rest(`repos/${owner}/${name}/rules/branches/${branch}`).some((rule) => rule.type === "merge_queue");
+        return restJson(`repos/${owner}/${name}/rules/branches/${branch}`).some((rule) => rule.type === "merge_queue");
       } catch (error) {
         // A plan without rulesets answers 403, and it has no merge queue either. A rate limit's 403
         // says nothing about the queue.
@@ -328,7 +328,7 @@ function mergeAt(n, head, repo) {
       return { merged: v.state === "MERGED", autoMerge: Boolean(v.autoMergeRequest), mergeCommit: v.mergeCommit?.oid };
     },
     () => {
-      const v = rest(endpoint);
+      const v = restJson(endpoint);
       return { merged: v.merged === true, autoMerge: Boolean(v.auto_merge), mergeCommit: v.merge_commit_sha };
     },
   );

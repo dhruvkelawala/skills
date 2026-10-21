@@ -336,7 +336,7 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
 
 // GitHub's answer once the account's GraphQL quota is spent: gh prints "API rate limit already
 // exceeded for user ID ...", and the response carries the RATE_LIMITED error type.
-export function isRateLimited(error) {
+function isRateLimited(error) {
   return /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
 }
 
@@ -485,8 +485,7 @@ async function readRest({ owner, name }, prNumber, runGh) {
   };
 }
 
-// REST has no reviewDecision. The gate only blocks on CHANGES_REQUESTED, which holds while some
-// reviewer's latest approving, rejecting or dismissed review requests changes.
+// REST has no reviewDecision, and the gate only blocks on its CHANGES_REQUESTED value.
 function standingChangeRequest(reviews) {
   const latest = new Map();
   for (const r of reviews) {
