@@ -498,7 +498,8 @@ test("fetchSnapshot flags truncation when REST totals exceed the page", async ()
 // --- GraphQL quota spent ------------------------------------------------------
 
 // A gh on PATH whose GraphQL calls fail the way GitHub answers once the account's quota is spent,
-// and whose REST calls answer from `fixtures`, keyed by endpoint without its query string.
+// and whose REST calls answer from `fixtures`, keyed by endpoint without its query string. A
+// fixture `{ httpError: "<status line>" }` fails that call the way gh reports an HTTP error.
 function rateLimitedGh(t, fixtures) {
   const dir = mkdtempSync(join(tmpdir(), "pr-gate-gh-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -515,11 +516,12 @@ if (args[0] === "api" && args[1] === "graphql") {
 }
 const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures.json"), "utf8"));
 const endpoint = args[0] === "api" ? args[1].split("?")[0] : "";
-if (!(endpoint in fixtures)) {
-  process.stderr.write("gh: Not Found (HTTP 404)\\n");
+const answer = fixtures[endpoint] ?? { httpError: "Not Found (HTTP 404)" };
+if (answer.httpError) {
+  process.stderr.write("gh: " + answer.httpError + "\\n");
   process.exit(1);
 }
-process.stdout.write(JSON.stringify(fixtures[endpoint]));
+process.stdout.write(JSON.stringify(answer));
 `, { mode: 0o755 });
   const gate = (...args) => {
     const run = spawnSync(process.execPath, [GATE, "--repo", "o/r", "--pr", "7", ...args, "--json"], {
@@ -579,6 +581,21 @@ test("GraphQL quota spent: REST still shows a failed required check and an unans
   ]);
   assert.deepEqual(result.notes, ['Check "Visual Recap" concluded FAILURE (not required)']);
   assert.equal(result.threads[0].kind, "review");
+});
+
+test("GraphQL quota spent: a failed rulesets read stops the gate instead of demoting a required check", (t) => {
+  const { gate } = rateLimitedGh(t, restPr({
+    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 2, check_runs: [
+      { name: "ci", status: "completed", conclusion: "success" },
+      { name: "lint", status: "completed", conclusion: "failure" },
+    ] },
+    "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
+    "repos/o/r/rules/branches/main": { httpError: "Server Error (HTTP 502)" },
+  }));
+  const { status, stderr, result } = gate("--expected-head", HEAD);
+  assert.equal(result?.notes, undefined, 'a lint check that a ruleset may require must not become a "not required" note');
+  assert.equal(status, 2);
+  assert.match(stderr, /HTTP 502/);
 });
 
 test("GraphQL quota spent: REST reads the PR's state, so a merged PR still blocks", (t) => {

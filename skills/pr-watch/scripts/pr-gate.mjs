@@ -495,10 +495,14 @@ function standingChangeRequest(reviews) {
   return [...latest.values()].includes("CHANGES_REQUESTED");
 }
 
-// The base branch's required checks, from branch protection and from rulesets. A read that fails,
-// such as rulesets on a private repository without Pro, adds no names.
+// Branch protection and rulesets can each require checks. A repository whose plan lacks one of
+// them answers 403 or 404 there, which adds no names; any other failure stops the gate, since
+// missing names would let a failing required check pass as a note.
 async function requiredChecks(repo, base, runGh) {
-  const optional = (args) => runGh(args).catch(() => null);
+  const optional = (args) => runGh(args).catch((error) => {
+    if (/HTTP 40[34]/.test(error?.stderr ?? "")) return null;
+    throw error;
+  });
   const branch = await optional(["api", `${repo}/branches/${base}`]);
   const rules = await optional(["api", `${repo}/rules/branches/${base}`]);
   return new Set([
