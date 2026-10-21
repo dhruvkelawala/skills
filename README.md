@@ -24,6 +24,7 @@
 | [research-explainer](skills/research-explainer/SKILL.md) | Research a topic against primary sources via background agents, then generate a self-contained HTML field guide that teaches it from scratch. |
 | [review-ready](skills/review-ready/SKILL.md) | Completion gate for code changes: checks a design contract (readable entry points, deep modules, real seams, tests through the interface, comment rules) and writes the gate report. |
 | [ship](skills/ship/SKILL.md) | Order the review queue by what each PR unblocks, record an independent verdict pinned to each PR's patch, and land only the verified run of a stack, bottom up. Works with one GitHub account. (pstack) |
+| [test-audit](skills/test-audit/SKILL.md) | Gate each new or changed test on the behaviour it protects and the bug that fails it, reject duplicate, tautological and implementation-coupled tests, and prune a suite with a per-test ledger. `issue-to-pr` runs its gate on every test it writes. |
 | [verification-skill](skills/verification-skill/SKILL.md) | Write a project-local `verify-<app>` skill that launches, health-checks and drives the real app with a feature map (`create`), or check every feature from source and live (`check`). (pstack) |
 | [verify](skills/verify/SKILL.md) | Discover and run every verification a project defines and report each as passed, failed, or could-not-run. |
 | [why](skills/why/SKILL.md) | Why code or a decision looks the way it does, from git and the PR with a confidence word, or why the agent took an action this session. `--deep` searches every source. (pstack) |
@@ -53,7 +54,7 @@ Or install a single skill:
 
 ## Credits
 
-Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory.
+Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory. `test-audit` adapts OpenClaw's `test-audit`, MIT licensed, at `openclaw/openclaw@3195fba`, with the license in its directory.
 
 ## License
 
