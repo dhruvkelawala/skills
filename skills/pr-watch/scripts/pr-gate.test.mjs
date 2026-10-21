@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { evaluateGate, fetchSnapshot, parseArgs, watchGate } from "./pr-gate.mjs";
+
+const GATE = fileURLToPath(new URL("./pr-gate.mjs", import.meta.url));
 
 const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -486,6 +493,135 @@ test("fetchSnapshot flags truncation when REST totals exceed the page", async ()
   };
   const snapshot = await fetchSnapshot({ owner: "o", name: "r" }, 4, runGh);
   assert.equal(snapshot.truncated, true);
+});
+
+// --- GraphQL quota spent ------------------------------------------------------
+
+// A gh on PATH whose GraphQL calls fail the way GitHub answers once the account's quota is spent,
+// and whose REST calls answer from `fixtures`, keyed by endpoint without its query string. A
+// fixture `{ httpError: "<status line>" }` fails that call the way gh reports an HTTP error.
+function rateLimitedGh(t, fixtures) {
+  const dir = mkdtempSync(join(tmpdir(), "pr-gate-gh-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, "fixtures.json"), JSON.stringify(fixtures));
+  writeFileSync(join(dir, "gh"), `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const args = process.argv.slice(2);
+fs.appendFileSync(path.join(__dirname, "calls.log"), args.slice(0, 2).join(" ") + "\\n");
+if (args[0] === "api" && args[1] === "graphql") {
+  process.stdout.write('{"errors":[{"type":"RATE_LIMITED","code":"graphql_rate_limit","message":"API rate limit already exceeded for user ID 50968441."}]}');
+  process.stderr.write("gh: API rate limit already exceeded for user ID 50968441.\\n");
+  process.exit(1);
+}
+const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures.json"), "utf8"));
+const endpoint = args[0] === "api" ? args[1].split("?")[0] : "";
+const answer = fixtures[endpoint] ?? { httpError: "Not Found (HTTP 404)" };
+if (answer.httpError) {
+  process.stderr.write("gh: " + answer.httpError + "\\n");
+  process.exit(1);
+}
+process.stdout.write(JSON.stringify(answer));
+`, { mode: 0o755 });
+  const gate = (...args) => {
+    const run = spawnSync(process.execPath, [GATE, "--repo", "o/r", "--pr", "7", ...args, "--json"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+    });
+    return { status: run.status, stderr: run.stderr, result: run.stdout ? JSON.parse(run.stdout) : null };
+  };
+  const calls = () => readFileSync(join(dir, "calls.log"), "utf8").trim().split("\n");
+  return { gate, calls };
+}
+
+function restPr(overrides = {}) {
+  return {
+    "repos/o/r/pulls/7": {
+      number: 7, state: "open", merged: false, draft: false, mergeable: true, mergeable_state: "clean",
+      user: { login: PR_AUTHOR, type: "User" }, head: { sha: HEAD, ref: "feature" }, base: { ref: "main" },
+    },
+    [`repos/o/r/git/commits/${HEAD}`]: { sha: HEAD, committer: { date: HEAD_COMMITTED_AT } },
+    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 1, check_runs: [{ name: "ci", status: "completed", conclusion: "success" }] },
+    [`repos/o/r/commits/${HEAD}/status`]: { total_count: 0, statuses: [] },
+    "repos/o/r/pulls/7/reviews": [],
+    "repos/o/r/issues/7/comments": [],
+    "repos/o/r/issues/7/reactions": [],
+    "repos/o/r/branches/main": { name: "main", protection: { enabled: false, required_status_checks: { contexts: [], checks: [] } } },
+    "repos/o/r/rules/branches/main": { httpError: "Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)" },
+    ...overrides,
+  };
+}
+
+test("GraphQL quota spent: the gate reads through REST and holds short of ready, since threads are unknown", (t) => {
+  const { gate, calls } = rateLimitedGh(t, restPr());
+  const { status, stderr, result } = gate("--expected-head", HEAD);
+  assert.equal(status, 1, stderr);
+  assert.deepEqual(result, { state: "pending", reasons: ["review threads unknown: GraphQL quota"], threads: [] });
+  assert.equal(calls()[0], "api graphql", "GraphQL stays the first try");
+});
+
+test("GraphQL quota spent: REST still shows a failed required check and an unanswered written review", (t) => {
+  const { gate } = rateLimitedGh(t, restPr({
+    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 2, check_runs: [
+      { name: "ci", status: "completed", conclusion: "failure" },
+      { name: "Visual Recap", status: "completed", conclusion: "failure" },
+    ] },
+    "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
+    "repos/o/r/pulls/7/reviews": [{
+      user: { login: HUMAN, type: "User" }, state: "COMMENTED", commit_id: HEAD,
+      submitted_at: REVIEWED_AT, body: "The joiner drops messages sent before the reply.",
+    }],
+  }));
+  const { status, stderr, result } = gate("--expected-head", HEAD);
+  assert.ok(result, stderr);
+  assert.equal(status, 2);
+  assert.equal(result.state, "blocked");
+  assert.deepEqual(result.reasons, [
+    `Written review from ${HUMAN} at ${REVIEWED_AT} has no reply`,
+    'Check "ci" concluded FAILURE',
+  ]);
+  assert.deepEqual(result.notes, ['Check "Visual Recap" concluded FAILURE (not required)']);
+  assert.equal(result.threads[0].kind, "review");
+});
+
+for (const [failure, httpError] of [
+  ["a server error", "Server Error (HTTP 502)"],
+  ["a REST rate limit", "You have exceeded a secondary rate limit. Please wait a few minutes before you try again. (HTTP 403)"],
+]) {
+  test(`GraphQL quota spent: ${failure} on the rulesets read stops the gate instead of demoting a required check`, (t) => {
+    const { gate } = rateLimitedGh(t, restPr({
+      [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 2, check_runs: [
+        { name: "ci", status: "completed", conclusion: "success" },
+        { name: "lint", status: "completed", conclusion: "failure" },
+      ] },
+      "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
+      "repos/o/r/rules/branches/main": { httpError },
+    }));
+    const { status, stderr, result } = gate("--expected-head", HEAD);
+    assert.equal(result, null, 'a lint check that a ruleset may require must not become a "not required" note');
+    assert.equal(status, 2);
+    assert.ok(stderr.includes(httpError), stderr);
+  });
+}
+
+test("GraphQL quota spent: REST reads the PR's state, so a merged PR still blocks", (t) => {
+  const pr = restPr()["repos/o/r/pulls/7"];
+  const { gate } = rateLimitedGh(t, restPr({ "repos/o/r/pulls/7": { ...pr, state: "closed", merged: true } }));
+  const { stderr, result } = gate("--expected-head", HEAD);
+  assert.ok(result, stderr);
+  assert.equal(result.state, "blocked");
+  assert.ok(result.reasons.includes("PR is MERGED, not open"));
+});
+
+test("GraphQL quota spent: a standing change request in the REST reviews blocks, and a dismissal lifts it", (t) => {
+  const review = (state, submitted_at) => ({ user: { login: HUMAN, type: "User" }, state, commit_id: HEAD, submitted_at, body: "" });
+  const requested = rateLimitedGh(t, restPr({ "repos/o/r/pulls/7/reviews": [review("CHANGES_REQUESTED", REVIEWED_AT)] })).gate("--expected-head", HEAD);
+  assert.ok(requested.result, requested.stderr);
+  assert.ok(requested.result.reasons.includes("Review decision is CHANGES_REQUESTED"));
+  const dismissed = rateLimitedGh(t, restPr({
+    "repos/o/r/pulls/7/reviews": [review("CHANGES_REQUESTED", REVIEWED_AT), review("DISMISSED", LATER)],
+  })).gate("--expected-head", HEAD);
+  assert.deepEqual(dismissed.result.reasons, ["review threads unknown: GraphQL quota"]);
 });
 
 // --- watch ------------------------------------------------------------------

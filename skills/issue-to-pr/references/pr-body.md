@@ -69,6 +69,6 @@ Every PR carries the `**Door:**` line spelled exactly as above, because `/ship` 
 
 - Each criterion has an After link to a capture of the feature running, or a quoted exemption. Test output alone is the proof only for an exempt criterion.
 - The verification table lists every command `/verify` found, including the ones that could not run.
-- The head in Verification equals the PR head. After every push, refresh the body for the new head with `gh pr edit --body-file`.
+- The head in Verification equals the PR head. After every push, refresh the body for the new head with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>`).
 - Excerpts are real output from this run, trimmed to the failing assertion, the passing summary or the changed output. Leave out full logs and diffs, since the PR already shows the diff.
 - For each capture, pick the lightest proof a reviewer would accept as seeing the feature work: a still for a state, a recording under 30 seconds for a flow, or a transcript for a CLI or API.

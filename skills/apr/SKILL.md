@@ -23,8 +23,8 @@ Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<pr
 1. **Helper.** The review helper is the `autoreview` script. Resolve the first that exists and keep it as `$AUTOREVIEW`:
    `.agents/skills/autoreview/scripts/autoreview`, `.claude/skills/autoreview/scripts/autoreview`, `$AGENTS_HOME/skills/autoreview/scripts/autoreview`, `~/.agents/skills/autoreview/scripts/autoreview`, `~/.claude/skills/autoreview/scripts/autoreview`. If none exists and review was not skipped, stop, because autoreview is required and an inline review cannot replace it.
 2. **Engine and model.** `codex` runs with `--model gpt-6.1-sol --thinking xhigh`; `claude` runs with `--model claude-sonnet-5-5`. A model or effort the user names replaces these. Keep the pair as `$ENGINE_FLAGS`. The engine and model stay fixed for the whole run. On capacity, rate-limit or latency errors, retry the same command up to three times, then report the blocker. Only the helper's own documented account-access fallback may change the model.
-3. **Base.** `--base` if given. Otherwise the predecessor branch's remote-tracking ref when stacked, else the remote default branch from `gh repo view --json defaultBranchRef`. Record the resolved base SHA with `git rev-parse`.
-4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker.
+3. **Base.** `--base` if given. Otherwise the predecessor branch's remote-tracking ref when stacked, else the remote default branch from `gh repo view --json defaultBranchRef` (REST: `gh api repos/{owner}/{repo} --jq .default_branch`). Record the resolved base SHA with `git rev-parse`.
+4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker. `gh pr` and `gh repo view` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
 
 ## 2. Confirm scope
 
@@ -61,27 +61,31 @@ Stage only the in-scope files. Commit with a conventional-commit subject that wi
 
 ## 6. Push and publish
 
-Check for an existing PR first: `gh pr view --json url,state,baseRefName,headRefOid`.
+Check for an existing PR first: `gh pr view --json url,state,baseRefName,headRefOid` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`, an empty list when there is none).
 
 - **Stacked, tracked locally** (`gh stack view` lists the branch): `gh stack push`, then `gh stack submit --open` to create or update every PR in the stack as ready for review.
 - **Stacked, not tracked** (a branch created outside gh stack, common in a fresh worktree): `git push -u origin "$(git branch --show-current)"`, then create the PR with the predecessor's head branch as its base, or update the existing one:
 
 ```bash
 gh pr create --title "$title" --body-file "$body_file" --head "$(git branch --show-current)" --base "$predecessor_head_branch"
+# REST, on a rate-limit error:
+gh api -X POST repos/{owner}/{repo}/pulls -f title="$title" -F body=@"$body_file" -f head="$(git branch --show-current)" -f base="$predecessor_head_branch"
 ```
 
-- For both, confirm with `gh pr view --json baseRefName` that this branch's PR targets the predecessor branch, not the trunk. If it targets the trunk, stop and report.
+- For both, confirm with `gh pr view --json baseRefName` (REST: `.base.ref` from `gh api repos/{owner}/{repo}/pulls/<n>`) that this branch's PR targets the predecessor branch, not the trunk. If it targets the trunk, stop and report.
 - **Standalone, no PR yet:** `git push -u origin "$(git branch --show-current)"`, then:
 
 ```bash
 gh pr create --title "$title" --body-file "$body_file" --head "$(git branch --show-current)" --base "$base_branch"
+# REST, on a rate-limit error:
+gh api -X POST repos/{owner}/{repo}/pulls -f title="$title" -F body=@"$body_file" -f head="$(git branch --show-current)" -f base="$base_branch"
 ```
 
-- **Standalone, PR exists:** push the new commits and update the body with `gh pr edit --body-file`. Update the existing PR rather than opening a second one.
+- **Standalone, PR exists:** push the new commits and update the body with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@"$body_file"`). Update the existing PR rather than opening a second one.
 
 Open every PR ready for review, not as a draft, and with no `[codex]` or other tag in the title.
 
-**Complete when:** `gh pr view --json headRefOid` equals the local HEAD and the PR is open and ready for review.
+**Complete when:** `gh pr view --json headRefOid` (REST: `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<n>`) equals the local HEAD and the PR is open and ready for review.
 
 ## 7. Watch and repair
 

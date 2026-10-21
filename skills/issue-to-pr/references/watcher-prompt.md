@@ -22,6 +22,13 @@ Gate command:
     --expected-head "$(git rev-parse HEAD)" {reviewer_flags} {ignore_check_flags} \
     --watch --timeout-seconds 300 --json
 
+GitHub quota: gh pr spends the GraphQL quota that every agent on the account
+shares. When a gh pr command fails with "API rate limit exceeded" or
+RATE_LIMITED, run the REST command given beside it. The gate falls back on
+its own, and its reason "review threads unknown: GraphQL quota" clears once
+the quota resets, so keep polling. Resolving a thread has no REST call:
+reply now, and resolve after the reset.
+
 Repeat until 30 minutes have passed since you started:
 1. Confirm `git rev-parse HEAD` equals the PR's headRefOid. If it does not,
    report MISMATCH.
@@ -33,7 +40,8 @@ Repeat until 30 minutes have passed since you started:
      AWAITING_HUMAN. Otherwise go back to step 1.
    - Exit 2: handle each blocked reason in step 4.
 3. When a reviewer with a request comment "has not reviewed the current HEAD",
-   post the comment once for this head with `gh pr comment`.
+   post the comment once for this head with `gh pr comment` (REST:
+   `gh api -X POST repos/{owner}/{repo}/issues/{pr_number}/comments -f body="<text>"`).
 4. Blocked reasons:
    - Failed check: read `gh run view --log-failed` and fix the cause.
    - Unresolved review thread: read it in full and check it against the code.
@@ -41,8 +49,8 @@ Repeat until 30 minutes have passed since you started:
      is pushed or the reply is posted.
    - Thread with kind "review" (a written review from a human, unanswered):
      read it, fix each point or decide against it, then post one PR comment
-     with `gh pr comment` that answers it point by point. A reply inside a
-     thread does not answer it.
+     with `gh pr comment` (REST: as in step 3) that answers it point by
+     point. A reply inside a thread does not answer it.
    - Merge conflict or behind base: rebase onto the live base and push with
      --force-with-lease.
    - Draft, closed, or head mismatch: report BLOCKED.
@@ -52,9 +60,11 @@ Repeat until 30 minutes have passed since you started:
    fails to repair twice.
 6. Each commit that changes code is one repair. Run the focused tests, commit
    with a conventional-commit subject, and push. Then update the PR body with
-   `gh pr edit --body-file`: set the Verification head to the new head, and
-   add the commit under "Not re-reviewed" in the review trail. When the
-   budget reaches 0, report BUDGET.
+   `gh pr edit --body-file` (REST:
+   `gh api -X PATCH repos/{owner}/{repo}/pulls/{pr_number} -F body=@<file>`):
+   set the Verification head to the new head, and add the commit under
+   "Not re-reviewed" in the review trail. When the budget reaches 0, report
+   BUDGET.
 When 30 minutes have passed, report TIMEOUT with the last reasons.
 
 Report this block and nothing else:

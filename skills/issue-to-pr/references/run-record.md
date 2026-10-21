@@ -2,7 +2,7 @@
 
 ## Location
 
-The record is `~/.agent/issue-to-pr/<repo>/<issue>.md`. `<repo>` is `gh repo view --json name --jq .name`, and `<issue>` is the issue number or the Linear ticket ID. Create the directory when it is missing. The path is outside every checkout, so isolated worktrees and helper agents share one record.
+The record is `~/.agent/issue-to-pr/<repo>/<issue>.md`. `<repo>` is `gh repo view --json name --jq .name` (REST: `gh api repos/{owner}/{repo} --jq .name`), and `<issue>` is the issue number or the Linear ticket ID. Create the directory when it is missing. The path is outside every checkout, so isolated worktrees and helper agents share one record.
 
 Only the orchestrator writes the record. Helper agents return reports, and the orchestrator appends them.
 
@@ -43,7 +43,7 @@ Keep earlier passes, so that `/promote` can see a finding that recurs.
 ## When a record already exists
 
 1. Read the record. If an older record exists at `$(git rev-parse --git-dir)/issue-to-pr/<issue>.md`, read it too and copy its identifiers and reports into the new record. Leave the old file where it is.
-2. Run `git fetch` and compare the record with live state: `base_sha` is still reachable, the branch head exists, and, once a PR exists, `gh pr view <pr> --json state,headRefOid,baseRefName`.
+2. Run `git fetch` and compare the record with live state: `base_sha` is still reachable, the branch head exists, and, once a PR exists, `gh pr view <pr> --json state,headRefOid,baseRefName` (REST: `.state`, `.merged`, `.head.sha` and `.base.ref` from `gh api repos/{owner}/{repo}/pulls/<pr>`).
 3. When GitHub reports the PR as MERGED, record `merged` and stop. When it reports CLOSED, record `blocked: PR closed` and stop.
 4. When the live head differs from the record, set `stage` back to the last stage whose head still matches, and continue from that stage.
 

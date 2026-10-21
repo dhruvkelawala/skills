@@ -5,9 +5,11 @@ description: Use when the user invokes /pr-watch, asks to wait for a PR's checks
 
 # PR watch
 
-Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N]`. With no PR argument, use the current branch's PR from `gh pr view`. The default repair budget is 10.
+Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N]`. With no PR argument, use the current branch's PR from `gh pr view` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`). The default repair budget is 10.
 
 The loop observes the PR with the gate script, repairs what it reports, republishes, and observes again. The gate only reads GitHub, so every push and comment comes from you.
+
+`gh pr` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one of your calls fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
 
 ## Configure
 
@@ -23,7 +25,7 @@ Resolve reviewers, the request comment and the checks to ignore from the first s
    - ignore checks: visual-recap / Gate, visual-recap / Generate visual recap
    ```
 
-3. Reviewers only: the logins that reviewed recent merged PRs, from `gh pr list --state merged --limit 5` and `gh pr view <n> --json reviews,comments`.
+3. Reviewers only: the logins that reviewed recent merged PRs, from `gh pr list --state merged --limit 5` and `gh pr view <n> --json reviews,comments` (REST: `gh api "repos/{owner}/{repo}/pulls?state=closed&per_page=20"` keeping PRs with a `merged_at`, then `gh api repos/{owner}/{repo}/pulls/<n>/reviews` and `gh api repos/{owner}/{repo}/issues/<n>/comments`).
 4. Nothing. The gate then needs passing checks, no open threads, and no unanswered written review.
 
 A reviewer is any account that reviews PRs in this repository: a bot such as Codex, CodeRabbit, Copilot or Claude, or a human the user names. The request comment is the exact text that asks a bot to review, such as `@codex review`. Post it at most once per HEAD, and only when the gate says the reviewer has not covered the current HEAD.
@@ -33,6 +35,7 @@ A reviewer is any account that reviews PRs in this repository: a bot such as Cod
 - **Checks.** When the base branch has required checks, only those block or hold the gate. Other checks appear in `notes` and never block. With no required checks, every check counts, so pass `--ignore-check <name>` for each optional check that should not hold the PR, such as a slow visual recap.
 - **Merge state.** GitHub's UNSTABLE merge state does not block on its own. Conflicts, a draft or closed PR, and a HEAD mismatch still block.
 - **Threads.** `threads` lists unresolved review threads with path, line, author and body.
+- **GraphQL quota.** When the gate's GraphQL query fails with a rate-limit error, it reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with `review threads unknown: GraphQL quota`, because REST cannot tell whether a thread is resolved. Each poll tries GraphQL first, so the reason clears once the quota resets (`gh api rate_limit --jq .resources.graphql.reset`).
 - **Written reviews.** A COMMENTED review with a body, from a human account other than the PR author, appears in `threads` with `kind: "review"` and blocks. It counts as answered once the PR author posts a later PR comment or a later review with a non-empty body, or the same reviewer posts a newer review. The empty review that GitHub creates for a reply inside a thread does not answer it.
 
 ## Watch loop
@@ -47,13 +50,13 @@ A reviewer is any account that reviews PRs in this repository: a bot such as Cod
    ```
 
    Exit `0` is ready, `1` is pending or timed out, and `2` is blocked. Each JSON line is `{ state, reasons, threads, notes }`.
-3. On pending with "has not reviewed the current HEAD" for a reviewer that takes a request comment, post the request once with `gh pr comment`, note the HEAD it was for, and watch again.
+3. On pending with "has not reviewed the current HEAD" for a reviewer that takes a request comment, post the request once with `gh pr comment` (REST: `gh api -X POST repos/{owner}/{repo}/issues/<n>/comments -f body="<text>"`), note the HEAD it was for, and watch again.
 4. On a pending timeout, report the last reasons and stop. Waiting longer is the user's call.
 5. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
-   - **Unresolved thread.** Read the whole thread with `gh api graphql` or `gh pr view --comments`, check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted.
-   - **Written review** (`kind: "review"`). Read it, fix each point or decide against it, then post one PR comment with `gh pr comment` that answers it point by point.
-   - **Changes requested by a human.** Address the review, then re-request it with `gh pr edit --add-reviewer`. Leave the human's review in place.
+   - **Unresolved thread.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
+   - **Written review** (`kind: "review"`). Read it, fix each point or decide against it, then post one PR comment with `gh pr comment` (REST: as in step 3) that answers it point by point.
+   - **Changes requested by a human.** Address the review, then re-request it with `gh pr edit --add-reviewer` (REST: `gh api -X POST repos/{owner}/{repo}/pulls/<n>/requested_reviewers -f "reviewers[]=<login>"`). Leave the human's review in place.
    - **Merge conflict or wrong base.** Rebase onto the live base, rerun the project's tests, and push with `--force-with-lease`.
    - **Draft, closed, or mismatched HEAD.** Stop and report, because these are not repairs.
 6. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Return to step 1 with the new HEAD.

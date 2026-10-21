@@ -11,7 +11,9 @@ Invoke as `/ship [queue | verify <pr> | land <bottom-pr>] [--policy approval|ver
 
 Choose `--policy`, `--trusted`, and `--repo` once at the start, as `$FLAGS`, and pass the same `$FLAGS` to every `run` and `verdict check` in this invocation. A later check with fewer flags trusts more people than the first one did.
 
-`$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans. Its only write is the verdict comment that `verdict record` posts. Every merge, rebase, and retarget is yours to do, one at a time.
+`$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans, and makes two writes: the verdict comment that `verdict record` posts, and the pinned merge that `merge` makes. Every rebase and retarget is yours to do, and you merge one PR at a time.
+
+Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved. A PR that needs a human approval waits, and the queue's merge-now list is empty. The caller's own PR, and a two-way door under `--policy verdict`, can still land.
 
 ## Rules
 
@@ -55,11 +57,11 @@ node "$SHIP" verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by
 
 1. Run `node "$SHIP" run <bottom-pr> $FLAGS`. It walks the stack upward from the bottom PR, checks each verdict against the current patch and each approval against the review list, and prints the landable run as `#pr@<full head SHA>` plus its ceiling, meaning the first PR that can't land and the reason.
 2. For each PR in the run, bottom first:
-   1. If the PR does not target the default branch, rebase it onto the current tip, push, retarget it with `gh pr edit <pr> --base <default>`, then run `node "$SHIP" verdict check <pr> $FLAGS`. A stale verdict sends the PR back to `verify`.
+   1. If the PR does not target the default branch, rebase it onto the current tip, push, retarget it with `gh pr edit <pr> --base <default>` (REST, on a rate-limit error: `gh api -X PATCH repos/{owner}/{repo}/pulls/<pr> -f base=<default>`), then run `node "$SHIP" verdict check <pr> $FLAGS`. A stale verdict sends the PR back to `verify`.
    2. Wait for required checks on the head.
    3. Run `node "$SHIP" run <pr> $FLAGS --json` again immediately before merging, and take `run[0].head` (the full 40-character SHA) for this PR. If this PR is not `run[0]`, stop.
-   4. Merge pinned to that head: `gh pr merge <pr> --squash --match-head-commit <head>`. GitHub refuses the merge if anything was pushed after the check. Never use `--auto`. `run` refuses a branch with a merge queue, because a queue merges whatever head is current when it fires.
-   5. Confirm the merge happened immediately: `gh pr view <pr> --json state,autoMergeRequest,headRefOid`. If the state is not `MERGED`, or an auto-merge request exists, run `gh pr merge <pr> --disable-auto` and stop. A merge that GitHub deferred is not pinned to the verified head.
+   4. Merge pinned to that head: `node "$SHIP" merge <pr> --head <head>`. It squash-merges with `gh pr merge --squash --match-head-commit <head>`, or, when GraphQL's quota is spent, with REST's `PUT repos/{owner}/{repo}/pulls/<pr>/merge` and `sha=<head>`. Either way GitHub refuses the merge if anything was pushed after the check. Never merge another way, such as `gh pr merge --auto`. `run` refuses a branch with a merge queue, because a queue merges whatever head is current when it fires.
+   5. `merge` then confirms the merge happened at once and prints the merge commit. When the PR did not merge, or an auto-merge request exists, it disables auto-merge and exits 2: stop there. A merge that GitHub deferred is not pinned to the verified head.
    6. Fetch, confirm the merge commit is on the default branch, and rerun `run` from the next PR. Never assume GitHub retargeted the child.
 3. Stop at the ceiling. Report what landed, the ceiling PR and its blocker, and the cheapest thing that would clear it.
 
