@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// ship: read-only planning for landing PRs, plus one write (posting a verdict comment).
+// ship: planning for landing PRs, plus two writes: posting a verdict comment and a pinned merge.
 //
 //   ship.mjs queue   [--repo o/r] [--me <login>] [--json]
 //   ship.mjs verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes <file>] [--repo o/r]
 //   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
 //   ship.mjs run     <bottom-pr> [--policy approval|verdict] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
+//   ship.mjs merge   <pr> --head <run[0].head> [--repo o/r] [--json]
 //
-// Nothing here merges, rebases, retargets, or force-pushes. The caller does that, one PR at a time.
+// Nothing here rebases, retargets, or force-pushes, and `merge` lands only the head it is given. The
+// caller runs `run` before each merge and does the rest, one PR at a time.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -201,17 +203,54 @@ const sh = (cmd, args, { trimOutput = true, ...opts } = {}) => {
   return trimOutput ? output.trim() : output;
 };
 const gh = (args, repo) => sh("gh", repo ? [...args, "--repo", repo] : args);
+const rest = (endpoint, ...args) => JSON.parse(sh("gh", ["api", ...args, endpoint]));
+const restList = (endpoint) => JSON.parse(sh("gh", ["api", "--paginate", "--slurp", endpoint], { maxBuffer: 1 << 28 })).flat();
+
+// gh pr, gh repo view and gh api graphql spend the GraphQL quota that every agent on the account
+// shares. Once it is spent, gh prints "API rate limit already exceeded" or the RATE_LIMITED type.
+export function isRateLimited(error) {
+  return /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
+}
+
+let warnedRest = false;
+function graphqlOrRest(graphql, viaRest) {
+  try {
+    return graphql();
+  } catch (error) {
+    if (!isRateLimited(error)) throw error;
+    if (!warnedRest) process.stderr.write("ship: GitHub's GraphQL quota is spent; using REST, which has no review decision, so no PR shows as approved\n");
+    warnedRest = true;
+    return viaRest();
+  }
+}
 // Whole-repository, unfiltered diff: no relative paths, conversion filters, external drivers, or
 // ignored submodules, so local git config cannot hide a change from the fingerprint.
 export const FINGERPRINT_DIFF_FLAGS = ["--no-relative", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--no-color", "--binary", "--full-index", "-U3"];
 const PR_FIELDS = "number,title,author,body,baseRefName,headRefName,headRefOid,isCrossRepository,additions,deletions,isDraft,reviewDecision,mergeStateStatus";
 
 function openPrs(repo) {
-  return JSON.parse(gh(["pr", "list", "--state", "open", "--limit", "200", "--json", PR_FIELDS], repo));
+  return graphqlOrRest(
+    () => JSON.parse(gh(["pr", "list", "--state", "open", "--limit", "200", "--json", PR_FIELDS], repo)),
+    () => restList(`repos/${nameWithOwner(repo)}/pulls?state=open&per_page=100`).map(fromRestPr),
+  );
+}
+
+// REST's PR list has what a stack walk and a verdict need, but no review decision, merge state or
+// size. Without a decision humanApprovers finds no approval, so only the caller's own PR can land.
+function fromRestPr(p) {
+  return {
+    number: p.number, title: p.title, author: { login: p.user?.login }, body: p.body ?? "",
+    baseRefName: p.base?.ref, headRefName: p.head?.ref, headRefOid: p.head?.sha,
+    isCrossRepository: p.head?.repo?.full_name !== p.base?.repo?.full_name,
+    isDraft: p.draft, reviewDecision: null,
+  };
 }
 
 function defaultBranch(repo) {
-  return JSON.parse(sh("gh", ["repo", "view", ...(repo ? [repo] : []), "--json", "defaultBranchRef"])).defaultBranchRef.name;
+  return graphqlOrRest(
+    () => JSON.parse(sh("gh", ["repo", "view", ...(repo ? [repo] : []), "--json", "defaultBranchRef"])).defaultBranchRef.name,
+    () => rest(`repos/${nameWithOwner(repo)}`).default_branch,
+  );
 }
 
 // The PR's patch as GitHub defines it: merge-base(base tip, PR head) to PR head. Both refs are fetched
@@ -231,7 +270,10 @@ function currentPatch(pr) {
 }
 
 function nameWithOwner(repo) {
-  return repo ?? JSON.parse(sh("gh", ["repo", "view", "--json", "nameWithOwner"])).nameWithOwner;
+  return repo ?? graphqlOrRest(
+    () => JSON.parse(sh("gh", ["repo", "view", "--json", "nameWithOwner"])).nameWithOwner,
+    () => rest("repos/{owner}/{repo}").full_name,
+  );
 }
 
 function prReviews(n, repo) {
@@ -242,12 +284,56 @@ function prReviews(n, repo) {
 function hasMergeQueue(branch, repo) {
   const [owner, name] = nameWithOwner(repo).split("/");
   const q = "query($o:String!,$n:String!,$b:String!){repository(owner:$o,name:$n){mergeQueue(branch:$b){id}}}";
-  const out = sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`, "--jq", ".data.repository.mergeQueue.id // empty"]);
-  return out.length > 0;
+  return graphqlOrRest(
+    () => sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`, "--jq", ".data.repository.mergeQueue.id // empty"]).length > 0,
+    () => {
+      try {
+        return rest(`repos/${owner}/${name}/rules/branches/${branch}`).some((rule) => rule.type === "merge_queue");
+      } catch (error) {
+        // A plan without rulesets answers 403, and it has no merge queue either.
+        if (/HTTP 40[34]/.test(error?.stderr ?? "")) return false;
+        throw error;
+      }
+    },
+  );
 }
 
 function prComments(n, repo) {
-  return JSON.parse(gh(["pr", "view", String(n), "--json", "comments"], repo)).comments;
+  return graphqlOrRest(
+    () => JSON.parse(gh(["pr", "view", String(n), "--json", "comments"], repo)).comments,
+    () => restList(`repos/${nameWithOwner(repo)}/issues/${n}/comments?per_page=100`)
+      .map((c) => ({ author: { login: c.user?.login }, body: c.body, createdAt: c.created_at })),
+  );
+}
+
+function postComment(n, body, repo) {
+  graphqlOrRest(
+    () => gh(["pr", "comment", String(n), "--body", body], repo),
+    () => sh("gh", ["api", "-X", "POST", `repos/${nameWithOwner(repo)}/issues/${n}/comments`, "-f", `body=${body}`]),
+  );
+}
+
+// Squash-merges only while the PR's head is still `head`: GitHub refuses once anything is pushed
+// after it. A merge GitHub deferred, such as an auto-merge request, is not pinned, so it is undone.
+function mergeAt(n, head, repo) {
+  const endpoint = `repos/${nameWithOwner(repo)}/pulls/${n}`;
+  graphqlOrRest(
+    () => gh(["pr", "merge", String(n), "--squash", "--match-head-commit", head], repo),
+    () => sh("gh", ["api", "-X", "PUT", `${endpoint}/merge`, "-f", "merge_method=squash", "-f", `sha=${head}`]),
+  );
+  const pr = graphqlOrRest(
+    () => {
+      const v = JSON.parse(gh(["pr", "view", String(n), "--json", "state,autoMergeRequest,mergeCommit"], repo));
+      return { merged: v.state === "MERGED", autoMerge: Boolean(v.autoMergeRequest), mergeCommit: v.mergeCommit?.oid };
+    },
+    () => {
+      const v = rest(endpoint);
+      return { merged: v.merged === true, autoMerge: Boolean(v.auto_merge), mergeCommit: v.merge_commit_sha };
+    },
+  );
+  if (pr.merged && !pr.autoMerge) return { number: n, head, mergeCommit: pr.mergeCommit };
+  if (pr.autoMerge) gh(["pr", "merge", String(n), "--disable-auto"], repo);
+  throw new Error(`PR #${n} did not merge at once, so the merge was not pinned to ${head.slice(0, 12)}${pr.autoMerge ? "; its auto-merge request is now disabled" : ""}`);
 }
 
 function statusFor(pr, repo, trusted, me) {
@@ -294,7 +380,7 @@ async function main() {
     if (!pr) throw new Error(`PR #${n} is not open`);
     if (pr.headRefOid !== a.head) throw new Error(`PR #${n} head is ${pr.headRefOid.slice(0, 12)}, but the verdict is for ${a.head.slice(0, 12)}; verify the current head instead`);
     const v = { verdict, by: a.by, at: new Date().toISOString(), ...currentPatch(pr), notes: a.notes ? readFileSync(a.notes, "utf8").trim() : undefined };
-    gh(["pr", "comment", String(n), "--body", formatVerdict(v)], repo);
+    postComment(n, formatVerdict(v), repo);
     return print(v, a.json, (x) => `recorded ${x.verdict} on #${n} at ${x.head.slice(0, 12)}`);
   }
   if (cmd === "verdict" && sub === "check") {
@@ -315,7 +401,11 @@ async function main() {
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",
        r.stackStop ? `note: ${r.stackStop}` : ""].filter(Boolean).join("\n"));
   }
-  throw new Error("usage: ship.mjs queue | verdict record|check | run <bottom-pr>");
+  if (cmd === "merge") {
+    if (!sub || !/^[0-9a-f]{40}$/.test(a.head ?? "")) throw new Error("usage: merge <pr> --head <the full head SHA from run>");
+    return print(mergeAt(Number(sub), a.head, repo), a.json, (m) => `merged #${m.number} at ${m.head.slice(0, 12)} as ${m.mergeCommit?.slice(0, 12)}`);
+  }
+  throw new Error("usage: ship.mjs queue | verdict record|check | run <bottom-pr> | merge <pr> --head <sha>");
 }
 
 // Skills are usually reached through a symlinked folder (~/.claude/skills), so compare real paths;
