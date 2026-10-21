@@ -128,7 +128,9 @@ switch (method + " " + endpoint) {
     state.comments.push(comment);
     answer(comment);
   }
-  case "GET repos/fixture/repo/rules/branches/main": answer([]);
+  case "GET repos/fixture/repo/rules/branches/main":
+    if (state.rulesError) fail("", "gh: " + state.rulesError);
+    answer([]);
   case "PUT repos/fixture/repo/pulls/7/merge":
     if (field("merge_method") !== "squash" || field("sha") !== pr.head.sha) {
       fail('{"message":"Head branch was modified. Review and try the merge again."}', "gh: Head branch was modified. Review and try the merge again. (HTTP 409)");
@@ -146,7 +148,8 @@ fail("", "gh: Not Found (HTTP 404)");
     return JSON.parse(run.stdout);
   };
   const state = () => JSON.parse(readFileSync(statePath, "utf8"));
-  return { dir, head, cli, state };
+  const setState = (changes) => writeFileSync(statePath, JSON.stringify({ ...state(), ...changes }));
+  return { dir, head, cli, state, setState };
 }
 
 test("GraphQL quota spent: queue, verdict and run read and post through REST", (t) => {
@@ -162,6 +165,18 @@ test("GraphQL quota spent: queue, verdict and run read and post through REST", (
   });
   const firstTries = state().calls.filter((c) => c[0] === "pr" || c[0] === "repo" || c[1] === "graphql");
   assert.ok(firstTries.some((c) => c[0] === "pr" && c[1] === "list"), "GraphQL stays the first try");
+});
+
+test("GraphQL quota spent: run refuses to call a branch queue-free when the REST rules read is rate limited", (t) => {
+  const { dir, head, cli, setState } = rateLimitedGitHub(t);
+  cli("verdict", "record", "7", "PASS", "--head", head, "--by", "verifier");
+  setState({ rulesError: "You have exceeded a secondary rate limit. Please wait a few minutes before you try again. (HTTP 403)" });
+  const run = spawnSync(process.execPath, [ship, "run", "7", "--repo", "fixture/repo", "--json"], {
+    cwd: dir, encoding: "utf8", env: { ...process.env, PATH: join(dir, "bin") + ":" + process.env.PATH },
+  });
+  assert.equal(run.stdout, "", "no landable run is printed when the merge queue is unknown");
+  assert.equal(run.status, 2);
+  assert.match(run.stderr, /secondary rate limit/);
 });
 
 test("GraphQL quota spent: merge squashes through REST, pinned to the verified head", (t) => {

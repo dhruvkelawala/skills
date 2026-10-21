@@ -547,6 +547,7 @@ function restPr(overrides = {}) {
     "repos/o/r/issues/7/comments": [],
     "repos/o/r/issues/7/reactions": [],
     "repos/o/r/branches/main": { name: "main", protection: { enabled: false, required_status_checks: { contexts: [], checks: [] } } },
+    "repos/o/r/rules/branches/main": { httpError: "Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)" },
     ...overrides,
   };
 }
@@ -583,20 +584,25 @@ test("GraphQL quota spent: REST still shows a failed required check and an unans
   assert.equal(result.threads[0].kind, "review");
 });
 
-test("GraphQL quota spent: a failed rulesets read stops the gate instead of demoting a required check", (t) => {
-  const { gate } = rateLimitedGh(t, restPr({
-    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 2, check_runs: [
-      { name: "ci", status: "completed", conclusion: "success" },
-      { name: "lint", status: "completed", conclusion: "failure" },
-    ] },
-    "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
-    "repos/o/r/rules/branches/main": { httpError: "Server Error (HTTP 502)" },
-  }));
-  const { status, stderr, result } = gate("--expected-head", HEAD);
-  assert.equal(result?.notes, undefined, 'a lint check that a ruleset may require must not become a "not required" note');
-  assert.equal(status, 2);
-  assert.match(stderr, /HTTP 502/);
-});
+for (const [failure, httpError] of [
+  ["a server error", "Server Error (HTTP 502)"],
+  ["a REST rate limit", "You have exceeded a secondary rate limit. Please wait a few minutes before you try again. (HTTP 403)"],
+]) {
+  test(`GraphQL quota spent: ${failure} on the rulesets read stops the gate instead of demoting a required check`, (t) => {
+    const { gate } = rateLimitedGh(t, restPr({
+      [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 2, check_runs: [
+        { name: "ci", status: "completed", conclusion: "success" },
+        { name: "lint", status: "completed", conclusion: "failure" },
+      ] },
+      "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
+      "repos/o/r/rules/branches/main": { httpError },
+    }));
+    const { status, stderr, result } = gate("--expected-head", HEAD);
+    assert.equal(result, null, 'a lint check that a ruleset may require must not become a "not required" note');
+    assert.equal(status, 2);
+    assert.ok(stderr.includes(httpError), stderr);
+  });
+}
 
 test("GraphQL quota spent: REST reads the PR's state, so a merged PR still blocks", (t) => {
   const pr = restPr()["repos/o/r/pulls/7"];

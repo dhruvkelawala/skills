@@ -236,7 +236,7 @@ function openPrs(repo) {
 }
 
 // REST's PR list has what a stack walk and a verdict need, but no review decision, merge state or
-// size. Without a decision humanApprovers finds no approval, so only the caller's own PR can land.
+// size. Without a decision humanApprovers finds no approval, so a PR that needs one waits.
 function fromRestPr(p) {
   return {
     number: p.number, title: p.title, author: { login: p.user?.login }, body: p.body ?? "",
@@ -290,8 +290,9 @@ function hasMergeQueue(branch, repo) {
       try {
         return rest(`repos/${owner}/${name}/rules/branches/${branch}`).some((rule) => rule.type === "merge_queue");
       } catch (error) {
-        // A plan without rulesets answers 403, and it has no merge queue either.
-        if (/HTTP 40[34]/.test(error?.stderr ?? "")) return false;
+        // A plan without rulesets answers 403, and it has no merge queue either. A rate limit's 403
+        // says nothing about the queue.
+        if (!isRateLimited(error) && /HTTP 40[34]/.test(error?.stderr ?? "")) return false;
         throw error;
       }
     },

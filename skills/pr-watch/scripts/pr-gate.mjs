@@ -496,11 +496,11 @@ function standingChangeRequest(reviews) {
 }
 
 // Branch protection and rulesets can each require checks. A repository whose plan lacks one of
-// them answers 403 or 404 there, which adds no names; any other failure stops the gate, since
-// missing names would let a failing required check pass as a note.
+// them answers 403 or 404 there, which adds no names. Any other failure, a rate limit's 403
+// included, stops the gate, since missing names would let a failing required check pass as a note.
 async function requiredChecks(repo, base, runGh) {
   const optional = (args) => runGh(args).catch((error) => {
-    if (/HTTP 40[34]/.test(error?.stderr ?? "")) return null;
+    if (!isRateLimited(error) && /HTTP 40[34]/.test(error?.stderr ?? "")) return null;
     throw error;
   });
   const branch = await optional(["api", `${repo}/branches/${base}`]);
