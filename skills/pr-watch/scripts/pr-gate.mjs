@@ -15,6 +15,7 @@
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ isResolved, isOutdated, path, line, author, body }]
+//   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
 //   reviews:       [{ author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
 //   reactions:     [{ author, content, createdAt }]   // PR-level reactions
@@ -35,6 +36,8 @@
 //        [--interval-seconds N]
 // Exit codes: 0 ready, 1 pending/timeout, 2 blocked/invalid.
 // Reads GitHub through the `gh` CLI only (execFile, never a shell); never mutates GitHub.
+// GraphQL is the first try. When the account's GraphQL quota is spent, the same PR data comes
+// through REST, apart from thread resolution, which REST cannot see.
 
 import { execFile } from "node:child_process";
 import fs from "node:fs";
@@ -94,6 +97,7 @@ export function evaluateGate(snapshot, options = {}) {
   if (activeThreads.length > 0) {
     blocked.push(`${activeThreads.length} unresolved review thread(s) on the PR`);
   }
+  if (snapshot?.threadsUnknown) pending.push(`review threads unknown: ${snapshot.threadsUnknown}`);
 
   const unanswered = unansweredReviews(snapshot);
   for (const review of unanswered) {
@@ -330,49 +334,30 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
   }
 }`;
 
-export async function fetchSnapshot({ owner, name }, prNumber, runGh = gh) {
-  const data = await runGh([
-    "api", "graphql",
-    "-f", `query=${PR_QUERY}`,
-    "-F", `owner=${owner}`,
-    "-F", `name=${name}`,
-    "-F", `number=${prNumber}`,
-  ]);
-  const pr = data?.data?.repository?.pullRequest;
-  if (!pr) throw new Error(`pull request #${prNumber} not found in ${owner}/${name}`);
+// GitHub's answer once the account's GraphQL quota is spent: gh prints "API rate limit already
+// exceeded for user ID ...", and the response carries the RATE_LIMITED error type.
+export function isRateLimited(error) {
+  return /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
+}
 
-  const head = pr.headRefOid;
-  const headCommit = pr.commits?.nodes?.find((node) => node.commit?.oid === head)?.commit;
-  const contexts = headCommit?.statusCheckRollup?.contexts;
-  const requiredNames = new Set((contexts?.nodes ?? [])
-    .filter((ctx) => ctx?.isRequired === true)
-    .map((ctx) => (ctx.__typename === "StatusContext" ? ctx.context : ctx.name)));
-
-  let truncated = Boolean(
-    pr.reviewThreads?.pageInfo?.hasNextPage
-      || pr.reviews?.pageInfo?.hasNextPage
-      || pr.comments?.pageInfo?.hasNextPage
-      || pr.reactions?.pageInfo?.hasNextPage
-      || contexts?.pageInfo?.hasNextPage
-  );
+export async function fetchSnapshot(repo, prNumber, runGh = gh) {
+  const read = await readGraphql(repo, prNumber, runGh).catch((error) => {
+    if (!isRateLimited(error)) throw error;
+    return readRest(repo, prNumber, runGh);
+  });
+  const { owner, name } = repo;
+  const { requiredNames, ...snapshot } = read;
+  const head = snapshot.pr.headRefOid;
 
   const checksData = await runGh(["api", `repos/${owner}/${name}/commits/${head}/check-runs?per_page=100`]);
   const statusesData = await runGh(["api", `repos/${owner}/${name}/commits/${head}/status?per_page=100`]);
+  let truncated = snapshot.truncated;
   truncated ||= Number(checksData?.total_count ?? 0) > (checksData?.check_runs ?? []).length;
   truncated ||= Number(statusesData?.total_count ?? 0) > (statusesData?.statuses ?? []).length;
   if (truncated) console.error("warning: paginated GitHub data truncated at 100 entries per collection");
 
   return {
-    pr: {
-      state: pr.state,
-      isDraft: pr.isDraft,
-      mergeable: pr.mergeable === "MERGEABLE" ? true : pr.mergeable === "CONFLICTING" ? false : null,
-      mergeStateStatus: pr.mergeStateStatus,
-      reviewDecision: pr.reviewDecision,
-      headRefOid: head,
-      headCommittedAt: headCommit?.committedDate ?? null,
-      author: pr.author?.login ?? null,
-    },
+    ...snapshot,
     checkRuns: [
       ...(checksData?.check_runs ?? []).map((c) => ({
         name: c.name,
@@ -388,6 +373,44 @@ export async function fetchSnapshot({ owner, name }, prNumber, runGh = gh) {
       })),
     ],
     truncated,
+  };
+}
+
+async function readGraphql({ owner, name }, prNumber, runGh) {
+  const data = await runGh([
+    "api", "graphql",
+    "-f", `query=${PR_QUERY}`,
+    "-F", `owner=${owner}`,
+    "-F", `name=${name}`,
+    "-F", `number=${prNumber}`,
+  ]);
+  const pr = data?.data?.repository?.pullRequest;
+  if (!pr) throw new Error(`pull request #${prNumber} not found in ${owner}/${name}`);
+
+  const head = pr.headRefOid;
+  const headCommit = pr.commits?.nodes?.find((node) => node.commit?.oid === head)?.commit;
+  const contexts = headCommit?.statusCheckRollup?.contexts;
+  return {
+    pr: {
+      state: pr.state,
+      isDraft: pr.isDraft,
+      mergeable: pr.mergeable === "MERGEABLE" ? true : pr.mergeable === "CONFLICTING" ? false : null,
+      mergeStateStatus: pr.mergeStateStatus,
+      reviewDecision: pr.reviewDecision,
+      headRefOid: head,
+      headCommittedAt: headCommit?.committedDate ?? null,
+      author: pr.author?.login ?? null,
+    },
+    requiredNames: new Set((contexts?.nodes ?? [])
+      .filter((ctx) => ctx?.isRequired === true)
+      .map((ctx) => (ctx.__typename === "StatusContext" ? ctx.context : ctx.name))),
+    truncated: Boolean(
+      pr.reviewThreads?.pageInfo?.hasNextPage
+        || pr.reviews?.pageInfo?.hasNextPage
+        || pr.comments?.pageInfo?.hasNextPage
+        || pr.reactions?.pageInfo?.hasNextPage
+        || contexts?.pageInfo?.hasNextPage
+    ),
     reviewThreads: (pr.reviewThreads?.nodes ?? []).map((t) => {
       const first = t.comments?.nodes?.[0];
       return {
@@ -418,6 +441,72 @@ export async function fetchSnapshot({ owner, name }, prNumber, runGh = gh) {
       createdAt: r.createdAt,
     })),
   };
+}
+
+// REST draws on its own quota but has no field for whether a review thread is resolved, so this
+// read leaves the threads unknown and the gate short of ready until GraphQL answers again.
+async function readRest({ owner, name }, prNumber, runGh) {
+  const repo = `repos/${owner}/${name}`;
+  const pr = await runGh(["api", `${repo}/pulls/${prNumber}`]);
+  const head = pr.head?.sha;
+  const commit = await runGh(["api", `${repo}/git/commits/${head}`]);
+  const reviews = await runGh(["api", `${repo}/pulls/${prNumber}/reviews?per_page=100`]);
+  const comments = await runGh(["api", `${repo}/issues/${prNumber}/comments?per_page=100`]);
+  const reactions = await runGh(["api", `${repo}/issues/${prNumber}/reactions?per_page=100`]);
+  return {
+    pr: {
+      state: pr.merged ? "MERGED" : String(pr.state ?? "").toUpperCase(),
+      isDraft: pr.draft,
+      mergeable: pr.mergeable ?? null,
+      mergeStateStatus: pr.mergeable_state?.toUpperCase() ?? null,
+      reviewDecision: standingChangeRequest(reviews) ? "CHANGES_REQUESTED" : null,
+      headRefOid: head,
+      headCommittedAt: commit?.committer?.date ?? null,
+      author: pr.user?.login ?? null,
+    },
+    requiredNames: await requiredChecks(repo, pr.base?.ref, runGh),
+    truncated: [reviews, comments, reactions].some((list) => list.length >= 100),
+    reviewThreads: [],
+    threadsUnknown: "GraphQL quota",
+    reviews: reviews.map((r) => ({
+      author: r.user?.login ?? "",
+      authorType: r.user?.type ?? null,
+      commitId: r.commit_id ?? "",
+      state: r.state,
+      submittedAt: r.submitted_at,
+      body: r.body ?? "",
+    })),
+    comments: comments.map((c) => ({ author: c.user?.login ?? "", body: c.body, createdAt: c.created_at })),
+    reactions: reactions.map((r) => ({
+      author: r.user?.login ?? "",
+      content: normalizeReaction(r.content),
+      createdAt: r.created_at,
+    })),
+  };
+}
+
+// REST has no reviewDecision. The gate only blocks on CHANGES_REQUESTED, which holds while some
+// reviewer's latest approving, rejecting or dismissed review requests changes.
+function standingChangeRequest(reviews) {
+  const latest = new Map();
+  for (const r of reviews) {
+    if (["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(r.state)) latest.set(r.user?.login, r.state);
+  }
+  return [...latest.values()].includes("CHANGES_REQUESTED");
+}
+
+// The base branch's required checks, from branch protection and from rulesets. A read that fails,
+// such as rulesets on a private repository without Pro, adds no names.
+async function requiredChecks(repo, base, runGh) {
+  const optional = (args) => runGh(args).catch(() => null);
+  const branch = await optional(["api", `${repo}/branches/${base}`]);
+  const rules = await optional(["api", `${repo}/rules/branches/${base}`]);
+  return new Set([
+    ...(branch?.protection?.required_status_checks?.contexts ?? []),
+    ...(Array.isArray(rules) ? rules : [])
+      .filter((rule) => rule.type === "required_status_checks")
+      .flatMap((rule) => (rule.parameters?.required_status_checks ?? []).map((check) => check.context)),
+  ]);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
