@@ -5,7 +5,7 @@ description: Use when the user invokes /pr-watch, asks to wait for a PR's checks
 
 # PR watch
 
-Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N]`. With no PR argument, use the current branch's PR from `gh pr view` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}"`). The default repair budget is 10.
+Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N]`. With no PR argument, use the current branch's PR from `gh pr view` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`). The default repair budget is 10.
 
 The loop observes the PR with the gate script, repairs what it reports, republishes, and observes again. The gate only reads GitHub, so every push and comment comes from you.
 

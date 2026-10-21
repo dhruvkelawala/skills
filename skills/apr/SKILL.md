@@ -61,7 +61,7 @@ Stage only the in-scope files. Commit with a conventional-commit subject that wi
 
 ## 6. Push and publish
 
-Check for an existing PR first: `gh pr view --json url,state,baseRefName,headRefOid` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}"`, an empty list when there is none).
+Check for an existing PR first: `gh pr view --json url,state,baseRefName,headRefOid` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`, an empty list when there is none).
 
 - **Stacked, tracked locally** (`gh stack view` lists the branch): `gh stack push`, then `gh stack submit --open` to create or update every PR in the stack as ready for review.
 - **Stacked, not tracked** (a branch created outside gh stack, common in a fresh worktree): `git push -u origin "$(git branch --show-current)"`, then create the PR with the predecessor's head branch as its base, or update the existing one:

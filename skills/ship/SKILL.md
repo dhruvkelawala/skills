@@ -13,7 +13,7 @@ Choose `--policy`, `--trusted`, and `--repo` once at the start, as `$FLAGS`, and
 
 `$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans, and makes two writes: the verdict comment that `verdict record` posts, and the pinned merge that `merge` makes. Every rebase and retarget is yours to do, and you merge one PR at a time.
 
-Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved: only the caller's own PR can land, and the queue's merge-now list is empty.
+Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved. A PR that needs a human approval waits, and the queue's merge-now list is empty. The caller's own PR, and a two-way door under `--policy verdict`, can still land.
 
 ## Rules
 
