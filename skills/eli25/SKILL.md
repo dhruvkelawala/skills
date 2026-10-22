@@ -82,15 +82,15 @@ Before and after, from `support-report-pr-349-eli25.html`:
    ```
 
    The script picks dark when the thread's background is dark, and picks again when the user switches T3's mode with the page open, because T3 then rewrites its theme style in `<head>`. Outside T3, as on a Vercel deploy, it does nothing and the page follows the system scheme. Paint the page ground with `var(--background, var(--bg))`, so it matches the thread in T3 and stays bone elsewhere.
-4. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width, height and ground.
+4. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width and height.
 5. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
 
 **Done when** the file holds a Field Guide page with the script first in `<head>` and no theme switch, and unslop has run on its prose.
 
 ## 4. Preview and show
 
-1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 390 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. Check that the prose fits the word budget and that each heading reads as a claim.
-2. Show it with `html_render`, at the `contentHeight` the 728-pixel preview reported. Open no local browser: the page lives in the thread, where the user reads it on any device. Your reply adds only what the page does not say.
+1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 390 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. These checks replace Field Guide's delivery checks.
+2. Show it with `html_render`, at the `contentHeight` the 390-pixel preview reported, up to 2000, because only phones use that height. Open no local browser: the page lives in the thread, where the user reads it on any device.
 
 **Done when** `html_render` has shown the page in the thread.
 
