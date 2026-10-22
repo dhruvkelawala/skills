@@ -40,6 +40,7 @@ const flag = (...names) => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 const flags = (...names) => args.flatMap((a, i) => (names.includes(a) ? [args[i + 1]] : []));
+const labelFlags = (...names) => flags(...names).flatMap((l) => l.split(","));
 const readFile = (file) => readFileSync(file === "-" ? 0 : file, "utf8");
 const fail = (message) => {
   process.stderr.write(`${message}\n`);
@@ -122,14 +123,14 @@ const target = positionals[2];
 if (args[0] === "--version") console.log("gh version 2.0.0 (fake)");
 else if (group === "issue" && verb === "create") {
   if (!flag("--title", "-t")) fail("must provide `--title` and `--body` when not running interactively");
-  console.log(create(flag("--title", "-t"), bodyFlag() ?? "", flags("--label", "-l").flatMap((l) => l.split(","))).url);
+  console.log(create(flag("--title", "-t"), bodyFlag() ?? "", labelFlags("--label", "-l")).url);
 } else if (group === "issue" && verb === "edit") {
   const issue = findIssue(target) ?? fail(`GraphQL: Could not resolve to an issue or pull request with the number of ${target}.`);
   edit(issue, {
     title: flag("--title", "-t"),
     body: bodyFlag(),
-    addLabels: flags("--add-label").flatMap((l) => l.split(",")),
-    removeLabels: flags("--remove-label").flatMap((l) => l.split(",")),
+    addLabels: labelFlags("--add-label"),
+    removeLabels: labelFlags("--remove-label"),
   });
   console.log(issue.url);
 } else if (group === "issue" && verb === "view") {

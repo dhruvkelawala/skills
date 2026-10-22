@@ -109,8 +109,7 @@ async function runThread(name) {
 const runs = {};
 const reported = new Set();
 
-// Starts each thread once, on first use, and prints what the agent did the first time a test reads it.
-async function run(t, name) {
+async function runOnce(t, name) {
   const result = await (runs[name] ??= runThread(name));
   if (!reported.has(name)) {
     reported.add(name);
@@ -123,25 +122,25 @@ async function run(t, name) {
 
 describe("ticket", { concurrency: true }, () => {
   test("fires on a request to capture one idea", async (t) => {
-    for (const result of await Promise.all([run(t, "clear"), run(t, "vague")])) {
+    for (const result of await Promise.all([runOnce(t, "clear"), runOnce(t, "vague")])) {
       assert.ok(result.skills.includes("ticket"), `${result.name}: ticket did not fire`);
     }
   });
 
   test("stays out of splitting a spec into tickets", async (t) => {
-    const result = await run(t, "spec");
+    const result = await runOnce(t, "spec");
     assert.ok(!result.skills.includes("ticket"), "spec: ticket fired");
   });
 
   test("clear criteria file one issue labelled ready-for-agent", async (t) => {
-    const { created } = await run(t, "clear");
+    const { created } = await runOnce(t, "clear");
     assert.equal(created.length, 1, "clear: expected one issue");
     assert.ok(created[0].labels.includes("ready-for-agent"), "clear: ready-for-agent missing");
   });
 
   // `day` lists unlabelled issues by this heading, so the heading text is the contract.
   test("vague criteria file one unlabelled issue that names what's missing", async (t) => {
-    const { created } = await run(t, "vague");
+    const { created } = await runOnce(t, "vague");
     assert.equal(created.length, 1, "vague: expected one issue");
     assert.deepEqual(created[0].labels, [], "vague: issue has labels");
     const [, missing] = created[0].body.split(/^## What's missing$/m);
@@ -150,7 +149,7 @@ describe("ticket", { concurrency: true }, () => {
   });
 
   test("replies with one line holding the issue link", async (t) => {
-    for (const { name, reply, created } of await Promise.all([run(t, "clear"), run(t, "vague")])) {
+    for (const { name, reply, created } of await Promise.all([runOnce(t, "clear"), runOnce(t, "vague")])) {
       assert.equal(created.length, 1, `${name}: expected one issue`);
       assert.equal(reply.trim().split("\n").length, 1, `${name}: reply is not one line`);
       assert.ok(reply.includes(created[0].url), `${name}: reply lacks ${created[0].url}`);
