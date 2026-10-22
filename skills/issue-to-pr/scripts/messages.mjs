@@ -45,8 +45,9 @@ function briefProblems(lines, record) {
   return problems;
 }
 
-function recapProblems(lines) {
+function recapProblems(message) {
   const problems = [];
+  const lines = message.map((line) => line.replace(/^[-*] /, ""));
   if (!lines[0].trim() || RECAP_LINES.some((label) => lines[0].startsWith(label))) {
     problems.push("the recap starts with the result on its first line");
   }

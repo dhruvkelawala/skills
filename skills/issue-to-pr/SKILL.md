@@ -12,7 +12,7 @@ Invoke as `/issue-to-pr <issue number | URL | Linear ticket> [stack [<PR>]] [--m
 - `--max-repairs` sets the repair budget. The default is 10.
 - `resume` continues a stopped run. Follow [resume](references/resume.md).
 
-After the contract prints, the run continues without waiting. It stops only for a hard blocker, the repair budget, or a gate that only a human can pass.
+After the brief posts, the run continues without waiting. It stops only for a hard blocker, the repair budget, or a gate that only a human can pass.
 
 ## Run record
 
@@ -25,6 +25,53 @@ A repair is one commit that changes code to fix a review finding, a failed check
 ## GitHub quota
 
 `gh pr`, `gh issue view`, `gh repo view` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota, and carry on. `gh api` fills `{owner}` and `{repo}` from the current checkout. The pr-watch gate and the ship script fall back on their own.
+
+## Brief
+
+Once the contract is pinned, post the brief in the thread and keep going. Don't wait for a reply.
+
+    Building #<n>: <issue title>
+
+    What it's about: <one or two sentences on the problem, as a user sees it>
+    Plan:
+      1. <criterion, in build order, test first>
+      ...
+    Stacked on: <PR | none> · Lane: <light | full>
+
+    <sign-off>
+
+Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own.
+
+## Recap
+
+When the run stops, post the recap: the result first, then one line each for what was built, review, evidence, what couldn't be checked and what's next. Links open in T3, never local paths or localhost. End with a sign-off.
+
+    <result, with the PR link>
+
+    - Built: <what changed, as a user sees it>
+    - Review: <the passes that ran and what they found>
+    - Evidence: <a link for each criterion, or its exemption>
+    - Couldn't check: <what automation could not check, or nothing>
+    - Next: <the one thing to do next>
+
+    <sign-off>
+
+The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again.
+
+## Sign-off
+
+One line, under 12 words, starting with an emoji: a playful nod to this issue or this moment in the run. Never instructions ("reply to redirect"). Never reuse one of the last 10 sign-offs in this repo's run records.
+
+## Shape check
+
+Before you post the brief or a recap, save it to the run record, with the text on stdin:
+
+```bash
+node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief file>
+node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
+```
+
+The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
 ## 1. Pin the contract
 
@@ -40,10 +87,10 @@ A repair is one commit that changes code to fix a review finding, a failed check
 5. Look for a `/product-description` output (`README.md`, `goal.md` and `glossary.md`) through paths named in `AGENTS.md` or `EVIDENCE.md` and in sibling directories. When one exists for this product, read it and the touched feature documents, use their setup, action and expected result to make vague issue text concrete, and record their paths and source commit. Flag claims that conflict with the issue or the code.
 6. Read enough code to state the contract: in-scope paths, out-of-scope items, acceptance criteria, any human gate the work item names, and for each criterion the surface it lands on and the capture that will prove it.
 7. Run `/review-ready` in preflight mode against the contract. The test seam it names becomes `test_seam`.
-8. Append the contract to the run record, print it, and continue. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
+8. Append the contract to the run record, post the [brief](#brief), and continue. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
 9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt, so leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
 
-**Complete when:** this thread is in the build's worktree, the run record holds the work item, mode, base ref and SHA, branch and contract, and the branch is checked out at `base_sha`.
+**Complete when:** this thread is in the build's worktree, the run record holds the work item, mode, base ref and SHA, branch, contract and brief, the brief is posted, and the branch is checked out at `base_sha`.
 
 ## 2. Build
 
@@ -138,7 +185,7 @@ Run this stage once stage 6 records anything but `watching`.
    5. Record `merged` with the merge commit, or `ready` with the blocker ship reports.
 
    Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
-3. Write the handoff block into the record and the report:
+3. Write the handoff block into the record:
 
    ```md
    handoff
@@ -148,12 +195,14 @@ Run this stage once stage 6 records anything but `watching`.
    - human gates left: <approvals and from whom, a one-way door, the merge>
    ```
 
-4. Offer `/pr-review <PR or stack>` to read the settled diff.
-5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
+4. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
+5. Write the report into the record, and post the [recap](#recap). Its `Next:` line offers `/pr-review <PR or stack>` to read the settled diff.
 
 Leave the branch and any worktree for the user to clean up.
 
 ## Report
+
+The report goes in the run record whenever the run stops. The thread gets the recap instead.
 
 - Work item, mode, lane, base SHA, branch, PR URL, final head, and stage, with the reason when blocked
 - Repairs used against the budget, by stage

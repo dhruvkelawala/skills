@@ -31,13 +31,19 @@ pr: <URL or none>
 Stage reports go below the header, appended in order:
 
 - the contract
+- the brief
 - the build report
 - each review pass: the tree it reviewed, or the skip and its reason, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
 - the evidence links, each with the head it was captured at
 - each watch pass: its gate result, its repairs and the stage it left
 - the handoff block
+- the report and the recap, each time the run stops
 
 Keep earlier passes, so that `/promote` can see a finding that recurs.
+
+The contract lists its criteria under a line that reads `Acceptance criteria:`, one numbered line per criterion, with details such as its surface and capture on indented lines below it. The brief's plan is checked against that list.
+
+`scripts/messages.mjs` appends the brief and each recap as a `## Brief, <UTC time>` or `## Recap, <UTC time>` section, with the text in a fenced block. Add them only through the script, because it reads those sections to find the last 10 sign-offs.
 
 ## When a record already exists
 

@@ -65,12 +65,13 @@ function brief({ building = "Building #7: Show the score on the results screen",
   ].join("\n");
 }
 
+// The five lines as SKILL.md's recap shows them, a markdown list so the thread keeps them apart.
 const RECAP_LINES = [
-  "Built: the results screen shows the score, and a dash when there is none.",
-  "Review: pass 1 and autoreview clean, light lane.",
-  "Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true",
-  "Couldn't check: the score on a real phone.",
-  "Next: review #9.",
+  "- Built: the results screen shows the score, and a dash when there is none.",
+  "- Review: pass 1 and autoreview clean, light lane.",
+  "- Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true",
+  "- Couldn't check: the score on a real phone.",
+  "- Next: review #9.",
 ];
 
 function recap({ result = "#7 is ready for your review: https://github.com/o/r/pull/9", lines = RECAP_LINES, signOff = "🏁 Score shown, round over" } = {}) {
@@ -133,10 +134,10 @@ test("a recap leads with the result, has its five lines in order, and links noth
   const { record, refused, saved } = runRecords(t);
   const path = record(7);
   refused("recap", path, recap({ result: null }), /result/);
-  refused("recap", path, recap({ lines: RECAP_LINES.filter((line) => !line.startsWith("Couldn't check:")) }), /Couldn't check:/);
+  refused("recap", path, recap({ lines: RECAP_LINES.filter((line) => !line.includes("Couldn't check:")) }), /Couldn't check:/);
   refused("recap", path, recap({ lines: [RECAP_LINES[0], RECAP_LINES[2], RECAP_LINES[1], ...RECAP_LINES.slice(3)] }), /order/);
-  for (const evidence of ["Evidence: http://localhost:3000/results", "Evidence: /Users/someone/shots/score.png", "Evidence: ~/shots/score.png"]) {
-    refused("recap", path, recap({ lines: RECAP_LINES.map((line) => (line.startsWith("Evidence:") ? evidence : line)) }), /local/);
+  for (const evidence of ["- Evidence: http://localhost:3000/results", "- Evidence: /Users/someone/shots/score.png", "- Evidence: ~/shots/score.png"]) {
+    refused("recap", path, recap({ lines: RECAP_LINES.map((line) => (line.includes("Evidence:") ? evidence : line)) }), /local/);
   }
   saved("recap", path, recap());
 });
