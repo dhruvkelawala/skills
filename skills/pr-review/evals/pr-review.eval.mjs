@@ -134,6 +134,7 @@ async function turn(c, name, prompt, session) {
     transcript,
     texts,
     introAt: intro >= 0 ? texts[intro].at : undefined,
+    intro: intro >= 0 ? texts[intro].text : "",
     reply: texts.slice(Math.max(intro, 0)).map((t) => t.text).join("\n\n"),
     t3: during("t3.jsonl"),
     secondOpinion: during("autoreview.jsonl"),
@@ -175,9 +176,11 @@ const reviewerTasks = (v) => v.t3.filter((e) => e.tool === "delegate_task" && e.
 const reportsOf = (v, tasks) => v.t3.filter((e) => e.tool === "report" && tasks.some((d) => d.taskId === e.taskId));
 const secondOpinionsAt = (v) => v.secondOpinion.filter((e) => e.head === v.head && e.base === v.base);
 const axes = (entries) => [...new Set(entries.map((e) => e.axis))].sort();
-// The tour runs from the intro to the wrap-up's Findings, and each stop is a numbered item that opens with a link to
-// its file and line, as the skill's tour example shows.
-const tourStops = (v) => v.reply.split(/^\s*(?:\d+\.\s+)?\*\*Findings\b/m)[0].split("\n").filter((line) => /^\d+\.\s+\[[^\]]*\]\([^)\s]+:\d+\)/.test(line));
+// A chat tour runs from the intro to the wrap-up's Findings, and each stop is a numbered item that names a file and line.
+const tourStops = (v) => v.reply.split(/^\s*(?:\d+\.\s+)?(?:#+\s*)?(?:\*\*)?Findings\b/m)[0].split("\n").filter((line) => /^\s*\d+[.)]\s.*[\w-]+\.\w+:\d+/.test(line));
+const fileLinks = (v) => [...v.reply.matchAll(/\]\(([^)\s]+)\)/g)].map(([, target]) => target).filter((t) => !/^https?:\/\//.test(t) || /\/(?:blob|tree)\//.test(t));
+const guideWrites = (v) => v.t3.filter((e) => e.tool === "write_pull_request_guides" && e.number === PR && e.head === v.head);
+const guideWritten = (v) => v.t3.filter((e) => e.tool === "read_pull_request_guide" && e.state === "written" && e.guideHead === v.head);
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
@@ -195,19 +198,32 @@ describe("pr-review", { concurrency: true }, () => {
     }
   });
 
-  test("the tour names every file a reviewer flagged", async (t) => {
+  test("starts the PR's guide in prep and reads it written for the head before the intro", async (t) => {
     for (const v of await firstVisits(t)) {
+      const writes = guideWrites(v);
+      assert.ok(writes.length, `${v.name}: no write_pull_request_guides for #${PR} at ${v.head}`);
+      const written = guideWritten(v);
+      assert.ok(written.length, `${v.name}: no read_pull_request_guide found the guide written for ${v.head}`);
       assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
-      const stops = tourStops(v);
-      for (const { file, priority } of findingsAt("first")) {
-        assert.ok(stops.some((stop) => stop.includes(`/${file}:`) && stop.includes(priority)), `${v.name}: no tour stop links ${file} with its ${priority}`);
+      assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the intro came before the guide was started and read back written`);
+    }
+  });
+
+  test("with a guide, the intro points at the Guide tab and chat has no tour stops or file links, but names each P1", async (t) => {
+    for (const v of await firstVisits(t)) {
+      assert.ok(guideWritten(v).length, `${v.name}: no guide written for ${v.head}`);
+      assert.match(v.intro, /\bGuide\b/, `${v.name}: the intro does not point at the Guide tab`);
+      assert.deepEqual(tourStops(v), [], `${v.name}: tour stops in chat`);
+      assert.deepEqual(fileLinks(v), [], `${v.name}: file links in chat`);
+      for (const { file, priority } of findingsAt("first").filter((f) => /^P[01]$/.test(f.priority))) {
+        assert.ok(v.reply.split("\n").some((line) => line.includes(`${file}:`) && line.includes(priority)), `${v.name}: no line names ${file} with its ${priority}`);
       }
     }
   });
 
   test("the review has no Judge line, triage block or diff block", async (t) => {
     for (const v of await firstVisits(t)) {
-      assert.ok(v.introAt && tourStops(v).length, `${v.name}: no intro and tour to check`);
+      assert.ok(v.introAt && /\bverdict\b/i.test(v.reply), `${v.name}: no intro and wrap-up to check`);
       const text = v.texts.map((x) => x.text).join("\n");
       assert.doesNotMatch(text, /\bJudge:/, `${v.name}: a Judge line`);
       assert.doesNotMatch(text, /^#\d+ .*\+\d+ -\d+ in \d+ files/m, `${v.name}: a triage header line`);
