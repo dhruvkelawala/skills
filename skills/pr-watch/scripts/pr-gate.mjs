@@ -225,8 +225,8 @@ function isBot(login, type) {
   return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
 }
 
-// A pushed fix often marks a person's thread outdated before its reply is drafted, so an outdated
-// thread still needs an answer while a person has spoken in it and the PR author has not replied.
+// A fix often outdates a person's thread before its reply is drafted, so an outdated thread
+// still counts until the PR author answers it.
 function awaitsAnswer(thread, prAuthor) {
   return !isBotThread(thread, prAuthor) && !sameLogin(thread.lastAuthor, prAuthor);
 }
@@ -360,7 +360,7 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
         nodes{
           id isResolved isOutdated path line
           opening: comments(first:1){ nodes{ databaseId author{ __typename login } body } }
-          latest: comments(last:1){ nodes{ databaseId author{ login } } }
+          last: comments(last:1){ nodes{ databaseId author{ login } } }
           comments(first:100){ nodes{ author{ __typename login } } pageInfo{ hasNextPage } }
         }
         pageInfo{ hasNextPage }
@@ -455,7 +455,7 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
       return {
         id: t.id,
         replyTo: first?.databaseId ?? null,
-        lastCommentId: t.latest?.nodes?.[0]?.databaseId ?? null,
+        lastCommentId: t.last?.nodes?.[0]?.databaseId ?? null,
         isResolved: t.isResolved,
         isOutdated: t.isOutdated,
         path: t.path ?? null,
@@ -463,7 +463,7 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
         author: first?.author?.login ?? null,
         authorType: first?.author?.__typename ?? null,
         body: first?.body ?? "",
-        lastAuthor: t.latest?.nodes?.[0]?.author?.login ?? null,
+        lastAuthor: t.last?.nodes?.[0]?.author?.login ?? null,
         commenters: (t.comments?.nodes ?? []).map((c) => ({ login: c.author?.login ?? null, type: c.author?.__typename ?? null })),
         commentersTruncated: Boolean(t.comments?.pageInfo?.hasNextPage),
       };

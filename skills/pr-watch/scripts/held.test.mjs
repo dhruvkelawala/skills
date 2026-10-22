@@ -81,7 +81,7 @@ function openPr(threads) {
 const personThread = {
   id: "PRRT_p", isResolved: false, isOutdated: false, path: "src/join.ts", line: 40,
   opening: { nodes: [{ databaseId: 201, author: { __typename: "User", login: "teammate" }, body: "Rename this to joinAll" }] },
-  latest: { nodes: [{ databaseId: 201 }] },
+  last: { nodes: [{ databaseId: 201 }] },
   comments: { nodes: [{ author: { __typename: "User", login: "teammate" } }], pageInfo: { hasNextPage: false } },
 };
 const GATE_ARGS = ["--repo", "o/r", "--pr", "7", "--expected-head", HEAD, "--json"];
@@ -184,7 +184,7 @@ test("post sends every held reply, resolution, comment and re-request in order, 
 test("post stops at a failed send, the gate still waits on post, and a later post sends only what is left", (t) => {
   const answered = {
     ...personThread,
-    latest: { nodes: [{ databaseId: 301 }] },
+    last: { nodes: [{ databaseId: 301 }] },
     comments: { nodes: [...personThread.comments.nodes, { author: { __typename: "User", login: "pr-author" } }], pageInfo: { hasNextPage: false } },
   };
   const gh = stubGh(t, { ...openPr([answered]), ...SENDS, mutation: { fail: "API rate limit already exceeded for user ID 1." } });

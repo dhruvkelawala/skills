@@ -517,7 +517,7 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
                 nodes: [{
                   id: "PRRT_a", isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
                   opening: { nodes: [{ databaseId: 101, author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
-                  latest: { nodes: [{ databaseId: 102, author: { login: "teammate" } }] },
+                  last: { nodes: [{ databaseId: 102, author: { login: "teammate" } }] },
                   comments: {
                     nodes: [{ author: { __typename: "Bot", login: "review-bot" } }, { author: { __typename: "User", login: "teammate" } }],
                     pageInfo: { hasNextPage: false },
@@ -565,7 +565,7 @@ test("a thread longer than one page of comments counts as a person's, with its n
       const thread = {
         id: "PRRT_long", isResolved: false, isOutdated: false,
         opening: { nodes: [{ databaseId: 1, ...bot, body: "finding" }] },
-        latest: { nodes: [{ databaseId: 150 }] },
+        last: { nodes: [{ databaseId: 150 }] },
         comments: { nodes: Array.from({ length: 100 }, () => bot), pageInfo: { hasNextPage: true } },
       };
       return { data: { repository: { pullRequest: {

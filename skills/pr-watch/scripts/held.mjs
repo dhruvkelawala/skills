@@ -33,7 +33,7 @@ const USAGE = [
   "       held.mjs post --file F --repo owner/name --pr N --record PATH",
 ].join("\n");
 const RESOLVE = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }";
-const NEWEST = "query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread{ comments(last:1){ nodes{ databaseId author{ login } } } } } }";
+const LAST_COMMENT = "query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread{ comments(last:1){ nodes{ databaseId author{ login } } } } } }";
 const FLAGS = new Set(["file", "thread", "reply-to", "seen", "to", "body-file", "review", "rerequest", "repo", "pr", "record"]);
 
 export function readHeld(file) {
@@ -139,13 +139,13 @@ function post(file, args) {
 function send(repo, pr, item) {
   switch (item.kind) {
     case "reply": {
-      unanswered(item);
+      stopOnNewComment(item);
       const reply = write(`${repo}/pulls/${pr}/comments/${item.replyTo}/replies`, [`body=${item.body}`]);
       const resolve = { kind: "resolve", thread: item.thread, seen: reply.id, to: item.to, url: reply.html_url };
       return { line: `reply to ${item.to}: ${reply.html_url}`, next: resolve };
     }
     case "resolve":
-      unanswered(item);
+      stopOnNewComment(item);
       write("graphql", [`query=${RESOLVE}`, `id=${item.thread}`]);
       return { line: `resolved ${item.to}'s thread: ${item.url}` };
     case "comment": {
@@ -161,8 +161,8 @@ function send(repo, pr, item) {
   }
 }
 
-function unanswered(item) {
-  const newest = gh(["api", "graphql", "-f", `query=${NEWEST}`, "-f", `id=${item.thread}`])?.data?.node?.comments?.nodes?.[0];
+function stopOnNewComment(item) {
+  const newest = gh(["api", "graphql", "-f", `query=${LAST_COMMENT}`, "-f", `id=${item.thread}`])?.data?.node?.comments?.nodes?.[0];
   if (!newest) throw new Error(`thread ${item.thread} could not be read`);
   if (!coversThread(item, { id: item.thread, lastCommentId: newest.databaseId })) {
     throw new Error(`${newest.author?.login ?? "someone"} commented in thread ${item.thread} after this was drafted; read it and hold a new draft`);
@@ -182,7 +182,8 @@ function gh(args) {
 async function main(argv) {
   try {
     const args = parseArgs(argv);
-    const file = args.file ?? (() => { throw new Error("--file is required"); })();
+    if (!args.file) throw new Error("--file is required");
+    const { file } = args;
     if (args.command === "post") return post(file, args);
     if (args.command !== "hold") throw new Error(USAGE);
     const item = itemFrom(args);
