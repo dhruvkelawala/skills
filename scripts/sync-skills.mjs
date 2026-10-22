@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // sync-skills: give each agent's skill folder this checkout's skills and the outside skills that
-// outside-skills.json pins.
+// outside-skills.json pins, and report anything else it finds there.
 //
-//   node scripts/sync-skills.mjs
+//   node scripts/sync-skills.mjs [--remove-unlisted]
 //
 // This repo's skills are linked from the checkout the script runs in. Each outside skill is
 // unpacked once into ~/.agents/skills at its pinned commit, and the other agent folders link to
-// that copy, so an agent that reads several folders finds one skill.
+// that copy, so an agent that reads several folders finds one skill. A skill that is neither is
+// reported as unlisted, and removed only with --remove-unlisted.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -15,27 +16,59 @@ import { homedir } from "node:os";
 import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const USAGE = "usage: node scripts/sync-skills.mjs [--remove-unlisted]";
+
 try {
-  main();
+  main(process.argv.slice(2));
 } catch (error) {
-  console.error(`sync-skills: ${error.message}`);
-  process.exit(1);
+  console.error(error.usage ? USAGE : `sync-skills: ${error.message}`);
+  process.exit(error.usage ? 2 : 1);
 }
 
-function main() {
+function main(argv) {
+  const flags = parseFlags(argv);
   const checkout = realpathSync(fileURLToPath(new URL("..", import.meta.url)));
   const home = homedir();
+  const show = (path) => (path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path);
   const own = ownSkills(checkout);
   const outside = readList(join(checkout, "outside-skills.json"), own);
   const cache = join(process.env.XDG_CACHE_HOME?.trim() || join(home, ".cache"), "sync-skills");
   for (const skill of outside) skill.pinned = pinnedFiles(cache, skill);
 
-  const { store, folders } = agentFolders(home, process.env);
-  for (const folder of folders) {
-    const steps = planFolder(folder, store, checkout, own, outside);
-    if (steps.length) mkdirSync(folder, { recursive: true });
-    for (const step of steps) step.apply();
+  const { store, folders, skipped } = agentFolders(home, process.env);
+  const plans = folders.map((folder) => ({ folder, steps: planFolder(folder.path, store.path, checkout, own, outside, flags, show) }));
+  const steps = plans.flatMap((plan) => plan.steps);
+  const changes = steps.filter((step) => step.apply).length;
+  const unlisted = steps.length - changes;
+
+  for (const [agent, agentHome] of skipped) console.log(`${agent}: skipped, ${show(agentHome)} does not exist`);
+  for (const { folder, steps } of plans) {
+    if (steps.length) console.log(show(folder.shown));
+    for (const step of steps) console.log(`  ${step.action.padEnd(8)} ${step.name}${step.detail ?? ""}`);
   }
+  if (!changes) {
+    console.log("nothing to change");
+  } else {
+    for (const { folder, steps } of plans) {
+      if (steps.some((step) => step.apply)) mkdirSync(folder.path, { recursive: true });
+      for (const step of steps) step.apply?.();
+    }
+    console.log(`made ${count(changes, "change")}`);
+  }
+  if (unlisted) console.log(`${count(unlisted, "unlisted skill")} kept; --remove-unlisted removes ${unlisted === 1 ? "it" : "them"}`);
+}
+
+function parseFlags(argv) {
+  const flags = { removeUnlisted: false };
+  for (const arg of argv) {
+    if (arg === "--remove-unlisted") flags.removeUnlisted = true;
+    else throw Object.assign(new Error(`unknown argument ${arg}`), { usage: true });
+  }
+  return flags;
+}
+
+function count(n, noun) {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
 
 function ownSkills(checkout) {
@@ -62,25 +95,30 @@ function readList(path, own) {
 
 // Agent folders that resolve to one real folder are synced once, so none is linked to itself.
 function agentFolders(home, env) {
-  const real = (path) => (existsSync(path) ? realpathSync(path) : path);
-  const store = real(join(home, ".agents", "skills"));
+  const located = (shown) => ({ shown, path: existsSync(shown) ? realpathSync(shown) : shown });
+  const store = located(join(home, ".agents", "skills"));
   const folders = [store];
-  const agentHomes = [
-    env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"),
-    env.CODEX_HOME?.trim() || join(home, ".codex"),
-    env.PI_CODING_AGENT_DIR?.trim() || join(home, ".pi", "agent"),
+  const skipped = [];
+  const agents = [
+    ["claude", env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude")],
+    ["codex", env.CODEX_HOME?.trim() || join(home, ".codex")],
+    ["pi", env.PI_CODING_AGENT_DIR?.trim() || join(home, ".pi", "agent")],
   ];
-  for (const agentHome of agentHomes) {
-    if (!existsSync(agentHome)) continue;
-    const folder = real(join(agentHome, "skills"));
-    if (!folders.includes(folder)) folders.push(folder);
+  for (const [agent, agentHome] of agents) {
+    if (!existsSync(agentHome)) {
+      skipped.push([agent, agentHome]);
+      continue;
+    }
+    const folder = located(join(agentHome, "skills"));
+    if (!folders.some((other) => other.path === folder.path)) folders.push(folder);
   }
-  return { store, folders };
+  return { store, folders, skipped };
 }
 
 // Each wanted entry is a link, or in the shared folder an outside skill's files. An entry that
-// already matches gets no step, which is what makes a second run change nothing.
-function planFolder(folder, store, checkout, own, outside) {
+// already matches gets no step, which is what makes a second run change nothing. Hidden entries,
+// such as Codex's .system, belong to the agent and are left out.
+function planFolder(folder, store, checkout, own, outside, flags, show) {
   const wanted = new Map();
   for (const name of own) wanted.set(name, { link: join(checkout, "skills", name) });
   for (const skill of outside) wanted.set(skill.name, folder === store ? { skill } : { link: join(store, skill.name) });
@@ -91,13 +129,26 @@ function planFolder(folder, store, checkout, own, outside) {
     const have = inspect(path);
     if (want.link) {
       if (have.kind === "link" && have.target === want.link) continue;
-      steps.push({ apply: () => link(want.link, path) });
+      const was = have.kind === "missing" ? "" : ` (was ${describe(have, "a folder", show)})`;
+      steps.push({ action: was ? "update" : "link", name, detail: ` -> ${show(want.link)}${was}`, apply: () => link(want.link, path) });
     } else {
       if (have.kind === "folder" && sameFiles(path, want.skill.pinned.files)) continue;
-      steps.push({ apply: () => install(want.skill.pinned, path) });
+      const was = have.kind === "missing" ? "" : ` (was ${describe(have, "a different copy", show)})`;
+      const from = ` from ${want.skill.source}@${want.skill.ref.slice(0, 7)}`;
+      steps.push({ action: was ? "update" : "install", name, detail: `${from}${was}`, apply: () => install(want.skill.pinned, path) });
     }
   }
+
+  const present = existsSync(folder) ? readdirSync(folder).sort() : [];
+  for (const name of present.filter((name) => !name.startsWith(".") && !wanted.has(name))) {
+    const path = join(folder, name);
+    steps.push(flags.removeUnlisted ? { action: "remove", name, apply: () => rmSync(path, { recursive: true, force: true }) } : { action: "unlisted", name });
+  }
   return steps;
+}
+
+function describe(have, folderText, show) {
+  return have.kind === "link" ? `a link to ${show(have.target)}` : have.kind === "folder" ? folderText : "a file";
 }
 
 function inspect(path) {

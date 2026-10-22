@@ -116,6 +116,22 @@ test("a second run changes nothing", (t) => {
   assert.deepEqual(snapshot(Object.values(m.folders)), before);
 });
 
+test("a skill that is not on the list is reported, and removed only with --remove-unlisted", (t) => {
+  const m = machine(t);
+  assert.equal(m.run().status, 0);
+  write(join(m.folders.codex, "stray/SKILL.md"), "stray\n");
+  write(join(m.folders.codex, ".system/openai-docs/SKILL.md"), "Codex's own\n");
+
+  const plain = m.run();
+  assert.equal(plain.stdout, "~/.codex/skills\n  unlisted stray\nnothing to change\n1 unlisted skill kept; --remove-unlisted removes it\n");
+  assert.equal(kind(join(m.folders.codex, "stray")), "folder");
+
+  const removing = m.run(["--remove-unlisted"]);
+  assert.equal(removing.stdout, "~/.codex/skills\n  remove   stray\nmade 1 change\n");
+  assert.equal(kind(join(m.folders.codex, "stray")), "missing");
+  assert.equal(kind(join(m.folders.codex, ".system")), "folder", "a hidden folder such as Codex's .system is not a skill");
+});
+
 test("a list the script cannot honour stops it before any agent folder changes", (t) => {
   const cases = [
     ["names one of this repo's skills", (m) => ({ pr: m.entry("pr") }), /pr is one of this repo's skills/],
@@ -158,6 +174,7 @@ test("each agent's folder follows its config variable, and an agent that is not 
 
   const result = m.run([], { CLAUDE_CONFIG_DIR: claude, CODEX_HOME: codex, PI_CODING_AGENT_DIR: join(m.root, "no-pi") });
   assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^pi: skipped, .*\/no-pi does not exist$/m);
 
   for (const folder of [join(claude, "skills"), join(codex, "skills")]) {
     assert.equal(linkTarget(join(folder, "pr")), join(m.checkout, "skills/pr"), folder);
