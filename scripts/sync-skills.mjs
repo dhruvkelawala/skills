@@ -9,9 +9,10 @@
 // that copy, so an agent that reads several folders finds one skill.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, posix } from "node:path";
+import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 try {
@@ -77,17 +78,60 @@ function agentFolders(home, env) {
   return { store, folders };
 }
 
+// Each wanted entry is a link, or in the shared folder an outside skill's files. An entry that
+// already matches gets no step, which is what makes a second run change nothing.
 function planFolder(folder, store, checkout, own, outside) {
+  const wanted = new Map();
+  for (const name of own) wanted.set(name, { link: join(checkout, "skills", name) });
+  for (const skill of outside) wanted.set(skill.name, folder === store ? { skill } : { link: join(store, skill.name) });
+
   const steps = [];
-  for (const name of own) {
+  for (const [name, want] of wanted) {
     const path = join(folder, name);
-    steps.push({ apply: () => link(join(checkout, "skills", name), path) });
-  }
-  for (const skill of outside) {
-    const path = join(folder, skill.name);
-    steps.push({ apply: folder === store ? () => install(skill.pinned, path) : () => link(join(store, skill.name), path) });
+    const have = inspect(path);
+    if (want.link) {
+      if (have.kind === "link" && have.target === want.link) continue;
+      steps.push({ apply: () => link(want.link, path) });
+    } else {
+      if (have.kind === "folder" && sameFiles(path, want.skill.pinned.files)) continue;
+      steps.push({ apply: () => install(want.skill.pinned, path) });
+    }
   }
   return steps;
+}
+
+function inspect(path) {
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch (error) {
+    if (error.code === "ENOENT") return { kind: "missing" };
+    throw error;
+  }
+  if (stat.isSymbolicLink()) return { kind: "link", target: resolve(dirname(path), readlinkSync(path)) };
+  return { kind: stat.isDirectory() ? "folder" : "file" };
+}
+
+// Compares in git's terms (path, mode and blob id), so an installed folder is checked against the
+// pinned tree without fetching any file contents.
+function sameFiles(dir, files) {
+  const pinned = files.map((file) => `${file.path}\t${file.mode} ${file.id}`).sort();
+  const installed = [];
+  const walk = (prefix) => {
+    for (const entry of readdirSync(join(dir, prefix), { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(dir, rel);
+      if (entry.isDirectory()) walk(rel);
+      else if (entry.isSymbolicLink()) installed.push(`${rel}\t120000 ${blobId(Buffer.from(readlinkSync(path)))}`);
+      else if (entry.isFile()) installed.push(`${rel}\t${statSync(path).mode & 0o100 ? "100755" : "100644"} ${blobId(readFileSync(path))}`);
+    }
+  };
+  walk("");
+  return installed.sort().join("\n") === pinned.join("\n");
+}
+
+function blobId(contents) {
+  return createHash("sha1").update(`blob ${contents.length}\0`).update(contents).digest("hex");
 }
 
 function link(target, path) {

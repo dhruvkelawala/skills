@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,6 +62,18 @@ function kind(path) {
   return stat.isSymbolicLink() ? "link" : stat.isDirectory() ? "folder" : "file";
 }
 
+// Every entry under the folders with its inode and mtime, so a rewrite with the same contents shows.
+function snapshot(folders) {
+  const entries = [];
+  const walk = (path) => {
+    const stat = lstatSync(path);
+    entries.push(`${path} ${stat.ino} ${stat.mtimeMs} ${linkTarget(path) ?? ""}`);
+    if (stat.isDirectory()) for (const name of readdirSync(path).sort()) walk(join(path, name));
+  };
+  for (const folder of folders) existsSync(folder) ? walk(folder) : entries.push(`${folder} missing`);
+  return entries;
+}
+
 function linkTarget(path) {
   try {
     return lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
@@ -92,6 +104,16 @@ test("after a run every agent folder links this repo's skills into the checkout 
   }
   assert.equal(kind(store), "folder", "the shared folder holds the outside skill itself");
   assert.ok(statSync(join(store, "scripts/ask")).mode & 0o100, "the pinned script keeps its executable bit");
+});
+
+test("a second run changes nothing", (t) => {
+  const m = machine(t);
+  assert.equal(m.run().status, 0);
+  const before = snapshot(Object.values(m.folders));
+
+  const second = m.run();
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(snapshot(Object.values(m.folders)), before);
 });
 
 test("a list the script cannot honour stops it before any agent folder changes", (t) => {
