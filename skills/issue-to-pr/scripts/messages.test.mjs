@@ -19,11 +19,11 @@ function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // A spec's record lists `tickets` where a build's lists criteria; a ticket's record names its `pr`.
-  const record = (issue, { predecessor, criteria = CRITERIA, tickets, pr } = {}) => {
+  const record = (issue, { predecessor, criteria = CRITERIA, tickets, specMode = "stack", pr } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
-      ...(tickets ? ["spec_mode: stack"] : []),
+      ...(tickets ? [`spec_mode: ${specMode}`] : []),
       `mode: ${predecessor ? "stacked" : "standalone"}`,
       ...(predecessor ? [`predecessor_pr: https://github.com/o/r/pull/${predecessor}`] : []),
       "stage: contract",
@@ -178,7 +178,7 @@ test("the taste-check page shows each record's latest brief and recap, in the or
 
 const TICKETS = ["#1 Show the score", "#2 Share the score"];
 
-test("a spec's brief plans its tickets, says it builds as a stack, and leaves the lane to each PR", (t) => {
+test("a spec's brief plans its tickets and says how they ship: as a stack, each PR with its own lane, or as one PR", (t) => {
   const { record, refused, saved } = runRecords(t);
   const path = record(10, { tickets: TICKETS });
   const specBrief = (overrides) => brief({ building: "Building #10 as a stack: Scores", plan: TICKETS, ...overrides })
@@ -187,6 +187,10 @@ test("a spec's brief plans its tickets, says it builds as a stack, and leaves th
   refused("brief", path, specBrief({ building: "Building #10: Scores" }), /Building #<n> as a stack: <spec title>/);
   refused("brief", path, specBrief({ lane: "Lane: full" }), /Lane: per PR/);
   saved("brief", path, specBrief());
+
+  const onePr = record(11, { tickets: TICKETS, specMode: "one-pr" });
+  refused("brief", onePr, specBrief({ signOff: "🧺 Every ticket in one basket" }), /Building #<n> as one PR: <spec title>[\s\S]*Lane: <light \| full>/);
+  saved("brief", onePr, specBrief({ building: "Building #11 as one PR: Scores", lane: "Lane: full", signOff: "🧺 Every ticket in one basket" }));
 });
 
 test("a spec's recap lists every ticket with its state, and the PR of each that has one", (t) => {

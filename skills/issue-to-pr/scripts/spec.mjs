@@ -4,6 +4,7 @@
 //   spec.mjs tickets <record>                print the spec's open tickets in build order, for the contract
 //   spec.mjs next <record>                   print one line per ticket, then `running` or `done`
 //   spec.mjs started <record> <n> <thread>   note that ticket #n's build started in that thread
+//   spec.mjs body <record> < body.md         check that a one-PR body closes and covers every ticket
 //
 // GitHub is read through `gh api` (REST). Each ticket's build is read from its run record, which sits
 // beside the spec's record. A problem prints on stderr with exit code 1; a bad call exits 2.
@@ -17,6 +18,7 @@ const USAGE = [
   "usage: spec.mjs tickets <record>",
   "       spec.mjs next <record>",
   "       spec.mjs started <record> <n> <thread>",
+  "       spec.mjs body <record> < body.md",
 ].join("\n");
 
 // The word after `#<n>` on a ticket's line: the planner's own, then the run record's stages.
@@ -183,6 +185,20 @@ function started(path, n, thread) {
   return `#${n} started in thread ${thread}\n`;
 }
 
+// One keyword closes one issue: https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
+function body(path) {
+  const text = readFileSync(0, "utf8");
+  const evidence = text.match(/^## Evidence\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1] ?? "";
+  const problems = ticketsOf(readFileSync(path, "utf8")).flatMap(({ number }) => [
+    ...(new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):? #${number}\\b`, "i").test(text)
+      ? [] : [`#${number} never closes: give it its own keyword, as in \`Closes #${number}\``]),
+    ...(new RegExp(`#${number}\\b`).test(evidence)
+      ? [] : [`#${number} has no evidence: give it a bold \`#${number}\` line under \`## Evidence\`, with its criteria below it`]),
+  ]);
+  if (problems.length) throw new Problem(`the body does not cover every ticket:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
+  return "the body covers every ticket\n";
+}
+
 // The first word of a header line, so a note after it, such as "(merged ...)", is left out.
 const field = (text, key) => text.match(new RegExp(`^${key}: (\\S+)`, "m"))?.[1];
 
@@ -192,7 +208,7 @@ function github(repo, path) {
 
 function main(argv) {
   const [command, path, ...rest] = argv;
-  const fits = { tickets: !rest.length, next: !rest.length, started: rest.length === 2 && /^\d+$/.test(rest[0]) };
+  const fits = { tickets: !rest.length, next: !rest.length, body: !rest.length, started: rest.length === 2 && /^\d+$/.test(rest[0]) };
   if (!fits[command] || !path) {
     console.error(USAGE);
     return 2;
@@ -204,6 +220,7 @@ function main(argv) {
   try {
     if (command === "tickets") process.stdout.write(tickets(path));
     else if (command === "next") process.stdout.write(next(path));
+    else if (command === "body") process.stdout.write(body(path));
     else process.stdout.write(started(path, Number(rest[0]), rest[1]));
     return 0;
   } catch (error) {

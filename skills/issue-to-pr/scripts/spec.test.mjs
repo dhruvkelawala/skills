@@ -77,7 +77,7 @@ function specRun(t, issues) {
     "",
   ].join("\n"));
   const next = () => ok(["next", spec]).trimEnd().split("\n");
-  return { spec, github, ok, pin, ticket, next };
+  return { spec, github, run, ok, pin, ticket, next };
 }
 
 test("a spec's unblocked tickets start at once, and one blocked by another starts when that PR is published, stacked on its branch", (t) => {
@@ -170,4 +170,36 @@ test("a ticket that ends blocked holds back only the tickets stacked above it, a
   ticket(2, { stage: "ready", pr: 22 });
   ticket(4, { stage: "awaiting-human", pr: 24, predecessor: 22 });
   assert.deepEqual(next().slice(-3), ["#4 awaiting-human: https://github.com/o/r/pull/24", "#5 waits for #3, which has no PR yet", "done"]);
+});
+
+test("a one-PR body closes every ticket with its own keyword and gives each ticket its evidence", (t) => {
+  const { spec, run, ok, pin } = specRun(t, {
+    10: { title: "Scores", tickets: [1, 2, 3] },
+    1: { title: "Show the score" },
+    2: { title: "Show a dash for no score" },
+    3: { title: "Share the score", blockedBy: [1] },
+  });
+  pin();
+  const body = ({ closes = "Closes #1. Closes #2. Closes #3.", evidence = [1, 2, 3] } = {}) => [
+    "## Summary",
+    "",
+    `The results screen shows the score, or a dash, and the score can be shared. ${closes}`,
+    "",
+    "## Evidence",
+    "",
+    ...evidence.flatMap((n) => [`**#${n}**`, "", `- **its criterion** **After:** https://github.com/o/r/blob/evidence/10/${n}.png?raw=true`, ""]),
+    "## Merge danger",
+    "",
+    "**Door:** two-way",
+    "",
+  ].join("\n");
+  const refused = (text, problem) => {
+    const result = run(["body", spec], text);
+    assert.equal(result.status, 1, `expected a refusal, got: ${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, problem);
+  };
+  refused(body({ closes: "Closes #1, #2, #3." }), /#2 never closes[\s\S]*#3 never closes/);
+  refused(body({ evidence: [1, 2] }), /#3 has no evidence/);
+  refused(body().replace("## Evidence", "## Proof"), /#1 has no evidence/);
+  assert.match(ok(["body", spec], body()), /covers every ticket/);
 });

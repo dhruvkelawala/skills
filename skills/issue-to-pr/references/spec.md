@@ -2,7 +2,7 @@
 
 A spec is an issue whose open sub-issues are its tickets, ordered by their blocked-by links. `/issue-to-pr <spec>` builds every ticket in it, because starting a spec is the word to start each of its tickets. The thread it runs in is the spec thread.
 
-Each ticket gets its own thread, its own brief and its own PR. A ticket blocked by another starts as soon as its blocker's PR is published, stacked on that PR's branch. GitHub's blocked-by count drops only when the blocker's issue closes on merge, so the spec thread tracks published PRs itself, from the tickets' run records.
+Each ticket gets its own thread, its own brief and its own PR. A ticket blocked by another starts as soon as its blocker's PR is published, stacked on that PR's branch. GitHub's blocked-by count drops only when the blocker's issue closes on merge, so the spec thread tracks published PRs itself, from the tickets' run records. With `--one-pr`, the spec thread builds every ticket as one PR instead, as [one PR](#one-pr) says.
 
 The commands below run `node <this skill's folder>/scripts/spec.mjs`. It reads GitHub through `gh api`, and each ticket's build from its run record beside the spec's.
 
@@ -40,6 +40,16 @@ The spec thread posts one brief for the whole spec, in [the brief](../SKILL.md#b
 When the spec stops, it posts one recap that covers every PR. Under the result, list every ticket on a line of its own, as `spec.mjs next` last printed it, so each PR shows with its state. Then come the five lines: `Review:` and `Evidence:` sum up what the PRs carry, and `Next:` offers `/pr-review <the stack>`, because the stack is reviewed from this thread.
 
 `messages.mjs recap` refuses a spec's recap that leaves out a ticket, its state or its PR.
+
+## One PR
+
+With `--one-pr`, the spec thread builds every ticket onto one integration branch, `<type>/<spec>-<short-description>`, as one build. That branch gets the same review, evidence, PR body and watch as any other build, and one repair budget. Carry on from stage 1 step 3, with these changes:
+
+- The header has `spec_mode: one-pr`. Run `spec.mjs tickets <record>` and append its list to the contract.
+- The contract's `Acceptance criteria:` list holds every ticket's criteria, in the `Tickets:` order, each one worded `#<ticket>: <criterion>`.
+- The brief's first line reads `Building #<spec> as one PR: <spec title>`, and each plan step is one ticket, as in the [spec's brief](#brief). Its lane is the build's own.
+- Stage 2 builds the tickets in that order, one commit per criterion.
+- The PR body follows [one PR for a spec](pr-body.md#one-pr-for-a-spec). Before stage 5 publishes it, run `spec.mjs body <record> < <body file>`, and fix the body until it passes.
 
 ## A ticket's build
 

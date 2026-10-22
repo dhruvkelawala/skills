@@ -30,9 +30,12 @@ const SIGN_OFF_WORDS = 12;
 const SAVED = /^## (Brief|Recap), (\S+)\n\n````text\n([\s\S]*?)\n````$/gm;
 const LOCAL_LINK = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1)\b|\blocalhost:\d|\bfile:\/\/|(?:^|[\s(<"'`])(?:~\/|\/(?:Users|home|tmp|private|var|Volumes)\/)/;
 const INSTRUCTION = /(?:^|\s)\/[a-z]|\b(?:reply|redirect)\b/i;
-// A brief's first line, plan steps and lane: a build's, and a spec's built as a stack, where each PR sets its own lane.
+// A brief's first line, plan steps and lane: a build's, and a spec's, where a stack leaves the lane to each PR.
 const BUILD = { as: "", title: "issue title", step: "criterion", lanes: ["light", "full"] };
-const SPEC_BRIEFS = { stack: { as: " as a stack", title: "spec title", step: "ticket", lanes: ["per PR"] } };
+const SPEC_BRIEFS = {
+  stack: { as: " as a stack", title: "spec title", step: "ticket", lanes: ["per PR"] },
+  "one-pr": { as: " as one PR", title: "spec title", step: "ticket", lanes: ["light", "full"] },
+};
 
 function briefProblems(lines, record) {
   const problems = [];
