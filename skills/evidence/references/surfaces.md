@@ -24,7 +24,7 @@ npx playwright test e2e/<flow>.spec.ts --reporter=line
 npx playwright screenshot --viewport-size=1280,800 http://localhost:3000/<route> .evidence/<slug>-after.png
 ```
 
-Inside Herdr, run `terminal-browser open http://localhost:3000/<route>`, then `terminal-browser action -- screenshot .evidence/<slug>.png`. In Claude Code with the Chrome extension, take a `claude-in-chrome` screenshot. Otherwise use Playwright.
+In T3 Code, open the route with `preview_open`, take a still with `preview_snapshot` and `save: true`, and record a flow between `preview_recording_start` and `preview_recording_stop`. Both return a file path; copy that file into `.evidence/` under the slug name. In Claude Code with the Chrome extension, take a `claude-in-chrome` screenshot. Otherwise use Playwright.
 
 For before and after, capture the same route with the same viewport at `base_sha`, in a second worktree, and at HEAD. Then place them side by side:
 
@@ -41,6 +41,8 @@ xcrun simctl io booted screenshot .evidence/<slug>-after.png
 xcrun simctl io booted recordVideo --codec h264 .evidence/<slug>-flow.mp4   # Ctrl-C to stop
 maestro test .maestro/<flow>.yaml   # when the repo has flows; Maestro saves screenshots per step
 ```
+
+In T3 Code, open the simulator with `device_open`. It shows the device in the Device panel so the user can watch, and returns the `agent-device` command that drives it. Keep capturing with simctl, so the files land in `.evidence/`.
 
 On Android, use `adb exec-out screencap -p > .evidence/<slug>.png` and `adb shell screenrecord /sdcard/x.mp4`. Keep recordings under 30 seconds, and trim them with `ffmpeg -ss <start> -to <end> -c copy`.
 
