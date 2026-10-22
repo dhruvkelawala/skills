@@ -1,14 +1,8 @@
 #!/usr/bin/env node
-// sync-skills: give each agent's skill folder this checkout's skills and the outside skills that
-// outside-skills.json pins, and report anything else it finds there.
+// sync-skills: link this checkout's skills into every agent's skill folder, install the outside
+// skills that outside-skills.json pins, and report anything else there.
 //
 //   node scripts/sync-skills.mjs [--dry-run] [--remove-unlisted]
-//
-// This repo's skills are linked from the checkout the script runs in. Each outside skill is
-// unpacked once into ~/.agents/skills at its pinned commit, and the other agent folders link to
-// that copy, so an agent that reads several folders finds one skill. A skill that is neither is
-// reported as unlisted, and removed only with --remove-unlisted. Every change prints before any is
-// made, and --dry-run stops there.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -32,9 +26,8 @@ function main(argv) {
   const home = homedir();
   const show = (path) => (path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path);
   const own = ownSkills(checkout);
-  const outside = readList(join(checkout, "outside-skills.json"), own);
   const cache = join(process.env.XDG_CACHE_HOME?.trim() || join(home, ".cache"), "sync-skills");
-  for (const skill of outside) skill.pinned = pinnedFiles(cache, skill);
+  const outside = readList(join(checkout, "outside-skills.json"), own).map((skill) => ({ ...skill, pinned: pinnedFiles(cache, skill) }));
 
   const { store, folders, skipped } = agentFolders(home, process.env, checkout, show);
   const plans = folders.map((folder) => ({ folder, steps: planFolder(folder.path, store.path, checkout, own, outside, flags, show) }));
@@ -84,8 +77,6 @@ function ownSkills(checkout) {
 }
 
 // The list uses the entry shape `npx skills` writes to its lock file, with `ref` pinned to a commit.
-// Names follow the Agent Skills rule (lowercase), so a case-insensitive disk cannot fold a list
-// name onto one of this repo's skills.
 function readList(path, own) {
   const { skills = {} } = JSON.parse(readFileSync(path, "utf8"));
   return Object.entries(skills).map(([name, entry]) => {
@@ -99,9 +90,6 @@ function readList(path, own) {
   });
 }
 
-// Agent folders that resolve to one real folder are synced once, so none is linked to itself. A
-// folder that overlaps the checkout stops the run: syncing it would replace the checkout's own
-// skills, or list the checkout as unlisted and let --remove-unlisted delete it.
 function agentFolders(home, env, checkout, show) {
   const located = (shown) => {
     const path = realPath(shown);
@@ -128,9 +116,8 @@ function agentFolders(home, env, checkout, show) {
   return { store, folders, skipped };
 }
 
-// Follows links whose target does not exist yet, so on a fresh machine a folder that links to the
-// shared folder is still known as the shared folder. A relative link resolves from its real parent,
-// and the native call returns the disk's own capitals, as the OS would see the path.
+// Like realpath, but also for a path whose link target does not exist yet, resolving each link from
+// its real parent in the disk's own capitals.
 function realPath(path, hops = 0) {
   if (existsSync(path)) return realpathSync.native(path);
   const parent = dirname(path);
@@ -140,9 +127,6 @@ function realPath(path, hops = 0) {
   return have.kind === "link" && hops < 40 ? realPath(have.target, hops + 1) : at;
 }
 
-// Each wanted entry is a link, or in the shared folder an outside skill's files. An entry that
-// already matches gets no step, which is what makes a second run change nothing. Hidden entries,
-// such as Codex's .system, belong to the agent and are left out.
 function planFolder(folder, store, checkout, own, outside, flags, show) {
   const wanted = new Map();
   for (const name of own) wanted.set(name, { link: join(checkout, "skills", name) });
@@ -152,22 +136,20 @@ function planFolder(folder, store, checkout, own, outside, flags, show) {
   for (const [name, want] of wanted) {
     const path = join(folder, name);
     const have = inspect(path);
+    const was = have.kind === "missing" ? "" : ` (was ${describe(have, want.link ? "a folder" : "a different copy", show)})`;
     if (want.link) {
       if (have.kind === "link" && have.target === want.link) continue;
-      const was = have.kind === "missing" ? "" : ` (was ${describe(have, "a folder", show)})`;
       steps.push({ action: was ? "update" : "link", name, detail: ` -> ${show(want.link)}${was}`, apply: () => link(want.link, path) });
     } else {
       if (have.kind === "folder" && sameFiles(path, want.skill.pinned.files)) continue;
-      const was = have.kind === "missing" ? "" : ` (was ${describe(have, "a different copy", show)})`;
       const from = ` from ${want.skill.source}@${want.skill.ref.slice(0, 7)}`;
       steps.push({ action: was ? "update" : "install", name, detail: `${from}${was}`, apply: () => install(want.skill.pinned, path) });
     }
   }
 
-  // On a case-insensitive disk PR and pr are one entry, which the step for pr already replaces.
-  const wantedEntry = (name) => [...wanted.keys()].some((wantedName) => wantedName.toLowerCase() === name.toLowerCase() && sameEntry(join(folder, name), join(folder, wantedName)));
+  const isWantedInOtherCapitals = (name) => [...wanted.keys()].some((wantedName) => wantedName.toLowerCase() === name.toLowerCase() && sameEntry(join(folder, name), join(folder, wantedName)));
   const present = existsSync(folder) ? readdirSync(folder).sort() : [];
-  for (const name of present.filter((name) => !name.startsWith(".") && !wanted.has(name) && !wantedEntry(name))) {
+  for (const name of present.filter((name) => !name.startsWith(".") && !wanted.has(name) && !isWantedInOtherCapitals(name))) {
     const path = join(folder, name);
     steps.push(flags.removeUnlisted ? { action: "remove", name, apply: () => rmSync(path, { recursive: true, force: true }) } : { action: "unlisted", name });
   }
@@ -235,12 +217,8 @@ function install(pinned, path) {
   renameSync(temp, path);
 }
 
-// ---------- the source cache ----------
-//
-// One bare repo per source under the cache folder. Each pinned commit is fetched once, with its
-// trees but no file contents (some sources are hundreds of megabytes), and kept under
-// refs/pins/<sha>. Comparing a skill needs only the trees; installing one fetches its files.
-
+// One bare repo per source in the cache. Each pinned commit is fetched once with its trees but no
+// file contents, since some sources are hundreds of megabytes, and kept under refs/pins/<sha>.
 function pinnedFiles(cache, skill) {
   const repo = join(cache, `${skill.source.replace(/[^\w.-]+/g, "_")}.git`);
   if (!hasPin(repo, skill.ref)) fetchPin(repo, skill);
