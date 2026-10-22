@@ -93,21 +93,23 @@ async function runThread(name) {
   const ghLog = join(out, "gh.jsonl");
   const transcript = join(out, "transcript.jsonl");
   const args = ["-p", THREADS[name], "--output-format", "stream-json", "--verbose", "--allowedTools", "Bash,Read,Write,Edit,Glob,Grep,Skill"];
-  const stdout = await new Promise((resolve, reject) => {
+  const { stdout, code } = await new Promise((resolve, reject) => {
     const child = spawn("claude", args, { cwd: repo, env: agentEnv(fakeGhOnPath(out), ghLog), stdio: ["ignore", "pipe", "inherit"] });
     let text = "";
     child.stdout.on("data", (chunk) => (text += chunk));
     child.on("error", reject);
-    child.on("close", () => resolve(text));
+    child.on("close", (exit) => resolve({ stdout: text, code: exit }));
   });
   writeFileSync(transcript, stdout);
   const events = stdout.split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
+  const result = events.findLast((e) => e.type === "result");
+  if (code !== 0 || !result || result.is_error) throw new Error(`${name}: the agent run failed (exit ${code}), transcript ${transcript}`);
   const skills = events
     .filter((e) => e.type === "assistant")
     .flatMap((e) => e.message.content)
     .filter((c) => c.type === "tool_use" && c.name === "Skill")
     .map((c) => c.input.skill);
-  const reply = events.findLast((e) => e.type === "result")?.result ?? "";
+  const reply = result.result ?? "";
   const created = readJsonLines(ghLog).flatMap((e) => (e.created ? [e.created] : []));
   return { name, skills, reply, created, transcript };
 }
@@ -149,10 +151,10 @@ describe("ticket", { concurrency: true }, () => {
   test("vague criteria file one unlabelled issue that names what's missing", async (t) => {
     const { created } = await run(t, "vague");
     assert.equal(created.length, 1, "vague: expected one issue");
-    assert.ok(!created[0].labels.includes("ready-for-agent"), "vague: labelled ready-for-agent");
-    const missing = created[0].body.split(/^## /m).find((section) => /^What['’]s missing/.test(section));
-    assert.ok(missing, "vague: no \"## What's missing\" section");
-    assert.ok(missing.split("\n").slice(1).join("\n").trim(), "vague: \"## What's missing\" is empty");
+    assert.deepEqual(created[0].labels, [], "vague: issue has labels");
+    const [, missing] = created[0].body.split(/^## What's missing$/m);
+    assert.ok(missing !== undefined, "vague: no \"## What's missing\" heading");
+    assert.ok(missing.split(/^## /m)[0].trim(), "vague: \"## What's missing\" is empty");
   });
 
   test("replies with one line holding the issue link", async (t) => {
