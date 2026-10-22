@@ -157,8 +157,10 @@ test("the taste-check page shows each record's latest brief and recap, in the or
   saved("brief", first, brief({ building: "Building #1: Show the <score> on screen", signOff: "🐣 The brief that replaced it" }));
   saved("recap", first, recap({ signOff: "🐥 Hatched and shipped" }));
   saved("brief", second, brief({ signOff: "🚧 Still building this one" }));
+  const third = record(3);
+  saved("brief", third, brief({ building: "Building #3: [x](https://a/(https://autofocus/onfocus=globalThis.pwned=1//)", signOff: "🧨 A title that tries its luck" }));
 
-  const page = run(["page", second, first]);
+  const page = run(["page", second, first, third]);
   assert.equal(page.status, 0, page.stderr);
   const html = page.stdout;
   assert.match(html, /^<!doctype html>/i);
@@ -166,4 +168,6 @@ test("the taste-check page shows each record's latest brief and recap, in the or
   const order = ["Still building this one", "no recap yet", "The brief that replaced it", "Hatched and shipped"].map((text) => html.indexOf(text));
   assert.ok(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])), `each message, in order: ${order}`);
   assert.ok(html.includes("Show the &lt;score&gt; on screen"), "message text is escaped");
+  const tags = [...html.matchAll(/<a\b[^>]*>/g)].map(([tag]) => tag);
+  assert.deepEqual(tags.filter((tag) => !/^<a href="[^"]*">$/.test(tag)), [], "a link in message text becomes an anchor with an href and nothing else");
 });

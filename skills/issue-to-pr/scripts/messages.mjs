@@ -199,11 +199,21 @@ function bubble(kind, message) {
 }
 
 // The thread renders markdown; the page keeps the text as written and makes its links and code live.
+// One pass over the raw text, so markup made for one link is never read again as text.
+const INLINE = /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s)]+)|`([^`\n]+)`/g;
+
 function inline(message) {
-  return escape(message)
-    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/gm, '$1<a href="$2">$2</a>')
-    .replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  let html = "";
+  let from = 0;
+  for (const match of message.matchAll(INLINE)) {
+    const [whole, text, url, bare, code] = match;
+    html += escape(message.slice(from, match.index));
+    if (url) html += `<a href="${escape(url)}">${escape(text)}</a>`;
+    else if (bare) html += `<a href="${escape(bare)}">${escape(bare)}</a>`;
+    else html += `<code>${escape(code)}</code>`;
+    from = match.index + whole.length;
+  }
+  return html + escape(message.slice(from));
 }
 
 const escape = (text) => text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
