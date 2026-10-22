@@ -41,7 +41,7 @@ Add a section only when the change has something for it:
 - **Hidden machinery.** Framework behaviour, generated code or storage a newcomer would not guess.
 - **What the tests promise.** Each test restated as a promise. Say which tests you read and which you ran.
 
-End with two or three labelled zoom-in choices, and ask which part is still unclear.
+Stop after the last section, with no menu of follow-up choices. When the reader says they still don't follow, load `../eli25/SKILL.md` and make its short page on the same change as the next try.
 
 Run `../unslop/SKILL.md` on the explanation last. Keep the order and length above, and leave quoted text and code as they are.
 
@@ -65,4 +65,3 @@ Example:
 > **Problem:** Each source sends a different format, and we need one internal shape that never drops a field.
 > **Key idea:** `.passthrough()` keeps unknown fields instead of deleting them.
 > **Trace:** `POST /intake {..., weirdField: 123}` is checked by [schema.ts:14](/repo/src/intake/schema.ts:14), stored by [store.ts:31](/repo/src/intake/store.ts:31), and read back after a restart by [load.ts:9](/repo/src/intake/load.ts:9) with `weirdField` still present.
-> **Zoom in?** (a) where the run log is stored (b) why passthrough matters (c) the restart test
