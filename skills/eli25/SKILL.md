@@ -49,6 +49,8 @@ Before and after, from `support-report-pr-349-eli25.html`:
 >
 > After. **The model reads the messages, and the app decides what gets posted.** The report reads two things: Jira tickets, and last week's messages from the QA and release Slack channels. Before it reads anything, it checks that every channel exists and that the bot can open it. Then it strips anything that looks like a password or token, keeps only Monday to Sunday, and cuts the pile to a fixed size.
 
+Run `../unslop/SKILL.md` on the page's prose last, and leave quotes and code as they are.
+
 **Done when** the page has its opener, every section of the shape sits under a claim title, and a plan or spike ends on one next action.
 
 ## 3. Build and check

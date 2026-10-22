@@ -42,6 +42,8 @@ Add a section only when the change has something for it:
 
 End with two or three labelled zoom-in choices, and ask which part is still unclear.
 
+Run `../unslop/SKILL.md` on the explanation last, and leave quotes and code as they are.
+
 ## Style
 
 - Plain English: short active sentences, real names and values, and a short gloss on any term the reader may not know, at first use.

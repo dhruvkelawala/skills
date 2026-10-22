@@ -12,6 +12,8 @@ Pick the mode from what the question is about:
 
 A bare `/why` asks about your last action if you just acted, and otherwise about the code discussed last. Say which in your first line.
 
+In every mode, run `../unslop/SKILL.md` on your answer last, and leave quotes and code as they are.
+
 ## Why did you do that
 
 1. Find the action in this session: the tool call, the edit, or the message where you decided. Quote it in one line.
