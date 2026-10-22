@@ -4,7 +4,7 @@ A stacked run adds one layer on top of an open stack of PRs. Its base is the top
 
 ## Find and pin the stack
 
-The checkout is usually a fresh worktree on the default branch, so the current branch need not have a PR.
+Stage 1 finds the stack before the build moves into its own worktree, so the current branch need not have a PR.
 
 1. List candidates with `gh pr list --state open --json number,url,title,headRefName,baseRefName,headRefOid` (REST: `gh api --paginate "repos/{owner}/{repo}/pulls?state=open&per_page=100"`, where those fields are `.number`, `.html_url`, `.title`, `.head.ref`, `.base.ref` and `.head.sha`). Chain each PR whose `baseRefName` is another open PR's `headRefName`. A chain is a stack, and its top is the PR whose head branch is no other PR's base. A lone open PR is a one-layer stack.
 2. Pick the stack the `stack` argument names: a PR in the chain, its URL, or a stack number. Without an argument, take the only chain. With several chains, take the one the work item names by PR or branch, or ask once, listing each chain by its top PR's title.
@@ -14,7 +14,7 @@ The checkout is usually a fresh worktree on the default branch, so the current b
 
 ## Branch
 
-Create the layer with `git checkout -b <branch> <base_sha>` and record `stack_tracking: none`. Use `gh stack` only when this checkout already tracks the stack, meaning `gh stack view` lists the predecessor's branch. Then run `gh stack add <branch>` instead and record `stack_tracking: gh-stack`.
+T3 creates the layer's branch with its worktree, from the predecessor's head branch, in stage 1 step 3. Record `stack_tracking: none`, even when another checkout tracks the stack with `gh stack`, because `gh stack add` would create a second branch.
 
 ## Publish
 
