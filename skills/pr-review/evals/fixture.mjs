@@ -129,6 +129,7 @@ const OFF_BY_ONE = {
   priority: "P1",
   file: "src/retry.js",
   line: 9,
+  symbol: "withRetry",
   title: "Stops one call early, and never stops at `retries: 0`",
   body: "`attempt + 1 === retries` throws after `retries` calls, so `retries: 3` makes 3 calls where the issue allows 4, and with `retries: 0` the check is never true, so a failing GET retries forever. Issue #6: \"`retries: 0` makes exactly one call.\"",
 };
@@ -136,6 +137,7 @@ const NO_LIMIT_TEST = {
   priority: "P2",
   file: "test/retry.test.js",
   line: 5,
+  symbol: "retries until the call succeeds",
   title: "No test covers `retries: 0` or the call limit",
   body: "The only test retries a call that succeeds on its third try, which passes with or without the off-by-one in retry.js.",
 };
@@ -143,6 +145,7 @@ const MYSTERIOUS_NAMES = {
   priority: "P2",
   file: "src/config.js",
   line: 1,
+  symbol: "retryCfg",
   title: "Possible Mysterious Name: `retryCfg.n` and `retryCfg.ms`",
   body: "The names don't say which is the retry count and which is the delay. `retries` and `delayMs` would match withRetry's options.",
 };
@@ -150,6 +153,7 @@ const SWAPPED_SETTINGS = {
   priority: "P1",
   file: "src/client.js",
   line: 10,
+  symbol: "fetchJson",
   title: "Pass the retry settings in the right order",
   body: "`retries` gets `retryCfg.ms` (200) and `delayMs` gets `retryCfg.n` (3), so a failing GET is retried 200 times, starting 3 ms apart and doubling each time.",
 };

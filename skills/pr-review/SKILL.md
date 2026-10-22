@@ -55,26 +55,45 @@ Prep comes before anything you write about the PR, on every PR.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
 4. Once both reviewers have reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
-6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head.
+6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, it is still running after about ten minutes, or this host has no T3 guide tools. Then step 3 writes the tour in chat.
 7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
 
 For a stack or a queue, start with one table: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. Order a stack from the bottom. Order a queue so the PR that unblocks the most other PRs comes first, then the smallest. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
-**Complete when** both reviewers have reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head.
+**Complete when** both reviewers have reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide.
 
 ## 3. Walk one PR at a time
 
-Send each PR's review as one message: the intro, then the wrap-up. The tour is the guide, so chat lists no stops and no file links.
+Send each PR's review as one message: the intro, then the wrap-up. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
 
 **Intro.**
 
-1. The PR link, `https://github.com/<owner>/<repo>/pull/<n>`, first. In T3 it opens the PR panel beside the thread. Then say that the tour is in that panel's Guide tab.
+1. The PR link, `https://github.com/<owner>/<repo>/pull/<n>`, first. In T3 it opens the PR panel beside the thread. Then say that the tour is in that panel's Guide tab or, when the PR has no guide, why the tour is in chat.
 2. What the PR is and why, in a short paragraph of plain English, with one real example that uses real names and values.
 3. One extra line only when something changes how you review: red CI, a claim backed by tests only, a one-way door or no `**Door:**` line, or review churn on an agent-written PR.
 
 When the change can't be followed from the intro and the diff, such as a new subsystem, a flow across several parts or a PR over about 2,000 changed lines, follow the message with an `/eli25` page.
 
 **The guide.** The user reads the tour there, marks files viewed, and sends you an excerpt with "Ask agent". Viewed marks are the user's, so never set them.
+
+**Chat tour, when there is no guide.** The whole route, in the order to read it: design changes first, most important first, then the rest of the route. A **design change** changes how the parts of the system fit together or what the system promises. Look for these, roughly in this order of importance:
+
+- **Authority:** who may do what, as which identity, and where that is checked.
+- **Data:** new or changed tables, columns, keys, indexes and migrations, and what is kept for how long.
+- **Ownership:** which component now owns a piece of state, a process or a decision, and what moved.
+- **Contracts:** APIs, events, protocols, message shapes, config keys and flags that other parts or other teams rely on.
+- **Flow and timing:** new processes, queues, schedulers or loops, and their ordering, idempotency, retries and concurrency.
+- **Failure:** what happens when a dependency is down or a step half-completes, and how it recovers.
+- **Dependencies:** new external services or packages, and which way modules now depend on each other.
+- **Rollout:** production switches, defaults, and changes that cannot be undone.
+
+Each stop is one numbered item: the file and lines, the name the lines define (a function, a test, or a constant), then what to look at there and why, in one or two sentences. For a design change, state the decision as one claim and say what it constrains, couples or makes hard to undo. Every file a reviewer flagged is a stop that names the finding, its priority and its reviewer, at any priority. Point at the lines instead of quoting them. Count the files that carry no design, such as lockfiles and snapshots, in one closing line. When a PR has no design change, say so in one line and start the route at the first flagged file.
+
+````md
+1. `src/runtime/reminders/fire.ts:351-372`, `fireReminder`: **a reminder fires as the person who set it.** The tick claims a Slack event as the requester and rechecks membership, `slack:reply` and the channel audience on every attempt, so a reminder carries its requester's authority days after it was set.
+2. `src/runtime/reminders/store.ts:88`, `claimReminder`: the claim is one `UPDATE` guarded by `claimed_at IS NULL`. **P1, second opinion:** the row is read before the update, so two ticks can claim the same reminder.
+3. `test/runtime/reminders/fire.test.ts:40-61`, "a reminder fires as its requester": the only test of the tick. **P2, Spec:** it runs one tick at a time, so it passes with the double claim above.
+````
 
 **Wrap-up.**
 
@@ -122,7 +141,7 @@ When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review chec
 
 1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
 2. **A pure rebase.** Compute the patch ID as prep does. When it matches the record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour.
-3. **A real change** reruns both reviewers on the new head, over the whole PR, as in step 2. Show only the new findings, and mark each earlier one fixed or still open. Say what changed since the user last looked: `git range-diff <old base>..<seen> <base>..<head>` when the branch was also rebased, otherwise `git diff <seen>..<head>`. Then the wrap-up, as in step 3.
+3. **A real change** reruns both reviewers on the new head, over the whole PR, as in step 2. Show only the new findings, and mark each earlier one fixed or still open. Say what changed since the user last looked: `git range-diff <old base>..<seen> <base>..<head>` when the branch was also rebased, otherwise `git diff <seen>..<head>`. A chat tour covers only those changes. Then the wrap-up, as in step 3.
 4. Update the prep record to the new head.
 
 **Complete when** every earlier finding is marked fixed or still open, and every change since the `seen` ref is named in the review or the rebase line.

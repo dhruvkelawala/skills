@@ -1,7 +1,8 @@
 // Stands in for T3's t3-code MCP server during the eval, over stdio: orchestrator_capabilities lists the
 // models the models file names, delegate_task answers each child at once with the fixed report for its
-// /code-review axis, and the two guide tools write and read PR #7's review guide. Every call, the moment each
-// report is handed back, and what each guide read returned go to $FAKE_DIR/t3.jsonl.
+// /code-review axis, and the two guide tools write and read PR #7's review guide, or fail every write when
+// FAKE_GUIDES is "off". Every call, the moment each report is handed back, and what each guide read returned go to
+// $FAKE_DIR/t3.jsonl.
 import { createInterface } from "node:readline";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -9,6 +10,7 @@ import { join } from "node:path";
 import { OWNER, PR, PR_URL, REPO, findingsFor } from "./fixture.mjs";
 
 const dir = process.env.FAKE_DIR;
+const guidesOff = process.env.FAKE_GUIDES === "off";
 const { jobs } = JSON.parse(readFileSync(process.env.FAKE_MODELS, "utf8"));
 const log = (entry) => appendFileSync(join(dir, "t3.jsonl"), `${JSON.stringify({ at: Date.now(), ...entry })}\n`);
 const state = () => JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
@@ -80,6 +82,10 @@ const TOOLS = {
     call: ({ pullRequests = [] }) => {
       const numbers = pullRequests.map(prNumber);
       const head = currentHead();
+      if (guidesOff) {
+        log({ tool: "write_pull_request_guides", numbers, number: numbers.includes(PR) ? PR : null, head, off: true });
+        throw new Error("Review guides are off on this server.");
+      }
       const g = loadGuide();
       const joined = g.run?._tag === "Running" && g.run.headSha === head;
       if (numbers.includes(PR) && !joined) saveGuide({ ...g, run: { _tag: "Running", headSha: head, startedAt: new Date().toISOString(), reads: 0 } });
@@ -127,7 +133,12 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   else if (method === "tools/list") send({ id, result: { tools: Object.entries(TOOLS).map(([name, t]) => ({ name, description: t.description, inputSchema: t.inputSchema })) } });
   else if (method === "tools/call") {
     const tool = TOOLS[params.name];
-    const result = tool ? tool.call(params.arguments ?? {}) : { error: `unknown tool ${params.name}` };
-    send({ id, result: { content: [{ type: "text", text: JSON.stringify(result) }], isError: !tool } });
+    let text, isError = !tool;
+    try {
+      text = JSON.stringify(tool ? tool.call(params.arguments ?? {}) : { error: `unknown tool ${params.name}` });
+    } catch (err) {
+      [text, isError] = [err.message, true];
+    }
+    send({ id, result: { content: [{ type: "text", text }], isError } });
   } else if (id !== undefined) send({ id, result: {} });
 });
