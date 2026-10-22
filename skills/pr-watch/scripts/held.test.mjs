@@ -11,8 +11,10 @@ const HELD = fileURLToPath(new URL("./held.mjs", import.meta.url));
 const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 // A gh on PATH that logs each call's arguments as a JSON line and answers from `answers`, keyed by
-// "query" for the gate's PR read, "mutation" for resolving a thread, and "<METHOD> <endpoint>" for
-// REST. An answer `{ fail: "<message>" }` fails the call the way gh reports an error.
+// "query" for the gate's PR read, "thread" for post's read of a thread's newest comment, "mutation"
+// for resolving a thread, and "<METHOD> <endpoint>" for REST. A list answers its nth call with its
+// nth entry, and then keeps giving the last. An answer `{ fail: "<message>" }` fails the call the
+// way gh reports an error.
 function stubGh(t, answers) {
   const dir = mkdtempSync(join(tmpdir(), "pr-watch-held-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -22,13 +24,19 @@ function stubGh(t, answers) {
 const fs = require("node:fs");
 const path = require("node:path");
 const args = process.argv.slice(2);
-fs.appendFileSync(path.join(__dirname, "calls.log"), JSON.stringify(args) + "\\n");
+const keyOf = (call) => {
+  const endpoint = call.find((a) => a === "graphql" || a.startsWith("repos/")).split("?")[0];
+  const method = call.includes("-X") ? call[call.indexOf("-X") + 1] : "GET";
+  if (endpoint !== "graphql") return method + " " + endpoint;
+  if (call.some((a) => a.includes("mutation"))) return "mutation";
+  return call.some((a) => a.includes("PullRequestReviewThread")) ? "thread" : "query";
+};
+const log = path.join(__dirname, "calls.log");
+const key = keyOf(args);
+const earlier = fs.readFileSync(log, "utf8").split("\\n").filter(Boolean).filter((line) => keyOf(JSON.parse(line)) === key).length;
+fs.appendFileSync(log, JSON.stringify(args) + "\\n");
 const answers = JSON.parse(fs.readFileSync(path.join(__dirname, "answers.json"), "utf8"));
-const endpoint = args.find((a) => a === "graphql" || a.startsWith("repos/")).split("?")[0];
-const method = args.includes("-X") ? args[args.indexOf("-X") + 1] : "GET";
-const key = endpoint !== "graphql" ? method + " " + endpoint
-  : args.some((a) => a.includes("mutation")) ? "mutation" : "query";
-const answer = answers[key];
+const answer = Array.isArray(answers[key]) ? answers[key][Math.min(earlier, answers[key].length - 1)] : answers[key];
 if (!answer || answer.fail) {
   process.stderr.write("gh: " + (answer ? answer.fail : "Not Found (HTTP 404)") + "\\n");
   process.exit(1);
@@ -108,11 +116,14 @@ test("a person's thread: hold keeps the drafted reply off GitHub, and the gate t
 
 const REPLY_URL = "https://github.com/o/r/pull/7#discussion_r301";
 const COMMENT_URL = "https://github.com/o/r/pull/7#issuecomment-401";
+const PR_URL = "https://github.com/o/r/pull/7";
+const newest = (databaseId, login) => ({ data: { node: { comments: { nodes: [{ databaseId, author: { login } }] } } } });
 const SENDS = {
+  thread: [newest(201, "teammate"), newest(301, "pr-author")],
   "POST repos/o/r/pulls/7/comments/201/replies": { id: 301, html_url: REPLY_URL },
   mutation: { data: { resolveReviewThread: { thread: { isResolved: true } } } },
   "POST repos/o/r/issues/7/comments": { id: 401, html_url: COMMENT_URL },
-  "POST repos/o/r/pulls/7/requested_reviewers": { number: 7 },
+  "POST repos/o/r/pulls/7/requested_reviewers": { number: 7, html_url: PR_URL },
 };
 
 function holdEach(gh, held) {
@@ -127,13 +138,18 @@ function holdEach(gh, held) {
   }
 }
 
-// What a call sends: its method, endpoint, and the -f fields after it, with the GraphQL query cut to its first word.
-function sent(args) {
-  const method = args.includes("-X") ? args[args.indexOf("-X") + 1] : "GET";
-  const endpoint = args.find((a) => a === "graphql" || a.startsWith("repos/"));
-  const fields = args.filter((_, i) => args[i - 1] === "-f").map((f) => (f.startsWith("query=") ? f.split(/[\s(]/)[0] : f));
-  return [method, endpoint, ...fields];
+// What each write sent: its method, endpoint, and the -f fields after it, with the GraphQL query cut
+// to its first word. Reads carry no -X and are left out.
+function writes(gh) {
+  return gh.calls().filter((args) => args.includes("-X")).map((args) => {
+    const endpoint = args.find((a) => a === "graphql" || a.startsWith("repos/"));
+    const fields = args.filter((_, i) => args[i - 1] === "-f").map((f) => (f.startsWith("query=") ? f.split(/[\s(]/)[0] : f));
+    return [args[args.indexOf("-X") + 1], endpoint, ...fields];
+  });
 }
+
+const recordLines = (record) => readFileSync(record, "utf8").split("\n").filter((l) => l.startsWith("- "));
+const post = (gh, held, record) => gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
 
 test("post sends every held reply, resolution, comment and re-request in order, and the run record lists them", (t) => {
   const gh = stubGh(t, SENDS);
@@ -141,9 +157,9 @@ test("post sends every held reply, resolution, comment and re-request in order, 
   const record = gh.file("run-record.md", "stage: watching\n");
   holdEach(gh, held);
 
-  const post = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
-  assert.equal(post.status, 0, post.stderr);
-  assert.deepEqual(gh.calls().map(sent), [
+  const first = post(gh, held, record);
+  assert.equal(first.status, 0, first.stderr);
+  assert.deepEqual(writes(gh), [
     ["POST", "repos/o/r/pulls/7/comments/201/replies", "body=Renamed to joinAll in 1a2b3c4."],
     ["POST", "graphql", "query=mutation", "id=PRRT_p"],
     ["POST", "repos/o/r/issues/7/comments", "body=1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed."],
@@ -152,34 +168,57 @@ test("post sends every held reply, resolution, comment and re-request in order, 
   const lines = readFileSync(record, "utf8").split("\n");
   assert.equal(lines[0], "stage: watching", "post appends and keeps what the record held");
   assert.ok(lines.some((l) => /^sent on "post" at \d{4}-\d\d-\d\dT/.test(l)), lines.join("\n"));
-  assert.deepEqual(lines.filter((l) => l.startsWith("- ")), [
+  assert.deepEqual(recordLines(record), [
     `- reply to teammate: ${REPLY_URL}`,
-    "- resolved teammate's thread PRRT_p",
+    `- resolved teammate's thread: ${REPLY_URL}`,
     `- comment to reviewer: ${COMMENT_URL}`,
-    "- review re-requested from reviewer",
+    `- review re-requested from reviewer: ${PR_URL}`,
   ]);
 
-  const again = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  const again = post(gh, held, record);
   assert.equal(again.status, 0, again.stderr);
-  assert.equal(gh.calls().length, 4, "a second post has nothing left to send");
+  assert.equal(writes(gh).length, 4, "a second post has nothing left to send");
 });
 
-test("post stops at a failed send, keeps the rest held, and a later post sends only what is left", (t) => {
-  const gh = stubGh(t, { ...SENDS, mutation: { fail: "API rate limit already exceeded for user ID 1." } });
+test("post stops at a failed send, the gate still waits on post, and a later post sends only what is left", (t) => {
+  const answered = {
+    ...personThread,
+    comments: { nodes: [...personThread.comments.nodes, { databaseId: 301, author: { __typename: "User", login: "pr-author" } }], pageInfo: { hasNextPage: false } },
+  };
+  const gh = stubGh(t, { ...openPr([answered]), ...SENDS, mutation: { fail: "API rate limit already exceeded for user ID 1." } });
   const held = gh.file("held.json");
   const record = gh.file("run-record.md", "");
   holdEach(gh, held);
 
-  const first = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  const first = post(gh, held, record);
   assert.equal(first.status, 2);
   assert.match(first.stderr, /rate limit/);
-  assert.deepEqual(gh.calls().map((c) => sent(c)[1]), ["repos/o/r/pulls/7/comments/201/replies", "graphql"]);
-  assert.deepEqual(readFileSync(record, "utf8").split("\n").filter((l) => l.startsWith("- ")), [`- reply to teammate: ${REPLY_URL}`]);
+  assert.deepEqual(writes(gh).map((w) => w[1]), ["repos/o/r/pulls/7/comments/201/replies", "graphql"]);
+  assert.deepEqual(recordLines(record), [`- reply to teammate: ${REPLY_URL}`]);
+
+  const gate = gh.run(GATE, [...GATE_ARGS, "--held-file", held]);
+  assert.equal(gate.status, 1, gate.stderr);
+  assert.deepEqual(gate.json, { state: "pending", reasons: ['3 item(s) to people held until "post"'], threads: [] },
+    "the thread whose resolve is still held is not a repair");
 
   gh.answer("mutation", SENDS.mutation);
-  const second = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  const second = post(gh, held, record);
   assert.equal(second.status, 0, second.stderr);
-  assert.deepEqual(gh.calls().slice(2).map((c) => sent(c)[1]), [
+  assert.deepEqual(writes(gh).slice(2).map((w) => w[1]), [
     "graphql", "repos/o/r/issues/7/comments", "repos/o/r/pulls/7/requested_reviewers",
   ], "the reply already sent is not sent twice");
+});
+
+test("post sends nothing to a thread where the person commented after the draft, and keeps it held", (t) => {
+  const gh = stubGh(t, { ...SENDS, thread: newest(202, "teammate") });
+  const held = gh.file("held.json");
+  const record = gh.file("run-record.md", "");
+  holdEach(gh, held);
+
+  for (const attempt of [post(gh, held, record), post(gh, held, record)]) {
+    assert.equal(attempt.status, 2);
+    assert.match(attempt.stderr, /teammate commented in thread PRRT_p after/);
+  }
+  assert.deepEqual(writes(gh), []);
+  assert.deepEqual(recordLines(record), []);
 });

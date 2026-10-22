@@ -51,7 +51,7 @@ import process from "node:process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { readHeld } from "./held.mjs";
+import { coversReview, coversThread, readHeld } from "./held.mjs";
 
 const execFileP = promisify(execFile);
 
@@ -96,7 +96,7 @@ export function evaluateGate(snapshot, options = {}) {
 
   const held = options.held ?? [];
   const activeThreads = reviewThreads
-    .filter((t) => !t.isResolved && !t.isOutdated && !heldThread(held, t))
+    .filter((t) => !t.isResolved && !t.isOutdated && !held.some((item) => coversThread(item, t)))
     .map((t) => ({
       id: t.id ?? null,
       replyTo: t.replyTo ?? null,
@@ -113,7 +113,7 @@ export function evaluateGate(snapshot, options = {}) {
   if (snapshot?.threadsUnknown) pending.push(`review threads unknown: ${snapshot.threadsUnknown}`);
 
   const unanswered = unansweredReviews(snapshot)
-    .filter((review) => !held.some((item) => item.kind === "comment" && item.review === review.id));
+    .filter((review) => !held.some((item) => coversReview(item, review)));
   for (const review of unanswered) {
     blocked.push(`Written review from ${review.author} at ${review.submittedAt} has no reply`);
     activeThreads.push({
@@ -217,13 +217,6 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
     return { pending: `${label} is reviewing the current HEAD` };
   }
   return { pending: `${label} has not reviewed the current HEAD` };
-}
-
-// A held reply covers its thread until someone comments after the draft, which the reply has not seen.
-// A resolve left by a post that sent the reply covers it until the resolve is sent.
-function heldThread(held, thread) {
-  return held.some((item) => item.thread === thread.id
-    && (item.kind === "resolve" || (item.kind === "reply" && item.seen === thread.lastCommentId)));
 }
 
 function isBot(login, type) {

@@ -12,12 +12,14 @@
 //                                                        seen is the thread's newest comment when drafted
 //   { kind: "comment", review, to, body }                 a PR comment answering a written review
 //   { kind: "rerequest", to }                             asking the person to review again
-//   { kind: "resolve", thread, to }                       left by a post whose reply went out but whose
-//                                                        resolve failed
+//   { kind: "resolve", thread, seen, to, url }            left by a post whose reply went out but whose
+//                                                        resolve did not; seen and url are the reply's
 // Holding again for the same thread, review or person replaces the earlier item.
 //
 // `post` sends the items in order and removes each from the file once GitHub accepts it, so a failed
 // post can run again without sending anything twice. It appends one line per send to the run record.
+// Before it replies in a thread or resolves it, it checks that nobody has commented after `seen`, and
+// stops with the item still held when someone has.
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -31,6 +33,7 @@ const USAGE = [
   "       held.mjs post --file F --repo owner/name --pr N --record PATH",
 ].join("\n");
 const RESOLVE = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }";
+const NEWEST = "query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread{ comments(last:1){ nodes{ databaseId author{ login } } } } } }";
 const FLAGS = new Set(["file", "thread", "reply-to", "seen", "to", "body-file", "review", "rerequest", "repo", "pr", "record"]);
 
 export function readHeld(file) {
@@ -38,6 +41,16 @@ export function readHeld(file) {
   const items = JSON.parse(readFileSync(file, "utf8"));
   if (!Array.isArray(items)) throw new Error(`${file} is not a list of held items`);
   return items;
+}
+
+// A held reply or resolve answers its thread while the thread's newest comment is the one the item
+// saw. A held comment answers the written review it names.
+export function coversThread(item, thread) {
+  return (item.kind === "reply" || item.kind === "resolve") && item.thread === thread.id && item.seen === thread.lastCommentId;
+}
+
+export function coversReview(item, review) {
+  return item.kind === "comment" && item.review === review.id;
 }
 
 function writeHeld(file, items) {
@@ -123,30 +136,42 @@ function post(file, args) {
   return 0;
 }
 
-// A reply leaves its thread's resolve as the next item, so the resolve can fail and be retried alone.
 function send(repo, pr, item) {
   switch (item.kind) {
     case "reply": {
+      unanswered(item);
       const reply = write(`${repo}/pulls/${pr}/comments/${item.replyTo}/replies`, [`body=${item.body}`]);
-      return { line: `reply to ${item.to}: ${reply.html_url}`, next: { kind: "resolve", thread: item.thread, to: item.to } };
+      const resolve = { kind: "resolve", thread: item.thread, seen: reply.id, to: item.to, url: reply.html_url };
+      return { line: `reply to ${item.to}: ${reply.html_url}`, next: resolve };
     }
     case "resolve":
+      unanswered(item);
       write("graphql", [`query=${RESOLVE}`, `id=${item.thread}`]);
-      return { line: `resolved ${item.to}'s thread ${item.thread}` };
+      return { line: `resolved ${item.to}'s thread: ${item.url}` };
     case "comment": {
       const comment = write(`${repo}/issues/${pr}/comments`, [`body=${item.body}`]);
       return { line: `comment to ${item.to}: ${comment.html_url}` };
     }
-    case "rerequest":
-      write(`${repo}/pulls/${pr}/requested_reviewers`, [`reviewers[]=${item.to}`]);
-      return { line: `review re-requested from ${item.to}` };
+    case "rerequest": {
+      const pull = write(`${repo}/pulls/${pr}/requested_reviewers`, [`reviewers[]=${item.to}`]);
+      return { line: `review re-requested from ${item.to}: ${pull.html_url}` };
+    }
     default:
       throw new Error(`unknown held item kind "${item.kind}"`);
   }
 }
 
-function write(endpoint, fields) {
-  const args = ["api", "-X", "POST", endpoint, ...fields.flatMap((field) => ["-f", field])];
+function unanswered(item) {
+  const newest = gh(["api", "graphql", "-f", `query=${NEWEST}`, "-f", `id=${item.thread}`])?.data?.node?.comments?.nodes?.[0];
+  if (!newest) throw new Error(`thread ${item.thread} could not be read`);
+  if (!coversThread(item, { id: item.thread, lastCommentId: newest.databaseId })) {
+    throw new Error(`${newest.author?.login ?? "someone"} commented in thread ${item.thread} after this was drafted; read it and hold a new draft`);
+  }
+}
+
+const write = (endpoint, fields) => gh(["api", "-X", "POST", endpoint, ...fields.flatMap((field) => ["-f", field])]);
+
+function gh(args) {
   try {
     return JSON.parse(execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) || "{}");
   } catch (error) {
