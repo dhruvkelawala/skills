@@ -254,11 +254,13 @@ test("GraphQL quota spent: run holds the caller's own PR when the default branch
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT);
 });
 
-test("run refuses a flag it does not know, such as the removed --policy", (t) => {
+test("run refuses an argument it cannot read: an unknown flag such as the removed --policy, or a stray PR number", (t) => {
   const { ship } = fixtureGitHub(t);
-  const run = ship("run", "7", "--policy", "approval");
-  assert.equal(run.status, 2);
-  assert.match(run.stderr, /unknown flag --policy/);
+  for (const [args, error] of [[["--policy", "approval"], /unknown flag --policy/], [["--rule-b", "7", "8"], /usage/]]) {
+    const run = ship("run", "7", ...args);
+    assert.equal(run.status, 2, args.join(" "));
+    assert.match(run.stderr, error);
+  }
 });
 
 test("run: a PR outside rule B lands without a verdict, and --rule-b holds it for one", (t) => {

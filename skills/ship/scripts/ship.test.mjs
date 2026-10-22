@@ -12,6 +12,8 @@ function pr(number, base, head, extra = {}) {
 
 test("parseArgs separates flags, values, and positionals", () => {
   assert.deepEqual(parseArgs(["run", "12", "--force", "--trusted", "a,b", "--json"]), { _: ["run", "12"], force: true, trusted: "a,b", json: true });
+  assert.throws(() => parseArgs(["run", "12", "--rule-b"]), /--rule-b needs a value/, "a trailing --rule-b would otherwise name no PR");
+  assert.throws(() => parseArgs(["run", "12", "--trusted", "--json"]), /--trusted needs a value/);
 });
 
 test("parseDoor reads the pr skill's Merge Danger line", () => {

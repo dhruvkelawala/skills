@@ -28,6 +28,7 @@ export function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith("--")) out._.push(a);
     else if (BOOLEAN_FLAGS.has(a.slice(2))) out[a.slice(2)] = true;
+    else if (argv[i + 1] === undefined || argv[i + 1].startsWith("--")) throw new Error(`${a} needs a value`);
     else out[a.slice(2)] = argv[++i];
   }
   return out;
@@ -460,7 +461,8 @@ async function main() {
   if (unknown) throw new Error(`unknown flag --${unknown}`);
   const [cmd, sub, ...rest] = a._;
   const repo = a.repo;
-  if (!["queue", "verdict", "run", "merge"].includes(cmd)) throw new Error(USAGE);
+  // A stray PR number, such as a second one after --rule-b, is refused rather than ignored.
+  if (a._.length !== { queue: 1, run: 2, merge: 2, verdict: sub === "record" ? 4 : 3 }[cmd]) throw new Error(USAGE);
   // An archived repository is a dropped project: none of its PRs reach ship's output.
   if (repository(repo).archived) throw new Error(`${nameWithOwner(repo)} is archived, and ship skips archived repositories`);
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
