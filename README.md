@@ -9,7 +9,7 @@
 | [cleanup](skills/cleanup/SKILL.md) | Free disk space: a read-only audit of Git worktrees, iOS simulators, build artifacts and package-manager caches, then removal by approved bucket, with a hold list for anything that could lose work. `audit` stops after the proposal and can run as a Saturday scheduled task. (pstack) |
 | [codebase-dive](skills/codebase-dive/SKILL.md) | Learn a whole unfamiliar or agent-written codebase at your own pace, file by file, fixing as you go with a living checklist. |
 | [day](skills/day/SKILL.md) | The goodnight check: every thread waiting on you or gone quiet, continue or stop for each run, and a strain line when disk or memory runs low. Stops only what you confirm, and records it for the morning. |
-| [eli25](skills/eli25/SKILL.md) | Explain a PR, stack, plan, spike, system or incident as a short visual page shaped by its topic, optionally hosted on Vercel. |
+| [eli25](skills/eli25/SKILL.md) | Explain a PR, stack, plan, spike, system or incident as a short page in the Field Guide look, shown in the thread as a T3 visual page and deployed to Vercel only when you ask. |
 | [evidence](skills/evidence/SKILL.md) | Write a repo's EVIDENCE.md: how to launch each surface, drive a feature, capture screenshots, recordings, or transcripts, and publish them so PRs can prove changes work. |
 | [explain-diff](skills/explain-diff/SKILL.md) | Explain a diff, commit, branch, or PR in plain words: the problem, the key idea, and one real input traced through the changed code. |
 | [hillclimb](skills/hillclimb/SKILL.md) | Raise one score toward a target (speed, a critic or eval score, a pass rate, a size) with one change per attempt, keep or revert, and a log. You judge taste scores at checkpoints. (pstack) |
