@@ -1,14 +1,14 @@
 ---
 name: pr-review
 description: Review a pull request, a stack, or the PRs waiting on the user, one PR at a time. Each PR gets the few architecture and system-design changes worth judging, each with a before-and-after sketch and the question to answer, then findings, a suggested verdict and one batched set of comments. Implementation detail comes only on request, and `try` runs the PR for hands-on testing. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next.
-compatibility: Requires git and gh. Inside Herdr it also uses herdr, hunk and node.
+compatibility: Requires git and gh.
 ---
 
 # PR review
 
 Make reviews fast without losing understanding. You read everything, implementation included. The user sees the design: what changed in how the system fits together, and what they have to decide about it.
 
-Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue] [--deep] [split]`.
+Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue] [--deep]`.
 
 | Argument | What it reviews |
 | --- | --- |
@@ -17,7 +17,6 @@ Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue] [--deep]
 | `queue` | Every open PR waiting on the user: `gh search prs --review-requested=@me --state open`. If the `ship` skill is installed, take the order from `ship queue` instead. |
 
 - `--deep` adds the implementation layer to every PR: a code trace and line-level stops. Use it for an unfamiliar area, or when the user says they are new to it.
-- `split` makes Herdr open Hunk in a 50/50 split instead of a new tab.
 
 ## 1. Pin each PR
 
@@ -115,10 +114,7 @@ Reminders now carry the requester's authority days after they were set, rechecke
 - one real input traced through the changed code, one line per step with a link, following `/how` and under 12 lines
 - line-level stops in the risky files, about one per 150 changed lines of non-test code, with at least 3 and at most 15. Each stop links its line and says what to check as "check X, expect Y", plus "Assumption to challenge:" where a wrong assumption would cause a bug.
 
-Deliver the review where the user reads diffs:
-
-- **Inside Herdr** (`test "${HERDR_ENV:-}" = 1`), also attach one numbered Hunk note per design change at the line where it is decided, plus the line stops when the implementation layer is shown, following [references/hunk.md](references/hunk.md).
-- **Everywhere else,** the chat message is the walkthrough. Write every code reference, in the design changes, the findings, the trace and the stops, as a Markdown link to the file in the review checkout, with the line after a colon: `[fire.ts:118](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/fire.ts:118)`. T3 Code, Codex and Claude Code open these links in their own editor. A bare path is not clickable in every host and a GitHub link leaves the host, so code links always point at the local checkout. For a line range, link the first line and put the range in the label.
+The chat message is the walkthrough. Write every code reference, in the design changes, the findings, the trace and the stops, as a Markdown link to the file in the review checkout, with the line after a colon: `[fire.ts:118](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/fire.ts:118)`. T3 Code, Codex and Claude Code open these links in their own editor. A bare path is not clickable in every host and a GitHub link leaves the host, so code links always point at the local checkout. For a line range, link the first line and put the range in the label.
 
 Show progress with each PR ("3 of 6"), then wait for the user's word:
 
@@ -159,7 +155,6 @@ Triage and walk only that change, and say which earlier findings it fixes.
 Keep one ledger per PR. Collect from:
 
 - The user's comments in chat.
-- Their Hunk notes: `hunk session comment list <session> --type all`. Without `--type all` you only see your own notes.
 - Review comments they left in the host's diff view.
 - Existing GitHub threads, so nothing is said twice.
 
