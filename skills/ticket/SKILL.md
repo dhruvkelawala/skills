@@ -20,7 +20,7 @@ The issue goes where the idea's work is tracked.
 
 ## 2. Write the issue
 
-Read the repo's latest issues and copy their headings and tone: `gh issue list --state all --limit 5 --json title,body` (REST: `gh api 'repos/{owner}/{repo}/issues?state=all&per_page=5'`). When there are none, use this shape:
+Read the repo's latest issues and copy their headings and tone: `gh issue list --state all --limit 5 --json title,body` (REST: `gh api 'repos/{owner}/{repo}/issues?state=all&per_page=5'`). Keep an `## Acceptance criteria` section even when their issues have none, because step 3 judges it. When there are no issues, use this shape:
 
 ```md
 ## What's wrong
