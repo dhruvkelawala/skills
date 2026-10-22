@@ -84,10 +84,12 @@ function ownSkills(checkout) {
 }
 
 // The list uses the entry shape `npx skills` writes to its lock file, with `ref` pinned to a commit.
+// Names follow the Agent Skills rule (lowercase), so a case-insensitive disk cannot fold a list
+// name onto one of this repo's skills.
 function readList(path, own) {
   const { skills = {} } = JSON.parse(readFileSync(path, "utf8"));
   return Object.entries(skills).map(([name, entry]) => {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) throw new Error(`${JSON.stringify(name)} is not a skill name`);
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error(`${JSON.stringify(name)} is not a skill name: use lowercase letters, digits and hyphens`);
     if (own.includes(name)) throw new Error(`${name} is one of this repo's skills, so the list cannot name it too`);
     if (!/^[0-9a-f]{40}$/.test(entry.ref ?? "")) throw new Error(`${name}: ref must be a full commit SHA, not ${JSON.stringify(entry.ref)}`);
     if (!entry.source || !entry.sourceUrl || !/(^|\/)SKILL\.md$/.test(entry.skillPath ?? "")) {

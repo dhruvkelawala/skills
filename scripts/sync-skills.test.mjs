@@ -172,6 +172,7 @@ test("a list or folder the script cannot honour stops it before anything changes
   const cases = [
     ["names one of this repo's skills", list((m) => ({ pr: m.entry("pr") })), /pr is one of this repo's skills/],
     ["pins a branch instead of a commit", list((m) => ({ grilling: { ...m.entry("grilling"), ref: "main" } })), /grilling: ref must be a full commit SHA/],
+    ["names this repo's skill in capitals, which a case-insensitive disk takes for the same folder", list((m) => ({ PR: m.entry("pr") })), /"PR" is not a skill name/],
     ["uses a path as a name", list((m) => ({ "../escape": m.entry("grilling") })), /"\.\.\/escape" is not a skill name/],
     ["pins a commit the source does not have", list((m) => ({ grilling: m.entry("grilling", "0".repeat(40)) })), /grilling: cannot fetch 0{40} from file:\/\//],
     ["points at a folder with no SKILL.md", list((m) => ({ grilling: { ...m.entry("grilling"), skillPath: "skills/grilling/scripts/SKILL.md" } })), /grilling: fixture\/upstream@[0-9a-f]{7} has no skills\/grilling\/scripts\/SKILL\.md/],
