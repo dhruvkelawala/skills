@@ -88,7 +88,7 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 
 ## 1. Pin the contract
 
-1. Resolve the repository and remote, run `git fetch <remote>`, and pin the base. Standalone: `refs/remotes/<remote>/<default-branch>` and its SHA. Stacked: the top PR's head, found as [stacks](references/stacks.md) describes.
+1. Resolve the repository and remote, run `git fetch <remote>`, and pin the base. Standalone: `refs/remotes/<remote>/<default-branch>` and its SHA. Stacked: the predecessor PR's head, found as [stacks](references/stacks.md) describes.
 2. Read the work item. When the invocation names no issue or ticket, file one through `ticket` first:
    - **No work item.** File the change this conversation discussed, with the criteria it pinned.
    - **A plan file.** File the plan as one issue. When the plan already links an issue, read that issue and file nothing.
