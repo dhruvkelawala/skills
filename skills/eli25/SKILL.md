@@ -1,6 +1,6 @@
 ---
 name: eli25
-description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to deploy one to Vercel. Writes a page in the Field Guide look shaped by its topic and shows it in the thread as a T3 visual page.
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to deploy one to Vercel. Also use unasked after a review intro or a recap whose PR adds a part, changes a flow across parts, or is a stack, and when the user still doesn't get a chat answer. Writes a page of about 400 words in the Field Guide look and shows it in the thread as a T3 visual page.
 ---
 
 # eli25
@@ -9,32 +9,37 @@ An eli25 page explains the user's own work in progress to an engineer who can pr
 
 Invoke as `/eli25 <topic>`. The topic can be a PR number, a stack, a plan file, a spike, or a phrase. With no topic, explain the work in this conversation.
 
+A page comes without asking in two cases. After the intro of a review or a recap, make one when its PR adds a part, changes a flow across parts, or is a stack. When the user says they still don't get a chat answer, the page is the next try. Every other answer stays in chat.
+
 ## 1. Pick the shape
 
-Read the source first: the diff and PR body, the plan file, the code, the measurements. Then pick the row for what the reader must understand after reading. Each cell names a section's job, not its title.
+Read the source first: the diff and PR body, the plan file, the code, the measurements. Then pick sections for what the reader must understand after reading. The rows are suggestions, and each cell names a section's job, not its title. Merge, reorder or drop sections to fit the topic.
 
-| Topic | Sections, in order |
+| Topic | Sections that usually work |
 | --- | --- |
-| PR or stack | Before and after. One real request traced through the change. One "Not in this change" line. A review route of three to six files to read in order, ending with "Next: `/pr-review <PR>`". A stack gets one before-and-after block per PR in stack order, then one route. |
+| PR | Before and after. One real request traced through the change. One "Not in this change" line. |
+| Stack | One before-and-after block per PR, bottom first. Then one request traced through the stack and one "Not in this change" line. |
 | Plan | Today versus target. Build order. Open decisions. The next action and what is left. |
 | System | A picture of the parts. One worked example through them. |
 | Spike or assessment | What was measured and what was assumed. The recommendation. The next action and what is left. |
 | Incident | Timeline. Cause. Fix. How to spot it next time. |
 | Concept | The mental model. An example. The common misconception, if a real one exists. |
 
-**Done when** you can name the row, the sections, and the one real example the page will trace, with its real names and numbers.
+A PR or stack page always has its three parts and ends on the "Not in this change" line, because the review tour gives the files to read.
+
+**Done when** you can name the sections and the one real example the page will trace, with its real names and numbers.
 
 ## 2. Write the page
 
 - **Opener.** One sentence and one figure that hold the whole model. A reader who stops there is still right about the topic.
-- **Claim titles.** Each section title states what the section shows, as in "One thread, one notebook" or "The app checks every ticket the model cites".
+- **Headings.** Each heading is one plain sentence, with a subject and a verb, that states what its section shows: "The app checks every ticket the model cites", or "A verdict stays valid until the diff changes" where a first draft had the slogan "A verdict covers the patch, not the commit". Field Guide's serif italic tail stays off eli25 headings.
 - **Figures.** Pick each one by what it shows, and use the smallest view that makes the point: a call tree for runtime flow, a sequence for messages between parts, a file tree for ownership, a box diagram for the parts of a system, and a before and after or a diff sketch (a call tree, file tree or state with added and removed lines) for a change. A section gets a figure only when a picture makes its point faster than words. Put each figure next to the two or three sentences it supports, inside a `<figure>` element.
   - Draw diagrams as inline SVG with a viewBox about 480 units wide and labels of 13 units or more, so they stay readable on a phone. Lists of steps or cards can be HTML boxes that stack on narrow screens instead.
-  - Set trees and diff sketches in a `<pre>` on the figure panel, with lines under 40 characters.
+  - Set trees and diff sketches in a `<pre>` inside a plate, with lines under 40 characters.
   - Use Mermaid only for a flow with more than four nodes.
 - **Terms.** Gloss each real term in plain words in the sentence that first uses it. Add a glossary only for terms the page uses three or more times.
 - **Misconceptions.** Include one only when engineers really make that mistake, as one sentence beside the mechanism it concerns. Scope notes go in the single "Not in this change" line.
-- **Length.** About 400 words of prose, counting captions but not figure labels, plus about 100 for each extra PR in a stack. When the user asks for detail, write a linked second page, `<slug>-eli25-detail.html`, and keep the first page short.
+- **Length.** About 400 words of prose, counting captions but not figure labels, plus about 100 for each extra PR in a stack. When the user asks for more detail than that, make the long page with visual-explainer and keep this one short.
 - **Ending.** A plan or spike ends with one next action concrete enough to run, then a short list of what is left.
 
 Prose rules:
@@ -49,7 +54,7 @@ Before and after, from `support-report-pr-349-eli25.html`:
 >
 > After. **The model reads the messages, and the app decides what gets posted.** The report reads two things: Jira tickets, and last week's messages from the QA and release Slack channels. Before it reads anything, it checks that every channel exists and that the bot can open it. Then it strips anything that looks like a password or token, keeps only Monday to Sunday, and cuts the pile to a fixed size.
 
-**Done when** the page has its opener, every section of the shape sits under a claim title, and a plan or spike ends on one next action.
+**Done when** the page has its opener, every section sits under a heading that is a plain sentence, and a plan or spike ends on one next action.
 
 ## 3. Build the page
 
