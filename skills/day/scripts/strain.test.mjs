@@ -32,6 +32,7 @@ function machine(outputs) {
   return async (command, args) => {
     const key = [command, ...args].join(" ");
     if (!(key in outputs)) throw new Error(`unexpected command: ${key}`);
+    if (outputs[key] instanceof Error) throw outputs[key];
     return outputs[key];
   };
 }
@@ -72,6 +73,18 @@ test("the strain line appears only under 50 GB free or at memory warning, naming
   for (const { name, freeGb, level, line } of cases) {
     assert.equal(await strain({ platform: "darwin", home: HOME, run: mac({ freeGb, level }) }), line, name);
   }
+});
+
+test("a folder scan that runs out of time still reports the low disk", async () => {
+  const run = machine({
+    [`df -kP ${HOME}`]: df(38),
+    "sysctl -n kern.memorystatus_vm_pressure_level": "1\n",
+    [`du -xkd 2 ${HOME}`]: Object.assign(new Error(`Command failed: du -xkd 2 ${HOME}`), { killed: true, signal: "SIGTERM" }),
+  });
+  assert.equal(
+    await strain({ platform: "darwin", home: HOME, run }),
+    "Strain: 38 GB free on disk, biggest folder unknown (du found no answer in 5 minutes).",
+  );
 });
 
 test("on Linux, memory pressure comes from the share of memory still available", async () => {

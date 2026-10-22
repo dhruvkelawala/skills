@@ -67,8 +67,16 @@ async function memoryPressure(platform, run) {
   throw new Error(`no memory pressure reading on ${platform}`);
 }
 
+// A full disk is when this matters most, so a scan that fails still leaves the free space in the line.
 async function biggestFolder(home, run) {
-  const sizes = (await run("du", ["-xkd", "2", home]))
+  let listing;
+  try {
+    listing = await run("du", ["-xkd", "2", home]);
+  } catch (error) {
+    const reason = error.killed ? `found no answer in ${DU_TIMEOUT_MS / 60000} minutes` : `failed (${error.code ?? error.signal})`;
+    return `folder unknown (du ${reason})`;
+  }
+  const sizes = listing
     .trim()
     .split("\n")
     .map((line) => line.match(/^(\d+)\t(.+)$/))
