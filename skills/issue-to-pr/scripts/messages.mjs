@@ -123,8 +123,6 @@ function stackedOnMismatch(value, record) {
   return new RegExp(`(?:#|/pull/)${predecessor}\\b`).test(value) ? [] : [`\`Stacked on:\` names the predecessor, #${predecessor}`];
 }
 
-// The criteria are the numbered lines under `Acceptance criteria:`; indented lines below each, such as
-// its surface and capture, are details.
 function criteriaOf(record) {
   const lines = record.split("\n");
   const from = lines.findIndex((line) => /^Acceptance criteria:\s*$/.test(line));
@@ -198,8 +196,6 @@ function bubble(kind, message) {
   return `<div class="msg"><div class="kind">${kind}</div><div class="text">${inline(message)}</div></div>`;
 }
 
-// The thread renders markdown; the page keeps the text as written and makes its links and code live.
-// One pass over the raw text, so markup made for one link is never read again as text.
 const INLINE = /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s)]+)|`([^`\n]+)`/g;
 
 function inline(message) {
