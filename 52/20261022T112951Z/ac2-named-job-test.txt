@@ -1,0 +1,23 @@
+# AC2: a test reads skills/models.json and fails when a job a skill names is missing from it
+
+## Before, at base 4a345b2: none, the file and the test are new
+
+## After, at head 121548b
+$ node --test skills/models.test.mjs
+✔ every job a skill names is in models.json (0.822958ms)
+✔ no skill text names a model (1.753167ms)
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+
+## The same test on a scratch copy of skills/, with the verifier job removed from models.json
+$ jq 'del(.jobs.verifier)' skills/models.json > copy/skills/models.json && node --test copy/skills/models.test.mjs
+✖ every job a skill names is in models.json (1.3075ms)
+✔ no skill text names a model (1.535208ms)
+ℹ pass 1
+ℹ fail 1
+  + actual - expected
+  + [
+  +   'ship/SKILL.md: verifier'
+  + ]
+  - []

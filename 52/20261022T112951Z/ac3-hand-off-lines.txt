@@ -1,0 +1,43 @@
+# AC3: every helper hand-off line in the in-scope skills names a job from models.json or says "the thread's model", with no Pi, SumoCode or Claude Code branches
+in-scope: skills/apr/SKILL.md skills/issue-to-pr/SKILL.md skills/issue-to-pr/references skills/ship/SKILL.md skills/how/SKILL.md skills/why/SKILL.md skills/hillclimb/SKILL.md skills/perf/SKILL.md skills/promote skills/verification-skill/SKILL.md skills/idea-foundry
+pattern:  SumoCode|on Pi\b|Pi worker|in Claude Code|on Claude Code|in Codex use|spawn role|implement-(cheap|smart)|`(research|review)` (role|helper)|role `|named role|Codex in the usual case|same family is available
+
+## Before, at base 4a345b2
+$ git grep -nE "$pattern" 4a345b2 -- $in_scope | cut -c1-150
+skills/hillclimb/SKILL.md:24:- A taste score comes from a critic: a helper with the `review` role (see Helpers) that did not make the change and score
+skills/hillclimb/SKILL.md:41:2. Make that one change. Hand it to an `implement-cheap` helper, or an `implement-smart` helper for a hard change (see He
+skills/hillclimb/SKILL.md:78:Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent tool (ge
+skills/how/SKILL.md:25:Do the trace yourself by default. When the question spans several subsystems and the user asks for depth, split it into two to 
+skills/idea-foundry/SKILL.md:16:Every agent in this skill is a helper agent with the `research` role. Hand each one off like this: on Pi or SumoCode s
+skills/idea-foundry/references/agent-prompts.md:3:Fill `{...}` slots. Launch all agents of a stage in one message so they run concurrently. All are he
+skills/issue-to-pr/SKILL.md:27:`/code-review` runs its two axes as helper agents, and stage 6 runs a watcher helper. If this host cannot start helper 
+skills/issue-to-pr/SKILL.md:83:2. **Autoreview, once.** Review `<base_sha>...HEAD` with an engine from a different model family than the one that ran 
+skills/issue-to-pr/SKILL.md:111:1. Hand the watch to a helper agent with the `implement-cheap` role: on Pi or SumoCode spawn role `implement-cheap`; i
+skills/issue-to-pr/references/watcher-hosts.md:3:The watcher is a helper agent with the `implement-cheap` role. It edits files and runs commands in th
+skills/issue-to-pr/references/watcher-hosts.md:7:| Pi or SumoCode | spawn role `implement-cheap`, not visible | passing `worktree: false` |
+skills/perf/SKILL.md:44:Before you remove work, confirm in the source that nothing reads its result. Before you add a cache, name what invalidates it.
+skills/perf/SKILL.md:83:2. Reduce it to a ranked finding: the hot path, the chain that keeps memory alive, or the blocked thread. Hand a large artifac
+skills/perf/SKILL.md:91:Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent tool (general
+skills/promote/references/session-mining.md:49:Read the transcript yourself in one pass by default. When it is too large for one pass, hand it to a he
+skills/ship/SKILL.md:43:2. Spawn a fresh subagent that did not write the code. On SumoCode or Pi use the `review` role, on Claude Code a `general-purp
+skills/verification-skill/SKILL.md:51:2. Read each feature from source. Hand each feature to a helper agent with the `research` role: on Pi or SumoCod
+skills/why/SKILL.md:51:Read [references/sources.md](references/sources.md), then search each source this session can reach: git and PRs, the issue tra
+
+## After, at head 121548b
+$ grep -rnE "$pattern" $in_scope; echo exit $?
+exit 1
+
+$ grep -rnoE "native subagents? on the thread's model|\`(second-opinion|verifier)\` job" $in_scope
+skills/apr/SKILL.md:12:`second-opinion` job
+skills/apr/SKILL.md:25:`second-opinion` job
+skills/issue-to-pr/SKILL.md:83:`second-opinion` job
+skills/issue-to-pr/SKILL.md:111:native subagent on the thread's model
+skills/ship/SKILL.md:43:`verifier` job
+skills/how/SKILL.md:25:native subagent on the thread's model
+skills/why/SKILL.md:51:native subagent on the thread's model
+skills/hillclimb/SKILL.md:78:native subagent on the thread's model
+skills/perf/SKILL.md:91:native subagent on the thread's model
+skills/promote/references/session-mining.md:49:native subagent on the thread's model
+skills/verification-skill/SKILL.md:51:native subagent on the thread's model
+skills/idea-foundry/references/agent-prompts.md:3:native subagents on the thread's model
+skills/idea-foundry/SKILL.md:16:native subagent on the thread's model

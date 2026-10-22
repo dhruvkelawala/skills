@@ -1,0 +1,15 @@
+# AC4: apr's report and PR body still name the engine and model it ran
+
+## Before, at base 4a345b2
+$ git grep -nE 'engine, model|Autoreview command|fallback may change' 4a345b2 -- skills/apr/SKILL.md | cut -c1-200
+skills/apr/SKILL.md:25:2. **Engine and model.** `codex` runs with `--model gpt-6.1-sol --thinking xhigh`; `claude` runs with `--model claude-sonnet-5-5`. A model or effort the user names replaces thes
+skills/apr/SKILL.md:40:2. With `--run-record`, read its `autoreview` line. When the result is clean, its tree equals `git rev-parse HEAD^{tree}`, and `git status --porcelain` prints nothing (no staged
+skills/apr/SKILL.md:98:With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, model and result. With `--skip-review`, leave the l
+skills/apr/SKILL.md:105:- Autoreview command and clean result, the clean result reused from `--run-record`, or `review skipped by --skip-review`
+
+## After, at head 121548b
+$ grep -noE '<the ran-model rule and its two readers>' skills/apr/SKILL.md skills/issue-to-pr/SKILL.md
+skills/apr/SKILL.md:25:Only the helper's own documented account-access retry may change the model. That retry cannot be switched off, and the helper announces it on stderr as `retrying with <model>`. The model it ran is that one when the line appears, and otherwise the one on its `model:` line.
+skills/apr/SKILL.md:98:autoreview line to that engine, the model it ran (step 1) and the result
+skills/apr/SKILL.md:105:Autoreview engine, the model it ran (step 1)
+skills/issue-to-pr/SKILL.md:83:<model it ran>, tree <hash>, clean | <n> fixed`, with the model as `/apr` step 1 defines it
