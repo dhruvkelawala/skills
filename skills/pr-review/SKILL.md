@@ -111,8 +111,8 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 | Word | What you do |
 | --- | --- |
-| `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR |
-| `approve and post` | Post as in step 5, then do the same as `next` |
+| `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR. Nothing is posted. |
+| "post", "approve and post" or "request changes and post" | Post the review as in step 5, then do the same as `next` |
 | `what else` | List the style and smell notes that were only counted |
 | `verify` | Run the verifier on this PR and add its result to the wrap-up |
 | `how` | Explain one part in full with `/how`, or the whole change with `/explain-diff` |
@@ -141,7 +141,7 @@ When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review chec
 
 **Complete when** every earlier finding is marked fixed or still open, and every change since the `seen` ref is in the tour or the rebase line.
 
-## 5. Comments
+## 5. Your word
 
 Keep one ledger per PR. Collect from:
 
@@ -152,18 +152,15 @@ Keep one ledger per PR. Collect from:
 What happens next depends on whose PR it is:
 
 - **The user's own PR** (the PR author equals `gh api user --jq .login`). Each item becomes a fix for the agent that owns the branch, or for you when they ask. Nothing is posted.
-- **Someone else's PR.** Draft one review: a short body plus inline comments anchored on added lines.
+- **Someone else's PR.** Draft one review in the user's voice: a short body, the verifier's result when it ran, and inline comments anchored on added lines.
   - Write like the user: short and direct, with "Nit:", "Non-blocking:" and "Please fix before X is enabled" where they fit.
-  - Show the draft, and post only when they say post: `gh api repos/<owner>/<repo>/pulls/<n>/reviews`, with `commit_id` set to the reviewed head and the event they chose (COMMENT, APPROVE or REQUEST_CHANGES).
-
-Post, approve or request changes only on the user's explicit word for that PR.
+  - Show the draft, and post it only on the user's word for this PR: "post" sends it as COMMENT, "approve and post" as APPROVE, and "request changes and post" as REQUEST_CHANGES, through `gh api repos/<owner>/<repo>/pulls/<n>/reviews` with `commit_id` set to the reviewed head.
 
 **Complete when** every ledger item is fixed, posted, or dropped by the user.
 
 ## Report
 
 First remove the review checkouts of PRs that were approved, merged or closed: `git worktree remove "$HOME/.agent/pr-review/<repo>/<n>"`. Keep the checkout of a PR still waiting on changes, for the return visit.
-
 
 - For each PR: the decision, the posted review URL or "not posted", and the findings still open.
 - For a stack or a queue: how many PRs are done, and what is left.
