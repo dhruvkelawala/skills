@@ -1,6 +1,6 @@
 ---
 name: ticket
-description: Use when the user asks to capture one idea or ask as an issue for later, such as "file this" or "make an issue for that". Files one GitHub or Linear issue from what the thread already knows, labels it ready-for-agent only when its acceptance criteria are clear, and replies with the link. A spec or plan that splits into several tickets goes to to-tickets instead.
+description: Use when the user asks to capture one idea or ask as an issue for later, such as "file this" or "make an issue for that". Files one GitHub or Linear issue from what the thread already knows, labels it ready-for-agent only when its acceptance criteria are clear, and replies with the link. Splitting a spec or plan into several tickets is a different job; for that, point the user to /to-tickets and leave this skill unloaded.
 ---
 
 # Ticket
