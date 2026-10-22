@@ -30,6 +30,25 @@ Resolve reviewers, the request comment and the checks to ignore from the first s
 
 A reviewer is any account that reviews PRs in this repository: a bot such as Codex, CodeRabbit, Copilot or Claude, or a human the user names. The request comment is the exact text that asks a bot to review, such as `@codex review`. Post it at most once per HEAD, and only when the gate says the reviewer has not covered the current HEAD.
 
+## Who hears from you
+
+Bots hear from you without asking: replies to threads where `bot` is true and resolving them, the request comment, commits, pushes, the PR body and opening the PR. Nothing reaches a person in the user's name without the user's word. Draft these and hold them until the user says "post":
+
+- a reply in a thread where `bot` is false, and resolving that thread
+- a PR comment that answers a written review
+- re-requesting a person's review
+
+Keep the held items for a PR in `HELD=~/.agent/pr-watch/<owner>/<repo>/<pr>.held.json`, and hold each one with the script beside the gate. The ids come from the gate's `threads`:
+
+```bash
+node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --thread <id> --reply-to <replyTo> \
+  --seen <lastCommentId> --to <author> --body-file <draft>
+node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --review <id> --to <author> --body-file <draft>
+node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --rerequest <login>
+```
+
+Holding again for the same thread, review or person replaces the earlier draft. Show the user each draft when you hold it. With `--held-file "$HELD"`, the gate stops counting a thread or written review as a repair once its reply is held, and waits at pending with `<n> item(s) to people held until "post"`. A newer comment in a held thread brings the thread back, so read it and hold a new draft.
+
 ## What the gate counts
 
 - **Checks.** When the base branch has required checks, only those block or hold the gate. Other checks appear in `notes` and never block. With no required checks, every check counts, so pass `--ignore-check <name>` for each optional check that should not hold the PR, such as a slow visual recap.
@@ -46,7 +65,7 @@ A reviewer is any account that reviews PRs in this repository: a bot such as Cod
    ```bash
    node "$SKILL_DIR/scripts/pr-gate.mjs" --repo "$OWNER/$REPO" --pr "$PR_NUMBER" \
      --expected-head "$HEAD_SHA" [--reviewer <login>]... [--request-comment "<text>"] \
-     [--ignore-check "<name>"]... --watch --json
+     [--ignore-check "<name>"]... --held-file "$HELD" --watch --json
    ```
 
    Exit `0` is ready, `1` is pending or timed out, and `2` is blocked. Each JSON line is `{ state, reasons, threads, notes }`.
@@ -55,8 +74,9 @@ A reviewer is any account that reviews PRs in this repository: a bot such as Cod
 5. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
    - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
-   - **Written review** (`kind: "review"`). Read it, fix each point or decide against it, then post one PR comment with `gh pr comment` (REST: as in step 3) that answers it point by point.
-   - **Changes requested by a human.** Address the review, then re-request it with `gh pr edit --add-reviewer` (REST: `gh api -X POST repos/{owner}/{repo}/pulls/<n>/requested_reviewers -f "reviewers[]=<login>"`). Leave the human's review in place.
+   - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request, then hold a reply that names the fix commit. For a question, or a request that is unclear or that you would decline, hold a reply that answers or asks, and change no code. Leave the thread unresolved.
+   - **Written review** (`kind: "review"`). Read it, fix each clear point, then hold one PR comment that answers it point by point.
+   - **Changes requested by a person.** Fix their points as above, then hold a re-request. Leave their review in place. The gate shows CHANGES_REQUESTED until they review again, so it is no longer a repair once the re-request is held or sent.
    - **Merge conflict or wrong base.** Rebase onto the live base, rerun the project's tests, and push with `--force-with-lease`.
    - **Draft, closed, or mismatched HEAD.** Stop and report, because these are not repairs.
 6. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Return to step 1 with the new HEAD.

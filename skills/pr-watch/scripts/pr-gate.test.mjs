@@ -199,16 +199,37 @@ test("blocked: review decision CHANGES_REQUESTED", () => {
 
 // --- review threads ---------------------------------------------------------
 
-test("blocked: unresolved thread is reported with path, line, author, body, and whether a bot wrote it", () => {
+test("blocked: unresolved thread is reported with path, line, author, body, whether a bot wrote it, and the ids a reply needs", () => {
   const result = evaluateGate(baseSnapshot({
     reviewThreads: [
-      { isResolved: false, isOutdated: false, path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" },
-      { isResolved: true, isOutdated: false, path: "src/b.ts", line: 3, author: BOT, body: "resolved" },
-      { isResolved: false, isOutdated: true, path: "src/c.ts", line: 9, author: BOT, body: "outdated" },
+      { id: "PRRT_a", replyTo: 101, lastCommentId: 102, isResolved: false, isOutdated: false, path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" },
+      { id: "PRRT_b", isResolved: true, isOutdated: false, path: "src/b.ts", line: 3, author: BOT, body: "resolved" },
+      { id: "PRRT_c", isResolved: false, isOutdated: true, path: "src/c.ts", line: 9, author: BOT, body: "outdated" },
     ],
   }));
   assert.equal(result.state, "blocked");
-  assert.deepEqual(result.threads, [{ path: "src/a.ts", line: 12, author: BOT, bot: true, body: "Null check missing" }]);
+  assert.deepEqual(result.threads, [{
+    id: "PRRT_a", replyTo: 101, lastCommentId: 102, path: "src/a.ts", line: 12, author: BOT, bot: true, body: "Null check missing",
+  }]);
+});
+
+// --- replies held until "post" ------------------------------------------------
+
+const personThread = (overrides = {}) => ({
+  id: "PRRT_p", replyTo: 201, lastCommentId: 201, isResolved: false, isOutdated: false, path: "src/join.ts", line: 40,
+  author: "teammate", authorType: "User", lastAuthor: "teammate", lastAuthorType: "User", body: "Rename this to joinAll", ...overrides,
+});
+const heldReply = { kind: "reply", thread: "PRRT_p", replyTo: 201, seen: 201, to: "teammate", body: "Renamed in 1a2b3c4." };
+
+test("pending: a person's thread whose reply is held waits on post instead of blocking", () => {
+  const result = evaluateGate(baseSnapshot({ reviewThreads: [personThread()] }), { held: [heldReply] });
+  assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
+});
+
+test("blocked: a held reply stops covering the thread once the person comments again", () => {
+  const result = evaluateGate(baseSnapshot({ reviewThreads: [personThread({ lastCommentId: 202 })] }), { held: [heldReply] });
+  assert.equal(result.state, "blocked");
+  assert.deepEqual(result.threads.map((t) => t.id), ["PRRT_p"]);
 });
 
 // A thread is a bot's only while no person has spoken in it: a person who opens it or answers the
@@ -245,7 +266,7 @@ const PR_AUTHOR = "dhruv";
 const HUMAN = "teammate";
 const LATER = "2026-08-28T21:00:00Z";
 const humanReview = (overrides = {}) => ({
-  author: HUMAN, authorType: "User", state: "COMMENTED", commitId: HEAD,
+  id: "PRR_h", author: HUMAN, authorType: "User", state: "COMMENTED", commitId: HEAD,
   submittedAt: REVIEWED_AT, body: "The joiner drops messages sent before the reply.", ...overrides,
 });
 const withReviews = (reviews, extra = {}) => baseSnapshot({
@@ -259,9 +280,15 @@ test("blocked: an unanswered written review from a person is listed with its tex
   assert.equal(result.state, "blocked");
   assert.ok(result.reasons.some((r) => r.includes(HUMAN)));
   assert.deepEqual(result.threads, [{
-    kind: "review", path: null, line: null, author: HUMAN, submittedAt: REVIEWED_AT,
+    kind: "review", id: "PRR_h", path: null, line: null, author: HUMAN, submittedAt: REVIEWED_AT,
     body: "The joiner drops messages sent before the reply.",
   }]);
+});
+
+test("pending: a written review whose answer is held waits on post instead of blocking", () => {
+  const held = [{ kind: "comment", review: "PRR_h", to: HUMAN, body: "Fixed in 1a2b3c4." }];
+  const result = evaluateGate(withReviews([humanReview()]), { held });
+  assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
 });
 
 test("ready: a later PR comment from the PR author answers the review", () => {
@@ -470,13 +497,13 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
               } }] },
               reviewThreads: {
                 nodes: [{
-                  isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
-                  comments: { nodes: [{ author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
-                  latest: { nodes: [{ author: { __typename: "User", login: "teammate" } }] },
+                  id: "PRRT_a", isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
+                  comments: { nodes: [{ databaseId: 101, author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
+                  latest: { nodes: [{ databaseId: 102, author: { __typename: "User", login: "teammate" } }] },
                 }],
                 pageInfo: { hasNextPage: false },
               },
-              reviews: { nodes: [{ author: { __typename: "Bot", login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary", commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
+              reviews: { nodes: [{ id: "PRR_b", author: { __typename: "Bot", login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary", commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
               comments: { nodes: [{ author: { login: "human" }, body: "@review-bot review", createdAt: REQUESTED_AT }], pageInfo: { hasNextPage: false } },
               reactions: { nodes: [{ user: { login: BOT }, content: "THUMBS_UP", createdAt: REVIEWED_AT }], pageInfo: { hasNextPage: false } },
             },
@@ -497,9 +524,9 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
     { name: "ci", status: "COMPLETED", conclusion: "SUCCESS", required: true },
     { name: "legacy", status: "IN_PROGRESS", conclusion: null, required: false },
   ]);
-  assert.deepEqual(snapshot.reviews, [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary" }]);
+  assert.deepEqual(snapshot.reviews, [{ id: "PRR_b", author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary" }]);
   assert.deepEqual(snapshot.reviewThreads, [{
-    isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
+    id: "PRRT_a", replyTo: 101, lastCommentId: 102, isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
     author: "review-bot", authorType: "Bot", lastAuthor: "teammate", lastAuthorType: "User", body: "fix me",
   }]);
   assert.deepEqual(snapshot.reactions, [{ author: BOT, content: "+1", createdAt: REVIEWED_AT }]);
@@ -593,7 +620,7 @@ test("GraphQL quota spent: REST still shows a failed required check and an unans
     ] },
     "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
     "repos/o/r/pulls/7/reviews": [{
-      user: { login: HUMAN, type: "User" }, state: "COMMENTED", commit_id: HEAD,
+      node_id: "PRR_h", user: { login: HUMAN, type: "User" }, state: "COMMENTED", commit_id: HEAD,
       submitted_at: REVIEWED_AT, body: "The joiner drops messages sent before the reply.",
     }],
   }));
@@ -607,6 +634,7 @@ test("GraphQL quota spent: REST still shows a failed required check and an unans
   ]);
   assert.deepEqual(result.notes, ['Check "Visual Recap" concluded FAILURE (not required)']);
   assert.equal(result.threads[0].kind, "review");
+  assert.equal(result.threads[0].id, "PRR_h", "the same id GraphQL gives, so a held answer still covers it");
 });
 
 for (const [failure, httpError] of [

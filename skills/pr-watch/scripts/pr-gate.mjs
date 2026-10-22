@@ -15,10 +15,11 @@
 //                    headRefOid, expectedHead, headCommittedAt, author }
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
-//   reviewThreads: [{ isResolved, isOutdated, path, line, author, authorType, lastAuthor,
-//                     lastAuthorType, body }]   // author is the first comment's, lastAuthor the newest's
+//   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
+//                     authorType, lastAuthor, lastAuthorType, body }]
+//                  // author and replyTo are the first comment's, lastAuthor and lastCommentId the newest's
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
-//   reviews:       [{ author, authorType, commitId, state, submittedAt, body }]
+//   reviews:       [{ id, author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
 //   reactions:     [{ author, content, createdAt }]   // PR-level reactions
 //
@@ -31,11 +32,13 @@
 //                   reviewer evidence older than the newest such comment is stale
 //   allowNoChecks:  treat a HEAD with zero check/status contexts as clean
 //   ignoreChecks:   check names (case-insensitive) left out of the gate entirely
+//   held:           items held.mjs keeps until the user says "post". They hold the gate at
+//                   pending, and the threads and written reviews they answer stop blocking.
 //
 // CLI: node pr-gate.mjs --repo owner/name --pr N --expected-head SHA
 //        [--reviewer LOGIN]... [--request-comment TEXT] [--allow-no-checks]
-//        [--ignore-check NAME]... [--json] [--watch] [--timeout-seconds N]
-//        [--interval-seconds N]
+//        [--ignore-check NAME]... [--held-file PATH] [--json] [--watch]
+//        [--timeout-seconds N] [--interval-seconds N]
 // Exit codes: 0 ready, 1 pending/timeout, 2 blocked/invalid.
 // Reads GitHub through the `gh` CLI only (execFile, never a shell); never mutates GitHub.
 // GraphQL is the first try. When the account's GraphQL quota is spent, the same PR data comes
@@ -46,6 +49,8 @@ import fs from "node:fs";
 import process from "node:process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+
+import { readHeld } from "./held.mjs";
 
 const execFileP = promisify(execFile);
 
@@ -88,9 +93,13 @@ export function evaluateGate(snapshot, options = {}) {
   if (snapshot?.truncated) pending.push("GitHub collections were truncated; readiness cannot be proven");
   if (pr.reviewDecision === "CHANGES_REQUESTED") blocked.push("Review decision is CHANGES_REQUESTED");
 
+  const held = options.held ?? [];
   const activeThreads = reviewThreads
-    .filter((t) => !t.isResolved && !t.isOutdated)
+    .filter((t) => !t.isResolved && !t.isOutdated && !heldThread(held, t))
     .map((t) => ({
+      id: t.id ?? null,
+      replyTo: t.replyTo ?? null,
+      lastCommentId: t.lastCommentId ?? null,
       path: t.path ?? null,
       line: t.line ?? null,
       author: t.author ?? null,
@@ -102,11 +111,13 @@ export function evaluateGate(snapshot, options = {}) {
   }
   if (snapshot?.threadsUnknown) pending.push(`review threads unknown: ${snapshot.threadsUnknown}`);
 
-  const unanswered = unansweredReviews(snapshot);
+  const unanswered = unansweredReviews(snapshot)
+    .filter((review) => !held.some((item) => item.kind === "comment" && item.review === review.id));
   for (const review of unanswered) {
     blocked.push(`Written review from ${review.author} at ${review.submittedAt} has no reply`);
     activeThreads.push({
       kind: "review",
+      id: review.id ?? null,
       path: null,
       line: null,
       author: review.author,
@@ -114,6 +125,8 @@ export function evaluateGate(snapshot, options = {}) {
       body: truncate(review.body),
     });
   }
+
+  if (held.length > 0) pending.push(`${held.length} item(s) to people held until "post"`);
 
   const notes = [];
   const ignored = new Set((options.ignoreChecks ?? []).map((name) => String(name).toLowerCase()));
@@ -205,6 +218,11 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
   return { pending: `${label} has not reviewed the current HEAD` };
 }
 
+// A held reply covers its thread until someone comments after the draft, which the reply has not seen.
+function heldThread(held, thread) {
+  return held.some((item) => item.kind === "reply" && item.thread === thread.id && item.seen === thread.lastCommentId);
+}
+
 function isBot(login, type) {
   return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
 }
@@ -257,6 +275,7 @@ function usage() {
     "  --request-comment TEXT   Comment text used to request a review; older reviewer evidence is stale",
     "  --allow-no-checks        A HEAD with no CI contexts counts as clean",
     "  --ignore-check NAME      Leave a named check out of the gate (repeatable, case-insensitive)",
+    "  --held-file PATH         Items held until \"post\" (held.mjs); what they answer stops blocking",
     "  --json                   Print { state, reasons, threads } JSON",
     "  --watch                  Poll until blocked or 3 unchanged clean observations (default 30 min)",
     "  --timeout-seconds N      Watch deadline in seconds (default 1800)",
@@ -297,6 +316,7 @@ export function parseArgs(argv) {
       case "--request-comment": args.requestComment = value(arg); break;
       case "--allow-no-checks": args.allowNoChecks = true; break;
       case "--ignore-check": args.ignoreChecks.push(value(arg)); break;
+      case "--held-file": args.heldFile = value(arg); break;
       case "--json": args.json = true; break;
       case "--watch": args.watch = true; break;
       case "--timeout-seconds": args.timeoutSeconds = positiveInt(arg); break;
@@ -336,13 +356,13 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
       } } }
       reviewThreads(first:100){
         nodes{
-          isResolved isOutdated path line
-          comments(first:1){ nodes{ author{ __typename login } body } }
-          latest: comments(last:1){ nodes{ author{ __typename login } } }
+          id isResolved isOutdated path line
+          comments(first:1){ nodes{ databaseId author{ __typename login } body } }
+          latest: comments(last:1){ nodes{ databaseId author{ __typename login } } }
         }
         pageInfo{ hasNextPage }
       }
-      reviews(first:100){ nodes{ author{ __typename login } state submittedAt body commit{ oid } } pageInfo{ hasNextPage } }
+      reviews(first:100){ nodes{ id author{ __typename login } state submittedAt body commit{ oid } } pageInfo{ hasNextPage } }
       comments(first:100){ nodes{ author{ login } body createdAt } pageInfo{ hasNextPage } }
       reactions(first:100){ nodes{ user{ login } content createdAt } pageInfo{ hasNextPage } }
     }
@@ -430,6 +450,9 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
       const first = t.comments?.nodes?.[0];
       const last = t.latest?.nodes?.[0];
       return {
+        id: t.id,
+        replyTo: first?.databaseId ?? null,
+        lastCommentId: last?.databaseId ?? null,
         isResolved: t.isResolved,
         isOutdated: t.isOutdated,
         path: t.path ?? null,
@@ -442,6 +465,7 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
       };
     }),
     reviews: (pr.reviews?.nodes ?? []).map((r) => ({
+      id: r.id,
       author: r.author?.login ?? "",
       authorType: r.author?.__typename ?? null,
       commitId: r.commit?.oid ?? "",
@@ -488,6 +512,7 @@ async function readRest({ owner, name }, prNumber, runGh) {
     reviewThreads: [],
     threadsUnknown: "GraphQL quota",
     reviews: reviews.map((r) => ({
+      id: r.node_id,
       author: r.user?.login ?? "",
       authorType: r.user?.type ?? null,
       commitId: r.commit_id ?? "",
@@ -637,6 +662,7 @@ async function main(argv) {
     requestComment: args.requestComment,
     allowNoChecks: args.allowNoChecks,
     ignoreChecks: args.ignoreChecks,
+    held: args.heldFile ? readHeld(args.heldFile) : [],
   };
   const loadSnapshot = async () => {
     const snapshot = await fetchSnapshot(repo, args.pr);
