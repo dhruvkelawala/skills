@@ -5,8 +5,9 @@ description: Use when the user invokes /issue-to-pr with a GitHub issue, Linear 
 
 # Issue to PR
 
-Invoke as `/issue-to-pr <issue number | URL | Linear ticket> [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
+Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
 
+- Without a work item, the build starts from this conversation. A plan file, such as one `improve` wrote, starts it from that plan. Stage 1 files either one as an issue through `ticket`, then builds that issue.
 - `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
 - `--merge` lands the PR in stage 7 through the ship skill: an independent `ship verify`, then `ship land`. A stacked layer lands only once it is the bottom of its stack.
 - `--max-repairs` sets the repair budget. The default is 10.
