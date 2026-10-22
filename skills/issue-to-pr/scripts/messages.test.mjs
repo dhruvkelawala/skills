@@ -18,7 +18,7 @@ const CRITERIA = [
 function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const record = (issue, { predecessor } = {}) => {
+  const record = (issue, { predecessor, criteria = CRITERIA } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
@@ -29,7 +29,7 @@ function runRecords(t) {
       "## Contract",
       "",
       "Acceptance criteria:",
-      ...CRITERIA.flatMap((criterion, i) => [`${i + 1}. ${criterion}`, "   surface: web. capture: a still of the results screen."]),
+      ...criteria.flatMap((criterion, i) => [`${i + 1}. ${criterion}`, "   surface: web. capture: a still of the results screen."]),
       "",
       "Human gate: none.",
       "",
@@ -96,6 +96,12 @@ test("a plan must list each criterion once, in any build order", (t) => {
   saved("brief", path, brief({ plan: [CRITERIA[1], CRITERIA[0]] }));
 });
 
+test("a plan quotes a criterion word for word, even one that names a local path or localhost", (t) => {
+  const { record, saved } = runRecords(t);
+  const criteria = ["The audit lists each worktree under ~/.t3/worktrees.", "No link in the answer points at localhost."];
+  saved("brief", record(7, { criteria }), brief({ plan: criteria }));
+});
+
 test("a brief needs its heading, a short 'What it's about' and a Stacked on line that fits the record", (t) => {
   const { record, refused } = runRecords(t);
   refused("brief", record(7), brief({ building: "Score on the results screen" }), /Building #<n>: <issue title>/);
@@ -140,6 +146,8 @@ test("a recap leads with the result, has its five lines in order, and links noth
     refused("recap", path, recap({ lines: RECAP_LINES.map((line) => (line.includes("Evidence:") ? evidence : line)) }), /local/);
   }
   saved("recap", path, recap());
+  const prose = "- Couldn't check: the localhost preview, which a phone can't open.";
+  saved("recap", path, recap({ lines: RECAP_LINES.map((line) => (line.includes("Couldn't check:") ? prose : line)), signOff: "📵 No localhost on a phone" }));
 });
 
 test("the taste-check page shows each record's latest brief and recap, in the order given", (t) => {

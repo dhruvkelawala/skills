@@ -25,7 +25,7 @@ const RECENT_SIGN_OFFS = 10;
 const SIGN_OFF_WORDS = 12;
 // Saved as `## Brief, <ISO time>` with the message in a four-backtick fence, so a message may hold ```.
 const SAVED = /^## (Brief|Recap), (\S+)\n\n````text\n([\s\S]*?)\n````$/gm;
-const LOCAL = /\blocalhost\b|\b127\.0\.0\.1\b|\bfile:\/\/|(?:^|[\s(<"'`])(?:~\/|\/(?:Users|home|tmp|private|var|Volumes)\/)/;
+const LOCAL_LINK = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1)\b|\blocalhost:\d|\bfile:\/\/|(?:^|[\s(<"'`])(?:~\/|\/(?:Users|home|tmp|private|var|Volumes)\/)/;
 const INSTRUCTION = /(?:^|\s)\/[a-z]|\b(?:reply|redirect)\b/i;
 
 function briefProblems(lines, record) {
@@ -65,6 +65,7 @@ function recapProblems(message) {
   if (present.some(({ at }, i) => i > 0 && at < present[i - 1].at)) {
     problems.push(`the recap's lines go in this order: ${RECAP_LINES.join(" ")}`);
   }
+  if (lines.some((line) => LOCAL_LINK.test(line))) problems.push("links must open in T3: no local paths, file:// or localhost");
   return problems;
 }
 
@@ -213,7 +214,6 @@ function save(kind, record) {
   const problems = [
     ...(kind === "brief" ? briefProblems(lines, readFileSync(record, "utf8")) : recapProblems(lines)),
     ...signOffProblems(lines, recentSignOffs(record)),
-    ...(lines.some((line) => LOCAL.test(line)) ? ["links must open in T3: no local paths, file:// or localhost"] : []),
   ];
   if (problems.length) {
     console.error(`${kind} not saved:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
