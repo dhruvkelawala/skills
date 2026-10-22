@@ -1,4 +1,4 @@
 interface:
   display_name: "PR Watch"
-  short_description: "Poll a PR until CI and review agents are clean"
-  default_prompt: "Use $pr-watch to poll this PR until checks are green and every review thread is addressed, repairing findings as needed."
+  short_description: "Watch a PR until CI and reviewers are clean, holding replies to people until post"
+  default_prompt: "Use $pr-watch to watch this PR until checks are green and every review thread is addressed, repairing findings and holding replies to people until I say post."

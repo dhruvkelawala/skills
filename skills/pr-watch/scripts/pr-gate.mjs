@@ -4,36 +4,47 @@
 // Public seam: evaluateGate(snapshot, options) -> { state, reasons, threads, notes? }
 //   state:   "ready" | "pending" | "blocked"
 //   reasons: human-readable strings explaining a non-ready state
-//   threads: what a repair must address: unresolved, non-outdated review threads,
-//            and unanswered written reviews from people (marked kind: "review")
+//   threads: what a repair must address: unresolved review threads that are not outdated,
+//            or are a person's and not yet answered by the PR author, and unanswered written
+//            reviews from people (marked kind: "review"). A thread's `bot` is true while no
+//            person has spoken in it.
 //   notes:   present only when non-empty; checks that are not required and did not
-//            pass. Informational: they never change the state.
+//            pass, and a repository with no CI. Informational: they never change the state.
 //
 // Snapshot shape (built by fetchSnapshot, or handed in by tests):
 //   pr:            { state, isDraft, mergeable, mergeStateStatus, reviewDecision,
-//                    headRefOid, expectedHead, headCommittedAt, author }
+//                    headRefOid, expectedHead, headCommittedAt, author, baseRefName }
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
-//   reviewThreads: [{ isResolved, isOutdated, path, line, author, body }]
+//   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
+//                     authorType, body, lastAuthor, commenters: [{ login, type }], commentersTruncated }]
+//                  // author, body and replyTo are the first comment's, lastCommentId and lastAuthor the newest's,
+//                  // and commenters lists the authors of the first 100 comments in order
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
-//   reviews:       [{ author, authorType, commitId, state, submittedAt, body }]
+//   ci:            { workflows, requiredChecks, results }, only for a head with no check runs or
+//                  statuses: the repository's active workflows, the checks its base branch requires,
+//                  and the results posted on the base branch's head and the last merged PR's head
+//   reviews:       [{ id, author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
 //   reactions:     [{ author, content, createdAt }]   // PR-level reactions
 //
 // Checks: when any check on the HEAD is required by the base branch, only required
-// checks hold or block the gate. When none is marked required, every check counts.
+// checks hold or block the gate. When none is marked required, every check counts. A HEAD
+// with no checks waits for them, unless `ci` shows the repository has no CI at all.
 //
 // Options:
 //   reviewers:      logins (with or without "[bot]") that must review the exact HEAD
 //   requestComment: text the orchestrator posts to ask a reviewer for a pass;
 //                   reviewer evidence older than the newest such comment is stale
-//   allowNoChecks:  treat a HEAD with zero check/status contexts as clean
+//   allowNoChecks:  treat a HEAD with zero check/status contexts as clean, even where CI exists
 //   ignoreChecks:   check names (case-insensitive) left out of the gate entirely
+//   held:           items held.mjs keeps until the user says "post". They hold the gate at
+//                   pending, and the threads and written reviews they answer stop blocking.
 //
 // CLI: node pr-gate.mjs --repo owner/name --pr N --expected-head SHA
 //        [--reviewer LOGIN]... [--request-comment TEXT] [--allow-no-checks]
-//        [--ignore-check NAME]... [--json] [--watch] [--timeout-seconds N]
-//        [--interval-seconds N]
+//        [--ignore-check NAME]... [--held-file PATH] [--json] [--watch]
+//        [--timeout-seconds N] [--interval-seconds N]
 // Exit codes: 0 ready, 1 pending/timeout, 2 blocked/invalid.
 // Reads GitHub through the `gh` CLI only (execFile, never a shell); never mutates GitHub.
 // GraphQL is the first try. When the account's GraphQL quota is spent, the same PR data comes
@@ -44,6 +55,8 @@ import fs from "node:fs";
 import process from "node:process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+
+import { coversReview, coversThread, readHeld } from "./held.mjs";
 
 const execFileP = promisify(execFile);
 
@@ -86,12 +99,18 @@ export function evaluateGate(snapshot, options = {}) {
   if (snapshot?.truncated) pending.push("GitHub collections were truncated; readiness cannot be proven");
   if (pr.reviewDecision === "CHANGES_REQUESTED") blocked.push("Review decision is CHANGES_REQUESTED");
 
+  const held = options.held ?? [];
   const activeThreads = reviewThreads
-    .filter((t) => !t.isResolved && !t.isOutdated)
+    .filter((t) => !t.isResolved && (!t.isOutdated || awaitsAnswer(t, pr.author)))
+    .filter((t) => !held.some((item) => coversThread(item, t)))
     .map((t) => ({
+      id: t.id ?? null,
+      replyTo: t.replyTo ?? null,
+      lastCommentId: t.lastCommentId ?? null,
       path: t.path ?? null,
       line: t.line ?? null,
       author: t.author ?? null,
+      bot: isBotThread(t, pr.author),
       body: truncate(t.body),
     }));
   if (activeThreads.length > 0) {
@@ -99,11 +118,13 @@ export function evaluateGate(snapshot, options = {}) {
   }
   if (snapshot?.threadsUnknown) pending.push(`review threads unknown: ${snapshot.threadsUnknown}`);
 
-  const unanswered = unansweredReviews(snapshot);
+  const unanswered = unansweredReviews(snapshot)
+    .filter((review) => !held.some((item) => coversReview(item, review)));
   for (const review of unanswered) {
     blocked.push(`Written review from ${review.author} at ${review.submittedAt} has no reply`);
     activeThreads.push({
       kind: "review",
+      id: review.id ?? null,
       path: null,
       line: null,
       author: review.author,
@@ -112,12 +133,15 @@ export function evaluateGate(snapshot, options = {}) {
     });
   }
 
+  if (held.length > 0) pending.push(`${held.length} item(s) to people held until "post"`);
+
   const notes = [];
   const ignored = new Set((options.ignoreChecks ?? []).map((name) => String(name).toLowerCase()));
   const counted = checkRuns.filter((run) => !ignored.has(String(run.name).toLowerCase()));
   const requiredOnly = counted.some((run) => run.required === true);
   if (checkRuns.length === 0) {
-    if (!options.allowNoChecks) pending.push("No check runs found on head commit");
+    if (hasNoCi(snapshot?.ci)) notes.push("No CI in this repository, so there are no checks to wait on");
+    else if (!options.allowNoChecks) pending.push("No check runs found on head commit");
   } else if (counted.length === 0) {
     if (!options.allowNoChecks) pending.push("Every check on the head commit is ignored");
   } else {
@@ -153,10 +177,9 @@ function unansweredReviews(snapshot) {
   const reviews = snapshot?.reviews ?? [];
   const comments = snapshot?.comments ?? [];
   const hasText = (item) => String(item.body ?? "").trim() !== "";
-  const isBot = (review) => review.authorType === "Bot" || /\[bot\]$/i.test(String(review.author ?? ""));
   return reviews.filter((review) => {
     if (review.state !== "COMMENTED" || !hasText(review)) return false;
-    if (isBot(review) || sameLogin(review.author, prAuthor)) return false;
+    if (isBot(review.author, review.authorType) || sameLogin(review.author, prAuthor)) return false;
     const after = timestamp(review.submittedAt);
     const authorComment = comments.some((c) => sameLogin(c.author, prAuthor) && timestamp(c.createdAt) > after);
     const laterReview = reviews.some((other) => other !== review
@@ -203,6 +226,26 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
   return { pending: `${label} has not reviewed the current HEAD` };
 }
 
+function hasNoCi(ci) {
+  return Boolean(ci) && ci.workflows === 0 && ci.requiredChecks === 0 && ci.results === 0;
+}
+
+function isBot(login, type) {
+  return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
+}
+
+// A fix often outdates a person's thread before its reply is drafted, so an outdated thread
+// still counts until the PR author answers it.
+function awaitsAnswer(thread, prAuthor) {
+  return !isBotThread(thread, prAuthor) && !sameLogin(thread.lastAuthor, prAuthor);
+}
+
+function isBotThread(thread, prAuthor) {
+  return isBot(thread.author, thread.authorType)
+    && !thread.commentersTruncated
+    && (thread.commenters ?? []).every((c) => isBot(c.login, c.type) || sameLogin(c.login, prAuthor));
+}
+
 function sameLogin(a, b) {
   const norm = (v) => String(v ?? "").toLowerCase().replace(/\[bot\]$/, "");
   return norm(a) !== "" && norm(a) === norm(b);
@@ -243,6 +286,7 @@ function usage() {
     "  --request-comment TEXT   Comment text used to request a review; older reviewer evidence is stale",
     "  --allow-no-checks        A HEAD with no CI contexts counts as clean",
     "  --ignore-check NAME      Leave a named check out of the gate (repeatable, case-insensitive)",
+    "  --held-file PATH         Items held until \"post\" (held.mjs); what they answer stops blocking",
     "  --json                   Print { state, reasons, threads } JSON",
     "  --watch                  Poll until blocked or 3 unchanged clean observations (default 30 min)",
     "  --timeout-seconds N      Watch deadline in seconds (default 1800)",
@@ -283,6 +327,7 @@ export function parseArgs(argv) {
       case "--request-comment": args.requestComment = value(arg); break;
       case "--allow-no-checks": args.allowNoChecks = true; break;
       case "--ignore-check": args.ignoreChecks.push(value(arg)); break;
+      case "--held-file": args.heldFile = value(arg); break;
       case "--json": args.json = true; break;
       case "--watch": args.watch = true; break;
       case "--timeout-seconds": args.timeoutSeconds = positiveInt(arg); break;
@@ -308,7 +353,7 @@ async function gh(args) {
 const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){
     pullRequest(number:$number){
-      state isDraft mergeable mergeStateStatus reviewDecision headRefOid
+      state isDraft mergeable mergeStateStatus reviewDecision headRefOid baseRefName
       author{ login }
       commits(last:1){ nodes{ commit{ oid committedDate
         statusCheckRollup{ contexts(first:100){
@@ -322,12 +367,14 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
       } } }
       reviewThreads(first:100){
         nodes{
-          isResolved isOutdated path line
-          comments(first:1){ nodes{ author{ login } body } }
+          id isResolved isOutdated path line
+          opening: comments(first:1){ nodes{ databaseId author{ __typename login } body } }
+          last: comments(last:1){ nodes{ databaseId author{ login } } }
+          comments(first:100){ nodes{ author{ __typename login } } pageInfo{ hasNextPage } }
         }
         pageInfo{ hasNextPage }
       }
-      reviews(first:100){ nodes{ author{ __typename login } state submittedAt body commit{ oid } } pageInfo{ hasNextPage } }
+      reviews(first:100){ nodes{ id author{ __typename login } state submittedAt body commit{ oid } } pageInfo{ hasNextPage } }
       comments(first:100){ nodes{ author{ login } body createdAt } pageInfo{ hasNextPage } }
       reactions(first:100){ nodes{ user{ login } content createdAt } pageInfo{ hasNextPage } }
     }
@@ -356,24 +403,23 @@ export async function fetchSnapshot(repo, prNumber, runGh = gh) {
   truncated ||= Number(statusesData?.total_count ?? 0) > (statusesData?.statuses ?? []).length;
   if (truncated) console.error("warning: paginated GitHub data truncated at 100 entries per collection");
 
-  return {
-    ...snapshot,
-    checkRuns: [
-      ...(checksData?.check_runs ?? []).map((c) => ({
-        name: c.name,
-        status: String(c.status ?? "").toUpperCase(),
-        conclusion: c.conclusion == null ? null : String(c.conclusion).toUpperCase(),
-        required: requiredNames.has(c.name),
-      })),
-      ...(statusesData?.statuses ?? []).map((s) => ({
-        name: s.context,
-        status: s.state === "pending" ? "IN_PROGRESS" : "COMPLETED",
-        conclusion: s.state === "success" ? "SUCCESS" : s.state === "pending" ? null : "FAILURE",
-        required: requiredNames.has(s.context),
-      })),
-    ],
-    truncated,
-  };
+  const checkRuns = [
+    ...(checksData?.check_runs ?? []).map((c) => ({
+      name: c.name,
+      status: String(c.status ?? "").toUpperCase(),
+      conclusion: c.conclusion == null ? null : String(c.conclusion).toUpperCase(),
+      required: requiredNames.has(c.name),
+    })),
+    ...(statusesData?.statuses ?? []).map((s) => ({
+      name: s.context,
+      status: s.state === "pending" ? "IN_PROGRESS" : "COMPLETED",
+      conclusion: s.state === "success" ? "SUCCESS" : s.state === "pending" ? null : "FAILURE",
+      required: requiredNames.has(s.context),
+    })),
+  ];
+  // A failed read leaves `ci` out, and the gate keeps waiting for checks.
+  const ci = checkRuns.length === 0 ? await ciSigns(repo, snapshot.pr.baseRefName, runGh).catch(() => null) : null;
+  return { ...snapshot, checkRuns, truncated, ...(ci ? { ci } : {}) };
 }
 
 async function readGraphql({ owner, name }, prNumber, runGh) {
@@ -400,6 +446,7 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
       headRefOid: head,
       headCommittedAt: headCommit?.committedDate ?? null,
       author: pr.author?.login ?? null,
+      baseRefName: pr.baseRefName ?? null,
     },
     requiredNames: new Set((contexts?.nodes ?? [])
       .filter((ctx) => ctx?.isRequired === true)
@@ -410,19 +457,28 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
         || pr.comments?.pageInfo?.hasNextPage
         || pr.reactions?.pageInfo?.hasNextPage
         || contexts?.pageInfo?.hasNextPage
+        || pr.reviewThreads?.nodes?.some((t) => t.comments?.pageInfo?.hasNextPage)
     ),
     reviewThreads: (pr.reviewThreads?.nodes ?? []).map((t) => {
-      const first = t.comments?.nodes?.[0];
+      const first = t.opening?.nodes?.[0];
       return {
+        id: t.id,
+        replyTo: first?.databaseId ?? null,
+        lastCommentId: t.last?.nodes?.[0]?.databaseId ?? null,
         isResolved: t.isResolved,
         isOutdated: t.isOutdated,
         path: t.path ?? null,
         line: t.line ?? null,
         author: first?.author?.login ?? null,
+        authorType: first?.author?.__typename ?? null,
         body: first?.body ?? "",
+        lastAuthor: t.last?.nodes?.[0]?.author?.login ?? null,
+        commenters: (t.comments?.nodes ?? []).map((c) => ({ login: c.author?.login ?? null, type: c.author?.__typename ?? null })),
+        commentersTruncated: Boolean(t.comments?.pageInfo?.hasNextPage),
       };
     }),
     reviews: (pr.reviews?.nodes ?? []).map((r) => ({
+      id: r.id,
       author: r.author?.login ?? "",
       authorType: r.author?.__typename ?? null,
       commitId: r.commit?.oid ?? "",
@@ -463,12 +519,14 @@ async function readRest({ owner, name }, prNumber, runGh) {
       headRefOid: head,
       headCommittedAt: commit?.committer?.date ?? null,
       author: pr.user?.login ?? null,
+      baseRefName: pr.base?.ref ?? null,
     },
     requiredNames: await requiredChecks(repo, pr.base?.ref, runGh),
     truncated: [reviews, comments, reactions].some((list) => list.length >= 100),
     reviewThreads: [],
     threadsUnknown: "GraphQL quota",
     reviews: reviews.map((r) => ({
+      id: r.node_id,
       author: r.user?.login ?? "",
       authorType: r.user?.type ?? null,
       commitId: r.commit_id ?? "",
@@ -494,22 +552,48 @@ function standingChangeRequest(reviews) {
   return [...latest.values()].includes("CHANGES_REQUESTED");
 }
 
-// Branch protection and rulesets can each require checks. A repository whose plan lacks one of
-// them answers 403 or 404 there, which adds no names. Any other failure, a rate limit's 403
-// included, stops the gate, since missing names would let a failing required check pass as a note.
-async function requiredChecks(repo, base, runGh) {
-  const optional = (args) => runGh(args).catch((error) => {
+// A repository whose plan or settings lack a feature answers 403 or 404 for it, which reads as
+// nothing. Any other failure, a rate limit's 403 included, is thrown.
+function readOptional(runGh, args) {
+  return runGh(args).catch((error) => {
     if (!isRateLimited(error) && /HTTP 40[34]/.test(error?.stderr ?? "")) return null;
     throw error;
   });
-  const branch = await optional(["api", `${repo}/branches/${base}`]);
-  const rules = await optional(["api", `${repo}/rules/branches/${base}`]);
+}
+
+// Branch protection and rulesets can each require checks. A failure other than a missing feature
+// stops the gate, since missing names would let a failing required check pass as a note.
+async function requiredChecks(repo, base, runGh) {
+  const branch = await readOptional(runGh, ["api", `${repo}/branches/${base}`]);
+  const rules = await readOptional(runGh, ["api", `${repo}/rules/branches/${base}`]);
   return new Set([
     ...(branch?.protection?.required_status_checks?.contexts ?? []),
     ...(Array.isArray(rules) ? rules : [])
       .filter((rule) => rule.type === "required_status_checks")
       .flatMap((rule) => (rule.parameters?.required_status_checks ?? []).map((check) => check.context)),
   ]);
+}
+
+// Whether the repository runs CI at all, for a head that has no checks yet. Check suites are no sign,
+// because apps register empty ones on every commit and some never post a result.
+async function ciSigns({ owner, name }, base, runGh) {
+  if (!base) throw new Error("base branch unknown");
+  const repo = `repos/${owner}/${name}`;
+  const workflows = await readOptional(runGh, ["api", `${repo}/actions/workflows?per_page=100`]);
+  const required = await requiredChecks(repo, base, runGh);
+  const closed = await runGh(["api", `${repo}/pulls?state=closed&base=${base}&sort=updated&direction=desc&per_page=20`]);
+  const lastMerged = closed.find((pull) => pull.merged_at);
+  let results = 0;
+  for (const ref of [base, lastMerged?.head?.sha].filter(Boolean)) {
+    const runs = await runGh(["api", `${repo}/commits/${ref}/check-runs?status=completed&per_page=1`]);
+    const statuses = await runGh(["api", `${repo}/commits/${ref}/status?per_page=1`]);
+    results += Number(runs?.total_count ?? 0) + Number(statuses?.total_count ?? 0);
+  }
+  return {
+    workflows: (workflows?.workflows ?? []).filter((workflow) => workflow.state === "active").length,
+    requiredChecks: required.size,
+    results,
+  };
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -618,6 +702,7 @@ async function main(argv) {
     requestComment: args.requestComment,
     allowNoChecks: args.allowNoChecks,
     ignoreChecks: args.ignoreChecks,
+    held: args.heldFile ? readHeld(args.heldFile) : [],
   };
   const loadSnapshot = async () => {
     const snapshot = await fetchSnapshot(repo, args.pr);

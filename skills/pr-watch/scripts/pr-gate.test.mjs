@@ -16,6 +16,7 @@ const HEAD_COMMITTED_AT = "2026-08-28T20:39:38Z";
 const REQUESTED_AT = "2026-08-28T20:40:00Z";
 const REVIEWED_AT = "2026-08-28T20:42:39Z";
 const BOT = "review-bot[bot]";
+const PR_AUTHOR = "dhruv";
 const WITH_BOT = { reviewers: ["review-bot"], requestComment: "@review-bot review" };
 
 function baseSnapshot(overrides = {}) {
@@ -199,17 +200,74 @@ test("blocked: review decision CHANGES_REQUESTED", () => {
 
 // --- review threads ---------------------------------------------------------
 
-test("blocked: unresolved thread is reported with path, line, author, and body", () => {
+test("blocked: unresolved thread is reported with path, line, author, body, whether a bot wrote it, and the ids a reply needs", () => {
   const result = evaluateGate(baseSnapshot({
     reviewThreads: [
-      { isResolved: false, isOutdated: false, path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" },
-      { isResolved: true, isOutdated: false, path: "src/b.ts", line: 3, author: BOT, body: "resolved" },
-      { isResolved: false, isOutdated: true, path: "src/c.ts", line: 9, author: BOT, body: "outdated" },
+      { id: "PRRT_a", replyTo: 101, lastCommentId: 102, isResolved: false, isOutdated: false, path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" },
+      { id: "PRRT_b", isResolved: true, isOutdated: false, path: "src/b.ts", line: 3, author: BOT, body: "resolved" },
+      { id: "PRRT_c", isResolved: false, isOutdated: true, path: "src/c.ts", line: 9, author: BOT, body: "outdated" },
     ],
   }));
   assert.equal(result.state, "blocked");
-  assert.deepEqual(result.threads, [{ path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" }]);
+  assert.deepEqual(result.threads, [{
+    id: "PRRT_a", replyTo: 101, lastCommentId: 102, path: "src/a.ts", line: 12, author: BOT, bot: true, body: "Null check missing",
+  }]);
 });
+
+// --- replies held until "post" ------------------------------------------------
+
+const personThread = (overrides = {}) => ({
+  id: "PRRT_p", replyTo: 201, lastCommentId: 201, isResolved: false, isOutdated: false, path: "src/join.ts", line: 40,
+  author: "teammate", authorType: "User", commenters: [{ login: "teammate", type: "User" }], body: "Rename this to joinAll", ...overrides,
+});
+const heldReply = { kind: "reply", thread: "PRRT_p", replyTo: 201, seen: 201, to: "teammate", body: "Renamed in 1a2b3c4." };
+
+test("pending: a person's thread whose reply is held waits on post instead of blocking", () => {
+  const result = evaluateGate(baseSnapshot({ reviewThreads: [personThread()] }), { held: [heldReply] });
+  assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
+});
+
+test("a person's thread still counts after a push marks it outdated, until the PR author answers it", () => {
+  const outdated = personThread({ isOutdated: true });
+  const unanswered = evaluateGate(baseSnapshot({ pr: { ...baseSnapshot().pr, author: PR_AUTHOR }, reviewThreads: [outdated] }));
+  assert.equal(unanswered.state, "blocked");
+  assert.deepEqual(unanswered.threads.map((t) => t.id), ["PRRT_p"]);
+  const answered = evaluateGate(baseSnapshot({
+    pr: { ...baseSnapshot().pr, author: PR_AUTHOR },
+    reviewThreads: [{ ...outdated, lastAuthor: PR_AUTHOR }],
+  }));
+  assert.equal(answered.state, "ready");
+});
+
+test("blocked: a held reply stops covering the thread once the person comments again", () => {
+  const result = evaluateGate(baseSnapshot({ reviewThreads: [personThread({ lastCommentId: 202 })] }), { held: [heldReply] });
+  assert.equal(result.state, "blocked");
+  assert.deepEqual(result.threads.map((t) => t.id), ["PRRT_p"]);
+});
+
+// A thread is a bot's only while no person has spoken in it: a person who opens it or answers the
+// bot gets their reply held until "post". The PR author's own replies keep a bot's thread a bot's.
+const CODEX = { login: "codex-connector", type: "Bot" };
+const TEAMMATE = { login: "teammate", type: "User" };
+const OWNER = { login: PR_AUTHOR, type: "User" };
+for (const [name, commenters, bot] of [
+  ["a bot opened it and has the last word", [CODEX, CODEX], true],
+  ["a bot opened it and the PR author replied", [CODEX, OWNER], true],
+  ["a login ending in [bot] opened it", [{ login: BOT }], true],
+  ["a person opened it", [TEAMMATE], false],
+  ["a bot opened it and a person joined", [CODEX, TEAMMATE], false],
+  ["a bot opened it, a person replied, and the bot answered last", [CODEX, TEAMMATE, CODEX], false],
+]) {
+  test(`thread from ${name}: bot is ${bot}`, () => {
+    const [first] = commenters;
+    const thread = { author: first.login, authorType: first.type, commenters };
+    const result = evaluateGate(baseSnapshot({
+      pr: { ...baseSnapshot().pr, author: PR_AUTHOR },
+      reviewThreads: [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 1, body: "b", ...thread }],
+    }));
+    assert.equal(result.threads[0].bot, bot);
+  });
+}
 
 test("thread bodies are truncated for prompt safety", () => {
   const result = evaluateGate(baseSnapshot({
@@ -223,11 +281,10 @@ test("thread bodies are truncated for prompt safety", () => {
 
 // --- written human reviews ----------------------------------------------------
 
-const PR_AUTHOR = "dhruv";
 const HUMAN = "teammate";
 const LATER = "2026-08-28T21:00:00Z";
 const humanReview = (overrides = {}) => ({
-  author: HUMAN, authorType: "User", state: "COMMENTED", commitId: HEAD,
+  id: "PRR_h", author: HUMAN, authorType: "User", state: "COMMENTED", commitId: HEAD,
   submittedAt: REVIEWED_AT, body: "The joiner drops messages sent before the reply.", ...overrides,
 });
 const withReviews = (reviews, extra = {}) => baseSnapshot({
@@ -241,9 +298,15 @@ test("blocked: an unanswered written review from a person is listed with its tex
   assert.equal(result.state, "blocked");
   assert.ok(result.reasons.some((r) => r.includes(HUMAN)));
   assert.deepEqual(result.threads, [{
-    kind: "review", path: null, line: null, author: HUMAN, submittedAt: REVIEWED_AT,
+    kind: "review", id: "PRR_h", path: null, line: null, author: HUMAN, submittedAt: REVIEWED_AT,
     body: "The joiner drops messages sent before the reply.",
   }]);
+});
+
+test("pending: a written review whose answer is held waits on post instead of blocking", () => {
+  const held = [{ kind: "comment", review: "PRR_h", to: HUMAN, body: "Fixed in 1a2b3c4." }];
+  const result = evaluateGate(withReviews([humanReview()]), { held });
+  assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
 });
 
 test("ready: a later PR comment from the PR author answers the review", () => {
@@ -451,10 +514,18 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
                 } },
               } }] },
               reviewThreads: {
-                nodes: [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, comments: { nodes: [{ author: { login: BOT }, body: "fix me" }] } }],
+                nodes: [{
+                  id: "PRRT_a", isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
+                  opening: { nodes: [{ databaseId: 101, author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
+                  last: { nodes: [{ databaseId: 102, author: { login: "teammate" } }] },
+                  comments: {
+                    nodes: [{ author: { __typename: "Bot", login: "review-bot" } }, { author: { __typename: "User", login: "teammate" } }],
+                    pageInfo: { hasNextPage: false },
+                  },
+                }],
                 pageInfo: { hasNextPage: false },
               },
-              reviews: { nodes: [{ author: { __typename: "Bot", login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary", commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
+              reviews: { nodes: [{ id: "PRR_b", author: { __typename: "Bot", login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary", commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
               comments: { nodes: [{ author: { login: "human" }, body: "@review-bot review", createdAt: REQUESTED_AT }], pageInfo: { hasNextPage: false } },
               reactions: { nodes: [{ user: { login: BOT }, content: "THUMBS_UP", createdAt: REVIEWED_AT }], pageInfo: { hasNextPage: false } },
             },
@@ -475,13 +546,102 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
     { name: "ci", status: "COMPLETED", conclusion: "SUCCESS", required: true },
     { name: "legacy", status: "IN_PROGRESS", conclusion: null, required: false },
   ]);
-  assert.deepEqual(snapshot.reviews, [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary" }]);
-  assert.deepEqual(snapshot.reviewThreads, [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, author: BOT, body: "fix me" }]);
+  assert.deepEqual(snapshot.reviews, [{ id: "PRR_b", author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary" }]);
+  assert.deepEqual(snapshot.reviewThreads, [{
+    id: "PRRT_a", replyTo: 101, lastCommentId: 102, isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
+    author: "review-bot", authorType: "Bot", body: "fix me",
+    lastAuthor: "teammate", commenters: [{ login: "review-bot", type: "Bot" }, { login: "teammate", type: "User" }], commentersTruncated: false,
+  }]);
   assert.deepEqual(snapshot.reactions, [{ author: BOT, content: "+1", createdAt: REVIEWED_AT }]);
   assert.equal(snapshot.truncated, false);
   assert.equal(calls.length, 3);
   assert.ok(calls.every((c) => c[0] === "api"));
 });
+
+test("a thread longer than one page of comments counts as a person's, with its newest comment's id", async () => {
+  const bot = { author: { __typename: "Bot", login: "coderabbitai" } };
+  const runGh = async (args) => {
+    if (args[1] === "graphql") {
+      const thread = {
+        id: "PRRT_long", isResolved: false, isOutdated: false,
+        opening: { nodes: [{ databaseId: 1, ...bot, body: "finding" }] },
+        last: { nodes: [{ databaseId: 150 }] },
+        comments: { nodes: Array.from({ length: 100 }, () => bot), pageInfo: { hasNextPage: true } },
+      };
+      return { data: { repository: { pullRequest: {
+        state: "OPEN", headRefOid: HEAD, commits: { nodes: [] },
+        reviewThreads: { nodes: [thread], pageInfo: { hasNextPage: false } },
+      } } } };
+    }
+    if (args[1].includes("check-runs")) return { total_count: 0, check_runs: [] };
+    return { total_count: 0, statuses: [] };
+  };
+  const snapshot = await fetchSnapshot({ owner: "o", name: "r" }, 4, runGh);
+  assert.equal(snapshot.truncated, true);
+  assert.equal(snapshot.reviewThreads[0].lastCommentId, 150);
+  const [thread] = evaluateGate({ ...snapshot, pr: { ...snapshot.pr, expectedHead: HEAD } }).threads;
+  assert.equal(thread.bot, false, "a person may have spoken past the first page");
+});
+
+// A head with no check runs or statuses, in a repository shaped like one with no CI: Actions has no
+// workflows, main requires nothing, nothing has posted results on main or on the last merged PR's
+// head, and five apps register empty check suites on every commit.
+function headWithoutChecks(overrides = {}) {
+  const emptySuite = (slug) => ({ app: { slug }, status: "queued", conclusion: null, latest_check_runs_count: 0 });
+  const answers = {
+    graphql: { data: { repository: { pullRequest: {
+      state: "OPEN", isDraft: false, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN", reviewDecision: null,
+      headRefOid: HEAD, baseRefName: "main", author: { login: PR_AUTHOR },
+      commits: { nodes: [{ commit: { oid: HEAD, committedDate: HEAD_COMMITTED_AT, statusCheckRollup: null } }] },
+    } } } },
+    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 0, check_runs: [] },
+    [`repos/o/r/commits/${HEAD}/status`]: { total_count: 0, statuses: [] },
+    [`repos/o/r/commits/${HEAD}/check-suites`]: { total_count: 5, check_suites: ["vercel", "pullfrog", "kody-ai", "kodiseus", "expo"].map(emptySuite) },
+    "repos/o/r/actions/workflows": { total_count: 0, workflows: [] },
+    "repos/o/r/branches/main": { name: "main", protection: { enabled: false, required_status_checks: { contexts: [], checks: [] } } },
+    "repos/o/r/rules/branches/main": [],
+    "repos/o/r/pulls": [{ number: 5, merged_at: null, head: { sha: "c".repeat(40) } }, { number: 6, merged_at: REVIEWED_AT, head: { sha: OTHER } }],
+    "repos/o/r/commits/main/check-runs": { total_count: 0, check_runs: [] },
+    "repos/o/r/commits/main/status": { total_count: 0, statuses: [] },
+    [`repos/o/r/commits/${OTHER}/check-runs`]: { total_count: 0, check_runs: [] },
+    [`repos/o/r/commits/${OTHER}/status`]: { total_count: 0, statuses: [] },
+    ...overrides,
+  };
+  const runGh = async (args) => {
+    const answer = answers[args[1] === "graphql" ? "graphql" : args[1].split("?")[0]];
+    if (answer === undefined || answer.httpError) {
+      throw Object.assign(new Error("gh failed"), { stderr: `gh: ${answer?.httpError ?? "Not Found (HTTP 404)"}` });
+    }
+    return answer;
+  };
+  return fetchSnapshot({ owner: "o", name: "r" }, 7, runGh)
+    .then((snapshot) => evaluateGate({ ...snapshot, pr: { ...snapshot.pr, expectedHead: HEAD } }));
+}
+
+for (const [name, overrides] of [
+  ["a repository with no CI", {}],
+  ["a repository whose only workflow is disabled", { "repos/o/r/actions/workflows": { total_count: 1, workflows: [{ name: "ci", state: "disabled_manually" }] } }],
+]) {
+  test(`ready: ${name} has no checks to wait on, though apps register empty check suites`, async () => {
+    const result = await headWithoutChecks(overrides);
+    assert.equal(result.state, "ready", result.reasons.join("; "));
+    assert.deepEqual(result.notes, ["No CI in this repository, so there are no checks to wait on"]);
+  });
+}
+
+for (const [name, overrides] of [
+  ["an active workflow", { "repos/o/r/actions/workflows": { total_count: 1, workflows: [{ name: "ci", state: "active" }] } }],
+  ["a check the base branch requires", { "repos/o/r/branches/main": { name: "main", protection: { required_status_checks: { contexts: ["ci"] } } } }],
+  ["results on the base branch's head", { "repos/o/r/commits/main/status": { total_count: 1, statuses: [{ context: "buildkite", state: "success" }] } }],
+  ["results on the last merged PR's head", { [`repos/o/r/commits/${OTHER}/check-runs`]: { total_count: 1, check_runs: [{ name: "ci", status: "completed" }] } }],
+  ["a failed read of the signs", { "repos/o/r/actions/workflows": { httpError: "Server Error (HTTP 502)" } }],
+]) {
+  test(`pending: CI that has not reported on the head still holds the gate, shown by ${name}`, async () => {
+    const result = await headWithoutChecks(overrides);
+    assert.equal(result.state, "pending");
+    assert.deepEqual(result.reasons, ["No check runs found on head commit"]);
+  });
+}
 
 test("fetchSnapshot flags truncation when REST totals exceed the page", async () => {
   const runGh = async (args) => {
@@ -568,7 +728,7 @@ test("GraphQL quota spent: REST still shows a failed required check and an unans
     ] },
     "repos/o/r/branches/main": { name: "main", protection: { enabled: true, required_status_checks: { contexts: ["ci"], checks: [{ context: "ci" }] } } },
     "repos/o/r/pulls/7/reviews": [{
-      user: { login: HUMAN, type: "User" }, state: "COMMENTED", commit_id: HEAD,
+      node_id: "PRR_h", user: { login: HUMAN, type: "User" }, state: "COMMENTED", commit_id: HEAD,
       submitted_at: REVIEWED_AT, body: "The joiner drops messages sent before the reply.",
     }],
   }));
@@ -582,6 +742,7 @@ test("GraphQL quota spent: REST still shows a failed required check and an unans
   ]);
   assert.deepEqual(result.notes, ['Check "Visual Recap" concluded FAILURE (not required)']);
   assert.equal(result.threads[0].kind, "review");
+  assert.equal(result.threads[0].id, "PRR_h", "REST gives the review the same id GraphQL does");
 });
 
 for (const [failure, httpError] of [
