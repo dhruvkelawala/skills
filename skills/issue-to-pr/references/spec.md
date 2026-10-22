@@ -11,7 +11,7 @@ The commands below run `node <this skill's folder>/scripts/spec.mjs`. It reads G
 The spec thread builds nothing, so it stays in the thread and checkout where it started. Stage 1 steps 1 and 2 have pinned the base and read the spec.
 
 1. Write the spec's run record header, as [run record](run-record.md) shows, with `spec_mode: stack` and `thread:` set to this thread's id from `t3_thread_configuration`.
-2. Run `spec.mjs tickets <record>`. It prints the spec's open tickets in build order, each with its open blockers. Append it to the contract as printed. When it reports a problem, such as a blocker in another repository or blocked-by links that form a loop, record `blocked: <problem>` and stop.
+2. Run `spec.mjs tickets <record>`. It prints the spec's open tickets in build order, each with its open blockers. Append it to the contract as printed. When it reports a problem, such as a sub-issue or blocker in another repository, or blocked-by links that form a loop, record `blocked: <problem>` and stop.
 3. Finish the contract: the base, what is out of scope, and the human gates, at least the review of each PR.
 4. Post the [spec's brief](#brief), then start what can start.
 

@@ -23,7 +23,7 @@ const issue = (n) => ({
   number: Number(n),
   title: issues[n].title,
   state: issues[n].state || "open",
-  html_url: "https://github.com/o/r/issues/" + n,
+  html_url: "https://github.com/" + (issues[n].repo || "o/r") + "/issues/" + n,
   repository_url: "https://api.github.com/repos/" + (issues[n].repo || "o/r"),
 });
 const [, number, relation] = match;
@@ -112,6 +112,23 @@ test("a spec's unblocked tickets start at once, and one blocked by another start
     "#3 starts on feat/1-score, stacked on https://github.com/o/r/pull/21",
     "running",
   ]);
+});
+
+test("a spec refuses a sub-issue or a blocker from another repository, rather than build this repository's issue of that number", (t) => {
+  const issues = {
+    10: { title: "Scores", tickets: [1, 12] },
+    1: { title: "Show the score" },
+    12: { title: "Score service", repo: "o/other" },
+  };
+  const { spec, github, run } = specRun(t, issues);
+  const refused = (problem) => {
+    const result = run(["tickets", spec]);
+    assert.equal(result.status, 1, `expected a refusal, got: ${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, problem);
+  };
+  refused(/https:\/\/github\.com\/o\/other\/issues\/12 is in another repository/);
+  github({ ...issues, 10: { title: "Scores", tickets: [1] }, 1: { title: "Show the score", blockedBy: [12] } });
+  refused(/#1 is blocked by https:\/\/github\.com\/o\/other\/issues\/12, in another repository/);
 });
 
 test("a ticket starts on the default branch once its blocker merges, and with two open blockers on the one whose branch holds the other", (t) => {

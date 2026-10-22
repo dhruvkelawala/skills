@@ -50,6 +50,8 @@ function tickets(path) {
   const { repo, number } = specIssue(readFileSync(path, "utf8"));
   const open = github(repo, `issues/${number}/sub_issues?per_page=100`).filter((issue) => issue.state === "open");
   if (!open.length) throw new Problem(`#${number} has no open sub-issues, so it is not a spec`);
+  const foreign = open.find((issue) => !inRepo(repo, issue));
+  if (foreign) throw new Problem(`${foreign.html_url} is in another repository; spec mode builds the sub-issues of one repository`);
   const blockersOf = new Map(open.map((issue) => [issue.number, openBlockers(repo, issue.number)]));
   return [
     "Tickets:",
@@ -65,7 +67,7 @@ function openBlockers(repo, number) {
   return github(repo, `issues/${number}/dependencies/blocked_by?per_page=100`)
     .filter((blocker) => blocker.state === "open")
     .map((blocker) => {
-      if (blocker.repository_url !== `https://api.github.com/repos/${repo}`) {
+      if (!inRepo(repo, blocker)) {
         throw new Problem(`#${number} is blocked by ${blocker.html_url}, in another repository; spec mode stacks within one repository`);
       }
       return blocker.number;
@@ -158,7 +160,8 @@ function buildsBeside(path) {
 }
 
 function closedIssues(repo, spec, numbers) {
-  const states = new Map(github(repo, `issues/${spec}/sub_issues?per_page=100`).map((issue) => [issue.number, issue.state]));
+  const children = github(repo, `issues/${spec}/sub_issues?per_page=100`).filter((issue) => inRepo(repo, issue));
+  const states = new Map(children.map((issue) => [issue.number, issue.state]));
   for (const n of new Set(numbers)) if (!states.has(n)) states.set(n, github(repo, `issues/${n}`).state);
   return new Set([...states].filter(([, state]) => state === "closed").map(([n]) => n));
 }
@@ -198,6 +201,9 @@ function body(path) {
   if (problems.length) throw new Problem(`the body does not cover every ticket:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
   return "the body covers every ticket\n";
 }
+
+// A sub-issue or blocker can live in another repository, where its number names a different issue.
+const inRepo = (repo, issue) => issue.repository_url === `https://api.github.com/repos/${repo}`;
 
 // The first word of a header line, so a note after it, such as "(merged ...)", is left out.
 const field = (text, key) => text.match(new RegExp(`^${key}: (\\S+)`, "m"))?.[1];
