@@ -25,7 +25,6 @@ head: <sha the stage was proven on>
 tree: <git rev-parse HEAD^{tree} at that head>
 repairs: <used>/<budget>
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
-watcher: subagent | this session
 pr: <URL or none>
 ```
 
@@ -35,7 +34,7 @@ Stage reports go below the header, appended in order:
 - the build report
 - each review pass: the tree it reviewed, or the skip and its reason, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
 - the evidence links, each with the head it was captured at
-- each watcher report
+- each watch pass: its gate result, its repairs and the stage it left
 - the handoff block
 
 Keep earlier passes, so that `/promote` can see a finding that recurs.

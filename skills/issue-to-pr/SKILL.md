@@ -1,6 +1,6 @@
 ---
 name: issue-to-pr
-description: Use when the user invokes /issue-to-pr with a GitHub issue or Linear ticket, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a time-boxed watch, standalone or as a stacked layer.
+description: Use when the user invokes /issue-to-pr with a GitHub issue or Linear ticket, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a watch through T3, standalone or as a stacked layer.
 ---
 
 # Issue to PR
@@ -20,7 +20,7 @@ The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the reposito
 
 ## Repair budget
 
-A repair is one commit that changes code to fix a review finding, a failed check, a red `/verify` or a review-ready violation, in stage 3, 4 or 6, including commits the watcher makes. Count every repair in `repairs: <used>/<budget>`. When `used` reaches the budget, stop, record `blocked: repair budget`, and ask the user whether to raise it.
+A repair is one commit that changes code to fix a review finding, a failed check, a red `/verify` or a review-ready violation, in stage 3, 4 or 6, including pr-watch's repairs in stage 6. Count every repair in `repairs: <used>/<budget>`. When `used` reaches the budget, stop, record `blocked: repair budget`, and ask the user whether to raise it.
 
 ## GitHub quota
 
@@ -109,22 +109,25 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 
 **Complete when:** an open, ready-for-review PR exists at the current head on the contracted base and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
 
-## 6. Watch, time-boxed
+## 6. Watch
 
-1. Hand the watch to a native subagent on the thread's model. Start it without a worktree of its own, because its pushes must land on the branch the run record names. With no subagent available, run the watcher loop yourself and say so. Record `watcher: subagent` or `watcher: this session`. Its whole prompt is [the watcher prompt](references/watcher-prompt.md), with every slot filled and a 30 minute time box.
-2. Leave the branch alone while the watcher runs. Its pushes are the only head changes.
-3. Append its report to the run record and add its repairs to the counter. Check its claim by running the gate once without `--watch` at the reported head.
-4. Record the stage from the report and your gate run:
-   - `READY`, with your gate run exiting 0: record `ready`.
-   - `AWAITING_HUMAN`: record `awaiting-human` and stop. Only a human review or approval is left, and `/issue-to-pr <n> resume` continues when a review comes in.
-   - `TIMEOUT`: record `watching` with the open reasons.
-   - `ESCALATE`: handle the findings yourself with the review case in [resume](references/resume.md), then start one more watcher run for the new head. A run has at most two watcher runs.
-   - `BUDGET`, `BLOCKED` or `MISMATCH`: record `blocked` with the reason and ask the user.
-5. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
+This thread watches its own PR, and T3 wakes it when the PR changes.
 
-**Complete when:** the record shows `ready`, `awaiting-human`, `watching` or `blocked` with its reasons, and your own gate run at the reported head agrees.
+1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the repair listed as not re-reviewed, because autoreview runs once per run.
+2. Add each pr-watch repair to the counter, and append one line per repair to the run record with its source thread or check, the head it was reviewed at, and its commit.
+3. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
+4. Record the stage from where pr-watch leaves the PR:
+   - **Clean.** The gate exits `0` at the current head: record `ready`.
+   - **Waiting on someone else**, such as a running check or a reviewer who has not covered the head. pr-watch has called `watch_pull_request`, so record `watching` with the open reasons and end the turn. When T3 wakes this thread, start this stage again at step 1.
+   - **Waiting on the user's word**, such as replies held until "post": record `awaiting-human` with what is held.
+   - **Budget spent:** record `blocked: repair budget` and ask the user whether to raise it.
+   - **Any other hand-back**, such as a draft or closed PR, a head mismatch, or a reason that needs the user's decision: record `blocked` with the reason and ask the user.
+
+**Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`.
 
 ## 7. Hand off
+
+Run this stage once stage 6 records anything but `watching`.
 
 1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, record `merged`.
 2. With `--merge` and the stage at `ready`, land the PR through the ship skill:
@@ -146,7 +149,7 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
    ```
 
 4. Offer `/pr-review <PR or stack>` to read the settled diff.
-5. If any finding recurred, in a later pass, a watcher run or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
+5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
 
 Leave the branch and any worktree for the user to clean up.
 
