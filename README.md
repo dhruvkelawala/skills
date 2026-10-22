@@ -30,6 +30,14 @@
 | [why](skills/why/SKILL.md) | Why code or a decision looks the way it does, from git and the PR with a confidence word, or why the agent took an action this session. `--deep` searches every source. (pstack) |
 | [worktree-cleanup](skills/worktree-cleanup/SKILL.md) | Read-only audit of git worktrees and iOS simulators, then removal by approved bucket, with a hold list for anything that could lose work. Branch deletion is a separate approval. (pstack) |
 
+## Parts
+
+A part is a skill that other skills run as one of their steps. They load it from its sibling folder, such as `../unslop/SKILL.md`, so the path works wherever the repo's skills are linked.
+
+| Part | Description |
+|-------|-------------|
+| [unslop](skills/unslop/SKILL.md) | Cut AI tells from prose. eli25, how, explain-diff and why run it last on what they write, and the agent runs it on its own when it writes docs, PR and issue text, or messages to people, but not on chat replies. |
+
 ## Installation
 
 Clone this repo on each machine and run the sync script from the clone. The dry run prints every change and makes none:
@@ -50,7 +58,7 @@ Changes travel only through git. To add an outside skill, or bring back a cut on
 
 ## Credits
 
-Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory. `test-audit` adapts OpenClaw's `test-audit`, MIT licensed, at `openclaw/openclaw@3195fba`, with the license in its directory.
+Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory. `test-audit` adapts OpenClaw's `test-audit`, MIT licensed, at `openclaw/openclaw@3195fba`, with the license in its directory. `unslop` adapts Siqi Chen's `humanizer`, MIT licensed, at `blader/humanizer@d8085c7`, with the license in its directory.
 
 ## License
 

@@ -60,8 +60,9 @@ Before and after, from `support-report-pr-349-eli25.html`:
    - A small fixed `#theme-toggle` button in a corner, in the same brutalist style, cycles from system to light to dark and back to system, and shows the current state as a word.
    - Store the pick in `localStorage` under `eli25-theme` inside try and catch, and apply it from an inline script at the top of `<head>`, before any stylesheet, so the page never flashes. Missing or unreadable storage means system.
    - `references/theme.html` has the code for all three.
-4. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
-5. Look at the light and dark screenshots at 1280 pixels.
+4. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
+5. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
+6. Look at the light and dark screenshots at 1280 pixels.
 
 **Done when** the render check passes, the prose word count is within the budget, every printed heading reads as a claim, and both screenshots look right to you.
 

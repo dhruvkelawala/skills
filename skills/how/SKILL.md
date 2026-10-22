@@ -58,6 +58,8 @@ Use this shape and these headings, so that other skills such as `pr-review` can 
 
 Aim for 300 to 600 words. Go longer only when the user asks for depth. Write plain words, as one engineer explains code to another. Use the repo's own names, and define a new term in the sentence where it first appears. Point with Markdown links to the local file and line, such as `[fire.ts:118](/abs/path/src/fire.ts:118)`, instead of pasting code, and quote a few lines only when the exact text matters.
 
+Run `../unslop/SKILL.md` on the answer last. Keep the shape and length above, and leave quoted text and code as they are.
+
 **Done when** the answer comes first, the trace follows one input, every pointer is a `path:line`, and the length is within 600 words unless the user asked for depth.
 
 Adapted from pstack by Lauren Tan (MIT), cursor/plugins@e5a8186. Upstream license: [LICENSE](LICENSE).
