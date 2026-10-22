@@ -75,7 +75,7 @@ The script checks the fields, the length of "What it's about", that the plan mat
 
 ## Taste check
 
-Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory, write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
 
 ```bash
 node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html
