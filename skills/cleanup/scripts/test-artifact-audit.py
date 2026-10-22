@@ -106,4 +106,8 @@ expect(HOME / ".cargo/registry", "cache", "cargo", "CANDIDATE", "delete")
 assert not any("left-pad" in path or "SomeApp" in path for path in by_path), result.stdout
 assert len(rows) == 11, result.stdout
 assert "artifacts=7 caches=4" in result.stderr, result.stderr
+# A code root that holds $HOME still lists Xcode's DerivedData once.
+home_run = subprocess.run(["/bin/bash", str(SCRIPT), str(HOME)], env=ENV,
+                          capture_output=True, text=True, check=True)
+assert home_run.stdout.count("\tDerivedData\t") == 1, home_run.stdout
 print(f"PASS: artifacts, caches, sizes, holds, read-only; fixtures retained at {ROOT}")

@@ -39,7 +39,7 @@ printf 'KIND\tNAME\tSIZE_KIB\tBUCKET\tCLEAN\tWORKTREE\tPATH\n'
 while IFS= read -r -d '' path; do
     artifact_row "$path"
 done < <(find "$(cd "$root" && pwd -P)" -name .git -prune -o -type d \
-    \( -name node_modules -o -name target -o -name .next -o -name .turbo -o -name DerivedData \) -prune -print0)
+    \( -name node_modules -o -name target -o -name .next -o -name .turbo \) -prune -print0)
 
 derived="$HOME/Library/Developer/Xcode/DerivedData"
 if [ -d "$derived" ]; then
