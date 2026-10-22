@@ -16,9 +16,9 @@
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
-//                     authorType, body, commenters: [{ login, type }] }]
+//                     authorType, body, commenters: [{ login, type }], commentersTruncated }]
 //                  // author, body and replyTo are the first comment's, lastCommentId the newest's,
-//                  // and commenters lists every comment's author in order
+//                  // and commenters lists the authors of the first 100 comments in order
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
 //   reviews:       [{ id, author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
@@ -223,9 +223,9 @@ function isBot(login, type) {
   return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
 }
 
-// A reply from the PR author keeps a bot's thread a bot's.
 function isBotThread(thread, prAuthor) {
   return isBot(thread.author, thread.authorType)
+    && !thread.commentersTruncated
     && (thread.commenters ?? []).every((c) => isBot(c.login, c.type) || sameLogin(c.login, prAuthor));
 }
 
@@ -351,8 +351,9 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
       reviewThreads(first:100){
         nodes{
           id isResolved isOutdated path line
-          opening: comments(first:1){ nodes{ body } }
-          comments(first:100){ nodes{ databaseId author{ __typename login } } pageInfo{ hasNextPage } }
+          opening: comments(first:1){ nodes{ databaseId author{ __typename login } body } }
+          latest: comments(last:1){ nodes{ databaseId } }
+          comments(first:100){ nodes{ author{ __typename login } } pageInfo{ hasNextPage } }
         }
         pageInfo{ hasNextPage }
       }
@@ -442,20 +443,20 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
         || pr.reviewThreads?.nodes?.some((t) => t.comments?.pageInfo?.hasNextPage)
     ),
     reviewThreads: (pr.reviewThreads?.nodes ?? []).map((t) => {
-      const comments = t.comments?.nodes ?? [];
-      const first = comments[0];
+      const first = t.opening?.nodes?.[0];
       return {
         id: t.id,
         replyTo: first?.databaseId ?? null,
-        lastCommentId: comments.at(-1)?.databaseId ?? null,
+        lastCommentId: t.latest?.nodes?.[0]?.databaseId ?? null,
         isResolved: t.isResolved,
         isOutdated: t.isOutdated,
         path: t.path ?? null,
         line: t.line ?? null,
         author: first?.author?.login ?? null,
         authorType: first?.author?.__typename ?? null,
-        body: t.opening?.nodes?.[0]?.body ?? "",
-        commenters: comments.map((c) => ({ login: c.author?.login ?? null, type: c.author?.__typename ?? null })),
+        body: first?.body ?? "",
+        commenters: (t.comments?.nodes ?? []).map((c) => ({ login: c.author?.login ?? null, type: c.author?.__typename ?? null })),
+        commentersTruncated: Boolean(t.comments?.pageInfo?.hasNextPage),
       };
     }),
     reviews: (pr.reviews?.nodes ?? []).map((r) => ({

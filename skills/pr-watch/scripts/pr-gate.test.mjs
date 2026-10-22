@@ -504,12 +504,10 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
               reviewThreads: {
                 nodes: [{
                   id: "PRRT_a", isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
-                  opening: { nodes: [{ body: "fix me" }] },
+                  opening: { nodes: [{ databaseId: 101, author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
+                  latest: { nodes: [{ databaseId: 102 }] },
                   comments: {
-                    nodes: [
-                      { databaseId: 101, author: { __typename: "Bot", login: "review-bot" } },
-                      { databaseId: 102, author: { __typename: "User", login: "teammate" } },
-                    ],
+                    nodes: [{ author: { __typename: "Bot", login: "review-bot" } }, { author: { __typename: "User", login: "teammate" } }],
                     pageInfo: { hasNextPage: false },
                   },
                 }],
@@ -540,7 +538,7 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
   assert.deepEqual(snapshot.reviewThreads, [{
     id: "PRRT_a", replyTo: 101, lastCommentId: 102, isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
     author: "review-bot", authorType: "Bot", body: "fix me",
-    commenters: [{ login: "review-bot", type: "Bot" }, { login: "teammate", type: "User" }],
+    commenters: [{ login: "review-bot", type: "Bot" }, { login: "teammate", type: "User" }], commentersTruncated: false,
   }]);
   assert.deepEqual(snapshot.reactions, [{ author: BOT, content: "+1", createdAt: REVIEWED_AT }]);
   assert.equal(snapshot.truncated, false);
@@ -548,10 +546,16 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
   assert.ok(calls.every((c) => c[0] === "api"));
 });
 
-test("fetchSnapshot flags truncation when a thread has more comments than one page", async () => {
+test("a thread longer than one page of comments counts as a person's, with its newest comment's id", async () => {
+  const bot = { author: { __typename: "Bot", login: "coderabbitai" } };
   const runGh = async (args) => {
     if (args[1] === "graphql") {
-      const thread = { id: "PRRT_long", isResolved: false, isOutdated: false, comments: { nodes: [], pageInfo: { hasNextPage: true } } };
+      const thread = {
+        id: "PRRT_long", isResolved: false, isOutdated: false,
+        opening: { nodes: [{ databaseId: 1, ...bot, body: "finding" }] },
+        latest: { nodes: [{ databaseId: 150 }] },
+        comments: { nodes: Array.from({ length: 100 }, () => bot), pageInfo: { hasNextPage: true } },
+      };
       return { data: { repository: { pullRequest: {
         state: "OPEN", headRefOid: HEAD, commits: { nodes: [] },
         reviewThreads: { nodes: [thread], pageInfo: { hasNextPage: false } },
@@ -561,7 +565,10 @@ test("fetchSnapshot flags truncation when a thread has more comments than one pa
     return { total_count: 0, statuses: [] };
   };
   const snapshot = await fetchSnapshot({ owner: "o", name: "r" }, 4, runGh);
-  assert.equal(snapshot.truncated, true, "a person past the first page of comments would go unseen");
+  assert.equal(snapshot.truncated, true);
+  assert.equal(snapshot.reviewThreads[0].lastCommentId, 150);
+  const [thread] = evaluateGate({ ...snapshot, pr: { ...snapshot.pr, expectedHead: HEAD } }).threads;
+  assert.equal(thread.bot, false, "a person may have spoken past the first page");
 });
 
 test("fetchSnapshot flags truncation when REST totals exceed the page", async () => {
