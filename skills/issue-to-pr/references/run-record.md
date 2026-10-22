@@ -25,7 +25,7 @@ head: <sha the stage was proven on>
 tree: <git rev-parse HEAD^{tree} at that head>
 repairs: <used>/<budget>
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
-watcher: <role it ran as>
+watcher: subagent | this session
 pr: <URL or none>
 ```
 

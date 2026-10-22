@@ -21,7 +21,7 @@ Post the thing, score, target, budget, and gate in one line, then start. The use
 Fix the scoring method and use it for every attempt:
 
 - A measured score, such as time, size, pass rate, or an eval, comes from one command. For a performance score, load the perf skill, answer its benchmark checklist for this command before you rely on it, and try ideas in its cheapest-first order.
-- A taste score comes from a critic: a helper with the `review` role (see Helpers) that did not make the change and scores the artifact against a short written rubric. The user is the final judge, as step 3 explains.
+- A taste score comes from a critic: a helper (see Helpers) that did not make the change and scores the artifact against a short written rubric. The user is the final judge, as step 3 explains.
 
 Score the baseline 3 times, or 5 times for timings, and note the median and the range. An attempt counts as better only when it beats the best kept score by more than that range.
 
@@ -38,7 +38,7 @@ id	hypothesis	change	before	after	verdict	judge	commit	note
 For each attempt:
 
 1. Read the log, then pick one idea that names a cause you measured or saw, such as "the chin looks flat because the light comes from straight ahead". Skip ideas the log already rejected unless you have new evidence.
-2. Make that one change. Hand it to an `implement-cheap` helper, or an `implement-smart` helper for a hard change (see Helpers), and read the diff.
+2. Make that one change. Hand it to a helper (see Helpers), and read the diff.
 3. Score it with the same method and run the gate.
 4. Keep it when it beats the best kept score by more than the range, the gate is green, and the gain is worth any added complexity. Commit only its files. Otherwise revert it in full.
 5. Log the row, kept or reverted.
@@ -75,7 +75,7 @@ For a taste score, show the final artifact with both the critic's and the user's
 
 ## Helpers
 
-Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, do it yourself and say so.
+Hand work to a native subagent on the thread's model. With no subagent available, do it yourself and say so.
 
 ## Attribution
 

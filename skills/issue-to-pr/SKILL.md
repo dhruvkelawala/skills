@@ -24,7 +24,7 @@ A repair is one commit that changes code to fix a review finding, a failed check
 
 ## Helper agents
 
-`/code-review` runs its two axes as helper agents, and stage 6 runs a watcher helper. If this host cannot start helper agents, as in a Pi worker with no spawn tool or a Claude Code subagent, stop after stage 2. Record `implemented`, return the build report and the run record path, and let the parent session run `/issue-to-pr <n>`, which continues at stage 3. A review the implementing agent runs on its own code is a self-review, and the record and the PR call it that.
+`/code-review` runs its two axes as helper agents, and stage 6 runs a watcher helper. If this host cannot start helper agents, as in a subagent with no tool to start one, stop after stage 2. Record `implemented`, return the build report and the run record path, and let the parent session run `/issue-to-pr <n>`, which continues at stage 3. A review the implementing agent runs on its own code is a self-review, and the record and the PR call it that.
 
 ## GitHub quota
 
@@ -80,7 +80,7 @@ Rate each finding after checking it against the code. P0 breaks normal use, secu
 Before each pass, compare `git rev-parse HEAD^{tree}` with the tree the last pass reviewed. When they are the same, as after a pure rebase, skip the pass and record the skip.
 
 1. **Pass 1.** Run `/code-review <base_sha>` with the contract as the spec and `<skills-dir>/test-audit/SKILL.md` added to the standards sources, where `<skills-dir>` is the directory that holds this skill's folder. Record the tree it reviewed.
-2. **Autoreview, once.** Review `<base_sha>...HEAD` with an engine from a different model family than the one that ran `/code-review`, which is Codex in the usual case. Resolve `$AUTOREVIEW` and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`. Record `autoreview: <engine> <model>, tree <hash>, clean | <n> fixed`. When only the same family is available, skip it and record why. Until the helper exits, keep scratch files outside the checkout, because the helper aborts when the worktree changes during a review.
+2. **Autoreview, once.** Review `<base_sha>...HEAD` with the `second-opinion` job. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`. Record `autoreview: <engine> <model it ran>, tree <hash>, clean | <n> fixed`, with the model as `/apr` step 1 defines it. When its model still can't run after apr's retries, record `blocked: second opinion unavailable` and ask the user. Until the helper exits, keep scratch files outside the checkout, because the helper aborts when the worktree changes during a review.
 3. **Pass 2, full lane only.** Run `/code-review <pass 1 head>`, which covers only the repairs since pass 1. Fix its P0 and P1 findings with focused tests. There is no third pass.
 
 Repairs made after the last pass, here or in a later stage, appear in the PR as not re-reviewed.
@@ -108,7 +108,7 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 
 ## 6. Watch, time-boxed
 
-1. Hand the watch to a helper agent with the `implement-cheap` role: on Pi or SumoCode spawn role `implement-cheap`; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, run the watcher loop yourself and say so. The helper works in this checkout on this branch, as [watcher hosts](references/watcher-hosts.md) shows. Its whole prompt is [the watcher prompt](references/watcher-prompt.md), with every slot filled and a 30 minute time box.
+1. Hand the watch to a native subagent on the thread's model. Start it without a worktree of its own, because its pushes must land on the branch the run record names. With no subagent available, run the watcher loop yourself and say so. Record `watcher: subagent` or `watcher: this session`. Its whole prompt is [the watcher prompt](references/watcher-prompt.md), with every slot filled and a 30 minute time box.
 2. Leave the branch alone while the watcher runs. Its pushes are the only head changes.
 3. Append its report to the run record and add its repairs to the counter. Check its claim by running the gate once without `--watch` at the reported head.
 4. Record the stage from the report and your gate run:

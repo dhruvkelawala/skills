@@ -22,7 +22,7 @@ Then choose one input to trace: a real request, command, event, or record. Take 
 
 Start where the input enters the code, such as a route, a CLI command, an event handler, or a job. Follow the real calls until the input produces its result: a response, a write, an event, or a render. Open every function you cite, because names and folders can mislead. Note which module owns each piece of state along the way.
 
-Do the trace yourself by default. When the question spans several subsystems and the user asks for depth, split it into two to four parts. Hand each part to a helper agent with the `research` role: on Pi or SumoCode spawn role `research`; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. Each helper returns its hops as `path:line` with one sentence each. With no helper available, trace the parts yourself and say so. Open each hop a helper reports before you cite it.
+Do the trace yourself by default. When the question spans several subsystems and the user asks for depth, split it into two to four parts. Hand each part to a native subagent on the thread's model. Each helper returns its hops as `path:line` with one sentence each. With no subagent available, trace the parts yourself and say so. Open each hop a helper reports before you cite it.
 
 **Done when** every hop has a `path:line` you opened, and every link you could not confirm is marked unverified.
 
