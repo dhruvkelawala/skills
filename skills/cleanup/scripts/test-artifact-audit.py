@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise the artifact and cache audit CLI against a fixture HOME and code root.
+"""Exercise the artifact and cache audit CLI and prove it leaves the fixture unchanged.
 
 Fixtures are intentionally retained: this check performs no deletions.
 Run: python3 skills/cleanup/scripts/test-artifact-audit.py
 """
+import hashlib
 import os
 from pathlib import Path
 import shlex
@@ -23,6 +24,11 @@ ENV = {**{k: v for k, v in os.environ.items() if not k.startswith("XDG_")},
 def git(repo, *args):
     return subprocess.check_output(["git", "-C", str(repo), *args], env=ENV,
                                    stderr=subprocess.PIPE, text=True).strip()
+
+
+def snapshot():
+    return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else "dir"
+            for p in ROOT.rglob("*")}
 
 
 def write(path, size=1024):
@@ -59,8 +65,10 @@ repo(CODE / "tracked", "", ["target/keep.txt"])
 repo(CODE / "forced", "target/\n", ["target/vendored.txt"])
 write(CODE / "loose" / "node_modules" / "dep" / "index.js")
 
+before = snapshot()
 result = subprocess.run(["/bin/bash", str(SCRIPT), str(CODE)], env=ENV,
                         capture_output=True, text=True, check=True)
+assert before == snapshot(), "Audit changed the fixture"
 
 
 def unquote(field):
@@ -98,4 +106,4 @@ expect(HOME / ".cargo/registry", "cache", "cargo", "CANDIDATE", "delete")
 assert not any("left-pad" in path or "SomeApp" in path for path in by_path), result.stdout
 assert len(rows) == 11, result.stdout
 assert "artifacts=7 caches=4" in result.stderr, result.stderr
-print(f"PASS: artifacts, caches, sizes, holds; fixtures retained at {ROOT}")
+print(f"PASS: artifacts, caches, sizes, holds, read-only; fixtures retained at {ROOT}")

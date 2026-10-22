@@ -7,12 +7,14 @@ description: Use when the user invokes /cleanup or /worktree-cleanup, says the d
 
 The user approves buckets, not single items, for example "remove merged and pr-merged". Anything that could lose work goes on a hold list, and a held item is removed only when the user names it.
 
+Invoke as `/cleanup [audit] [<code-root>]`, where `<code-root>` is the folder that holds the repos and defaults to the current repo. With `audit`, run sections 1 to 3, post the proposal from section 4 with the report, and stop. An audit run removes nothing. A later reply that names buckets picks up at section 4's confirmations.
+
 ## 1. Audit worktrees
 
-Record `df -h "$HOME"`, then run the audit over the folder that holds the repos, or over one repo:
+Record `df -h "$HOME"`, then run the audit over `<code-root>`:
 
 ```bash
-bash <skill-dir>/scripts/worktree-audit.sh <code-root or repo>
+bash <skill-dir>/scripts/worktree-audit.sh <code-root>
 ```
 
 The script is read-only. It prints a header and one tab-separated row per worktree, including `MERGED` (HEAD is in the default branch), the dirty counts, a suggested `BUCKET` and the `HEAD` SHA. Its stderr names repos whose remote it could not read.
@@ -40,10 +42,10 @@ Complete when every device and runtime is in a bucket or held, or the audit is n
 
 ## 3. Audit build artifacts and caches
 
-Run the second audit over the same folder:
+Run the second audit over `<code-root>`:
 
 ```bash
-bash <skill-dir>/scripts/artifact-audit.sh <code-root or repo>
+bash <skill-dir>/scripts/artifact-audit.sh <code-root>
 ```
 
 The script is read-only. It prints one tab-separated row per item, with its `KIND`, `NAME`, `SIZE_KIB`, a suggested `BUCKET`, a `CLEAN` command, the `WORKTREE` that holds it and its `PATH`.
@@ -104,6 +106,6 @@ Complete when the user has answered, and each approved branch is deleted or repo
 - The hold list, grouped by reason.
 - Simulator results, or why the simulator audit was unavailable.
 
-On an audit-only run, say that nothing was removed.
+On an audit run, say that nothing was removed.
 
 Adapted from pstack's worktree-cleanup playbook by Lauren Tan (MIT), cursor/plugins@e5a8186.
