@@ -1,0 +1,7 @@
+$ git rev-parse --short HEAD
+f162b42
+$ grep -niE 'html_preview|html_render|local browser|xdg-open|`open`|tailnet|SSH_CONNECTION' skills/eli25/SKILL.md
+3:description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in the user's browser, or as a tailnet URL over ssh.
+72:- Over ssh (`SSH_CONNECTION` set), a browser would open on the remote machine where nobody sees it. Unless the user named another target, serve the page on the tailnet and print its URL instead.
+73:- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux.
+79:| "tailscale", "my tailnet" | Tailscale serve, reachable only on the tailnet |

@@ -1,0 +1,13 @@
+Repair P1 (pass 1, spec + standards): the page must follow a T3 light/dark switch made while it is open.
+Method: html_preview (appearance light, 390 px). The page posts T3's own message
+{jsonrpc:"2.0", method:"ui/notifications/host-context-changed", params:{theme:"dark", styles:{variables:{"--background":"#0a0a0a"}}}}
+to itself; T3's injected listener rewrites <style id="t3-theme">, as it does on a real switch.
+
+RED: snippet at 92ee26f (runs once at load)
+  at load: data-theme=light --background=#fcfcfc
+  after T3 switches to dark: data-theme=light --background=#0a0a0a
+
+GREEN: snippet after the repair (pick() re-runs from a MutationObserver on <head>)
+  at load: data-theme=light --background=#fcfcfc
+  after T3 switches to dark: data-theme=dark --background=#0a0a0a
+  after T3 switches back to light: data-theme=light --background=#fcfcfc

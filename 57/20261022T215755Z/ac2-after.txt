@@ -1,0 +1,7 @@
+$ git rev-parse --short HEAD
+dd1eaf4
+$ grep -niE 'html_preview|html_render|local browser|xdg-open|`open`|tailnet|SSH_CONNECTION' skills/eli25/SKILL.md
+85:4. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width and height.
+92:1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 360 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. These checks replace Field Guide's first delivery check, on its switch and widths, and its other checks still apply.
+93:2. Show it with `html_render`. Set its height to the `contentHeight` of the 360-pixel preview, because T3 uses the height only on phones, which are about 360 pixels wide. Open no local browser: the page lives in the thread, where the user reads it on any device.
+95:**Done when** `html_render` has shown the page in the thread.

@@ -1,0 +1,9 @@
+Repair P1 (pass 1, spec): ../visual-explainer does not resolve from eli25's folder.
+$ ls -la ~/.agents/skills | grep -E 'eli25|visual-explainer'
+eli25 -> ~/development/skills/skills/eli25
+$ ls ~/.agents/skills/eli25/../visual-explainer/references/field-guide.md
+ls: ~/.agents/skills/eli25/../visual-explainer/references/field-guide.md: No such file or directory
+$ node -e 'fs.existsSync(HOME+"/.agents/skills/eli25/../visual-explainer/references/field-guide.md")'
+false
+(eli25 is a symlink into the skills repo, so the OS resolves .. to the repo's skills/ folder, which holds no visual-explainer.
+ ../unslop works only because unslop is in the repo too.)

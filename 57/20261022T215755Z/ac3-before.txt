@@ -1,0 +1,6 @@
+$ git rev-parse --short HEAD
+f162b42
+$ grep -n '^| \[eli25\]' README.md
+11:| [eli25](skills/eli25/SKILL.md) | Explain a PR, stack, plan, spike, system or incident as a short visual page shaped by its topic, optionally hosted on Vercel. |
+$ grep -ci tailscale README.md
+0

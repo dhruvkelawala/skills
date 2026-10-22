@@ -1,0 +1,24 @@
+$ git rev-parse --short HEAD
+f162b42
+$ git ls-files skills/eli25
+skills/eli25/SKILL.md
+skills/eli25/agents/openai.yaml
+skills/eli25/references/deploy.md
+skills/eli25/references/render-check.mjs
+skills/eli25/references/theme.html
+$ grep -rniE 'render-check|theme\.html|arcade|research-explainer|tailscale|tailnet' skills/eli25
+skills/eli25/references/deploy.md:5:## Tailscale
+skills/eli25/references/deploy.md:7:Only devices on the tailnet can open the URL.
+skills/eli25/references/deploy.md:10:tailscale serve status | grep -q '/eli25' || tailscale serve --bg --set-path /eli25 ~/.agent/diagrams
+skills/eli25/references/deploy.md:11:host=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
+skills/eli25/references/deploy.md:15:Tailscale serves the whole diagrams folder, so a page is live as soon as it is written. An updated page or a second page needs no new serve.
+skills/eli25/SKILL.md:3:description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in the user's browser, or as a tailnet URL over ssh.
+skills/eli25/SKILL.md:57:2. Start from `research-explainer/templates/explainer-template-arcade.html` in the sibling skill folder and replace its content. Keep its neo-brutalist look: thick dark borders, hard offset shadows, flat high-contrast colours, oversized heavy type, square corners, and figures on the fixed dark panel. Give each topic its own small palette by swapping the accent hexes. Drop template parts the shape does not use.
+skills/eli25/SKILL.md:62:   - `references/theme.html` has the code for all three.
+skills/eli25/SKILL.md:64:5. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
+skills/eli25/SKILL.md:72:- Over ssh (`SSH_CONNECTION` set), a browser would open on the remote machine where nobody sees it. Unless the user named another target, serve the page on the tailnet and print its URL instead.
+skills/eli25/SKILL.md:79:| "tailscale", "my tailnet" | Tailscale serve, reachable only on the tailnet |
+skills/eli25/references/theme.html:2:  Theme kit for an eli25 page built from research-explainer/templates/explainer-template-arcade.html.
+skills/eli25/references/theme.html:4:  The render check (references/render-check.mjs) expects the id "theme-toggle" and the storage key "eli25-theme".
+(plus matches inside render-check.mjs itself: 2)
+exit: matches=4 files

@@ -1,0 +1,47 @@
+$ git rev-parse --short HEAD
+dd1eaf4
+$ sed -n '1,4p;10,32p' skills/eli25/SKILL.md   # description, unasked rule, step 1
+---
+name: eli25
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to deploy one to Vercel. Also use unasked after a review intro or a recap whose PR adds a part, changes a flow across parts, or is a stack, and when the user still doesn't get a chat answer. Writes a page of about 400 words in the Field Guide look and shows it in the thread as a T3 visual page.
+---
+Invoke as `/eli25 <topic>`. The topic can be a PR number, a stack, a plan file, a spike, or a phrase. With no topic, explain the work in this conversation.
+
+A page comes without asking in two cases. After the intro of a review or a recap, make one when its PR adds a part, changes a flow across parts, or is a stack. When the user says they still don't get a chat answer, the page is the next try. Every other answer stays in chat.
+
+## 1. Pick the shape
+
+Read the source first: the diff and PR body, the plan file, the code, the measurements. Then pick sections for what the reader must understand after reading. The rows are suggestions, and each cell names a section's job, not its title. Merge, reorder or drop sections to fit the topic.
+
+| Topic | Sections that usually work |
+| --- | --- |
+| PR | Before and after. One real request traced through the change. One "Not in this change" line. |
+| Stack | One before-and-after block per PR, bottom first. Then one request traced through the stack and one "Not in this change" line. |
+| Plan | Today versus target. Build order. Open decisions. The next action and what is left. |
+| System | A picture of the parts. One worked example through them. |
+| Spike or assessment | What was measured and what was assumed. The recommendation. The next action and what is left. |
+| Incident | Timeline. Cause. Fix. How to spot it next time. |
+| Concept | The mental model. An example. The common misconception, if a real one exists. |
+
+A PR or stack page always has its three parts and ends on the "Not in this change" line, because the review tour gives the files to read.
+
+**Done when** you can name the sections and the one real example the page will trace, with its real names and numbers.
+
+## 2. Write the page
+$ sed -n '/^- \*\*Headings/p;/^\*\*Done when\*\* the page has/p' skills/eli25/SKILL.md
+- **Headings.** Each heading is one plain sentence, with a subject and a verb, that states what its section shows: "The app checks every ticket the model cites", or "A verdict stays valid until the diff changes" where a first draft had the slogan "A verdict covers the patch, not the commit". Field Guide's serif italic tail stays off eli25 headings.
+**Done when** the page has its opener, its prose runs to about 400 words, every section sits under a heading that is a plain sentence, and a plan or spike ends on one next action.
+$ sed -n '/## 5. Deploy/,$p' skills/eli25/SKILL.md
+## 5. Deploy on request
+
+Deploy only when the user asks, for a page meant for a teammate. The user names the target in plain words, now or in a later message. The commands are in `references/deploy.md`.
+
+| The user says | Target |
+| --- | --- |
+| "argentlabs vercel", "work vercel", "company vercel" | Vercel, work scope |
+| "personal vercel", "my vercel" | Vercel, personal scope |
+| "vercel" alone | Work scope for an argentlabs repo, personal scope otherwise |
+
+Report each URL as a plain URL on its own line.
+
+**Done when** the user has the URL.

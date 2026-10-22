@@ -1,0 +1,19 @@
+Sample eli25 page built by following skills/eli25/SKILL.md at dd1eaf4: ~/.agent/diagrams/eli25-t3-pages-eli25.html (copy: sample-page.html)
+Previewed with T3's html_preview. Each preview appended one diagnostic line before </body>:
+  console.log("theme=" + document.documentElement.dataset.theme + " overflowX=" + (scrollWidth > clientWidth))
+
+appearance  width  contentHeight  console
+light        728       1502       theme=light overflowX=false   page-728-light.png
+dark         728       1502       theme=dark  overflowX=false   page-728-dark.png
+light        360       2124       theme=light overflowX=false   page-360-light.png
+dark         360       2124       theme=dark  overflowX=false   page-360-dark.png
+
+Prose words (captions in, figure labels out): 270
+Headings: The skill drops two files and the Tailscale route|A request for this page ends in html_render
+No theme switch, no localStorage: 0 matches
+
+Phone frame height (repairs 88656a9 and dd1eaf4), measured on the page before its file-tree plate was cut:
+  contentHeight at 728: 1743   (d29b60b told the agent to use this: a 360 phone frame would cap at 1743 and scroll 622 px inside)
+  contentHeight at 390: 2291   (88656a9 used this: still 74 px short on a 360 phone)
+  contentHeight at 360: 2365   (dd1eaf4 uses this)
+html_render caps height at 2000, so a Field Guide page taller than that at 360 still scrolls inside the frame on a phone (this page: 2124).

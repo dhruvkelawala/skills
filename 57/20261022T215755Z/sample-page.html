@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>
+  (() => {
+    const root = document.documentElement;
+    const c = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const pick = () => {
+      const bg = getComputedStyle(root).getPropertyValue("--background");
+      if (!bg) return;
+      c.fillStyle = bg;
+      c.fillRect(0, 0, 1, 1);
+      const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
+      root.dataset.theme = r * 299 + g * 587 + b * 114 < 128000 ? "dark" : "light";
+    };
+    pick();
+    new MutationObserver(pick).observe(document.head, { childList: true, subtree: true, characterData: true });
+  })();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>eli25 pages in the T3 thread</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4efe6; --surface:#fbf8f2; --fg:#121212; --muted:#55504a; --rule:#a9a296; --shadow:#121212;
+  --code-bg:rgba(18,18,18,.06);
+  --cobalt:#1f4bd8; --tomato:#ef5a3c; --butter:#f6d44c; --on-field:#121212; --on-cobalt:#fff;
+  --cobalt-fg:#1f4bd8; --tomato-fg:#b0341a;
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --serif:"Instrument Serif",Georgia,serif;
+  --sans:"Instrument Sans",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+:root[data-theme=dark]{
+  --bg:#14120f; --surface:#1d1a16; --fg:#f1ebe0; --muted:#b3aa9b; --rule:#5a534a; --shadow:#000;
+  --code-bg:rgba(241,235,224,.09);
+  --cobalt-fg:#8ea6ff; --tomato-fg:#ff8d73;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --bg:#14120f; --surface:#1d1a16; --fg:#f1ebe0; --muted:#b3aa9b; --rule:#5a534a; --shadow:#000;
+    --code-bg:rgba(241,235,224,.09);
+    --cobalt-fg:#8ea6ff; --tomato-fg:#ff8d73;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--background, var(--bg));color:var(--fg);font:400 17px/1.55 var(--sans);-webkit-font-smoothing:antialiased;text-wrap:pretty}
+main{padding:4px 10px 24px 0}
+h2,h3{font-family:var(--display);margin:0;letter-spacing:-.03em;line-height:1.02;text-wrap:balance}
+p{margin:0}
+code{font:500 .86em var(--mono);background:var(--code-bg);padding:1px 4px;border-radius:2px}
+.label{font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.opener{font-family:var(--display);font-weight:700;font-size:clamp(1.5rem,4.6vw,2.2rem);letter-spacing:-.025em;line-height:1.08;max-width:24ch;margin:8px 0 22px}
+.opener .k{color:var(--cobalt-fg)}
+
+.specimens{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.spec{min-width:0;background:var(--surface);border:3px solid var(--fg);display:flex;flex-direction:column}
+.spec-top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 14px;border-bottom:3px solid var(--fg);font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.s-tomato .spec-top{background:var(--tomato);color:var(--on-field)}
+.s-cobalt .spec-top{background:var(--cobalt);color:var(--on-cobalt)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--fg);border:2px solid var(--fg);border-radius:99px;padding:1px 9px;font-weight:600;white-space:nowrap}
+.spec-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.spec h3{font-size:1.6rem;font-weight:700}
+.spec h3 em{font-family:var(--serif);font-style:italic;font-weight:400;font-size:1.12em}
+dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr)}
+dt{font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:8px 12px 0 0;color:var(--muted);border-top:1.5px dashed var(--rule)}
+dd{margin:0;padding:6px 0 6px;border-top:1.5px dashed var(--rule);font-size:16px}
+
+.sec{padding-top:32px}
+.sec-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start;margin-bottom:16px}
+.sec-no{font-family:var(--display);font-weight:800;font-size:clamp(2.6rem,7vw,4rem);line-height:.8;letter-spacing:-.06em}
+h2{font-size:clamp(1.5rem,3.8vw,2.2rem);font-weight:700;max-width:24ch}
+.sec-head .label{display:block;margin-bottom:8px}
+.sec p+p{margin-top:12px}
+.sec p{max-width:62ch}
+
+figure{margin:20px 0 0}
+.plate{background:var(--surface);border:3px solid var(--fg);padding:14px 16px;box-shadow:10px 10px 0 var(--shadow)}
+.plate-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1.5px solid var(--fg);margin-bottom:12px}
+pre{margin:0;font:500 14px/1.55 var(--mono);white-space:pre;overflow-x:auto}
+.add{color:var(--cobalt-fg)}
+.del{color:var(--tomato-fg)}
+figcaption{margin-top:18px;font-size:16px;max-width:62ch}
+.not{margin-top:36px;padding-top:12px;border-top:3px solid var(--fg);font-size:16px}
+.not strong{font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-right:6px}
+
+@media (max-width:640px){
+  .specimens{grid-template-columns:minmax(0,1fr)}
+  .sec-head{grid-template-columns:minmax(0,1fr);gap:6px}
+  .plate{box-shadow:6px 6px 0 var(--shadow)}
+  main{padding-right:6px}
+}
+</style>
+</head>
+<body>
+<main>
+  <p class="label">eli25 · PR for issue #57</p>
+  <p class="opener">An eli25 page now opens <span class="k">inside the T3 thread</span>, drawn in Field Guide and coloured by T3's own light or dark mode.</p>
+
+  <figure>
+    <div class="specimens">
+      <article class="spec s-tomato">
+        <div class="spec-top"><span>Specimen No. 1 · Before</span><span class="chip">■ Removed</span></div>
+        <div class="spec-body">
+          <h3>The <em>browser</em> page</h3>
+          <dl>
+            <dt>Look</dt><dd>research-explainer's arcade template</dd>
+            <dt>Theme</dt><dd>its own toggle, saved in the browser</dd>
+            <dt>Check</dt><dd>a headless Chrome script</dd>
+            <dt>Shown in</dt><dd>a browser tab, or a tailnet URL over ssh</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="spec s-cobalt">
+        <div class="spec-top"><span>Specimen No. 2 · After</span><span class="chip">● Now</span></div>
+        <div class="spec-body">
+          <h3>The <em>thread</em> page</h3>
+          <dl>
+            <dt>Look</dt><dd>Field Guide, from the visual-explainer skill</dd>
+            <dt>Theme</dt><dd>whatever T3 is showing</dd>
+            <dt>Check</dt><dd><code>html_preview</code> in light and dark</dd>
+            <dt>Shown in</dt><dd>the thread, through <code>html_render</code></dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </figure>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="sec-no">01</div>
+      <div><span class="label">Plate I · Before and after</span><h2>The skill drops two files and the Tailscale route</h2></div>
+    </div>
+    <p>Before this change, eli25 kept a theme kit and a 293-line render check of its own, and it opened the page in a browser. The check started headless Chrome, so it ran only on a machine that had it. The page then landed in a tab the user could miss, or on the tailnet.</p>
+    <p>Now the page appears in the reply column, where the user reads it on a laptop or a phone. Vercel stays, but only when the user asks for a page to share with a teammate.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="sec-no">02</div>
+      <div><span class="label">Plate II · One request</span><h2>A request for this page ends in html_render</h2></div>
+    </div>
+    <p>Here is <code>/eli25 57</code>, the request that made this page. The agent picks the PR shape and writes the prose. Then it builds the page from Field Guide's parts and puts one script first in the head.</p>
+    <figure class="plate">
+      <div class="plate-top"><span class="label">/eli25 57</span><span class="label">dark thread</span></div>
+<pre>pick the PR shape
+write the prose
+build from Field Guide
+  script reads --background
+    #0a0a0a, so data-theme
+    becomes <span class="add">dark</span>
+html_preview, four times
+  light, dark at 728 and 360
+html_render in the thread</pre>
+      <figcaption>T3 sends no <code>prefers-color-scheme</code>, so the script reads the thread's background colour. When the user switches mode, T3 rewrites its theme style and the script picks again.</figcaption>
+    </figure>
+  </section>
+
+  <p class="not"><strong>Not in this change</strong>The visual-explainer skill learning T3 pages itself (#58), and pr-review's offer of a page.</p>
+</main>
+</body>
+</html>

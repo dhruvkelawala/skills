@@ -1,0 +1,42 @@
+$ git rev-parse --short HEAD
+f162b42
+$ sed -n '1,4p;12,25p' skills/eli25/SKILL.md   # description and step 1
+---
+name: eli25
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in the user's browser, or as a tailnet URL over ssh.
+---
+## 1. Pick the shape
+
+Read the source first: the diff and PR body, the plan file, the code, the measurements. Then pick the row for what the reader must understand after reading. Each cell names a section's job, not its title.
+
+| Topic | Sections, in order |
+| --- | --- |
+| PR or stack | Before and after. One real request traced through the change. One "Not in this change" line. A review route of three to six files to read in order, ending with "Next: `/pr-review <PR>`". A stack gets one before-and-after block per PR in stack order, then one route. |
+| Plan | Today versus target. Build order. Open decisions. The next action and what is left. |
+| System | A picture of the parts. One worked example through them. |
+| Spike or assessment | What was measured and what was assumed. The recommendation. The next action and what is left. |
+| Incident | Timeline. Cause. Fix. How to spot it next time. |
+| Concept | The mental model. An example. The common misconception, if a real one exists. |
+
+**Done when** you can name the row, the sections, and the one real example the page will trace, with its real names and numbers.
+$ sed -n '69,88p' skills/eli25/SKILL.md   # step 4 Deliver
+## 4. Deliver
+
+Show the page:
+- Over ssh (`SSH_CONNECTION` set), a browser would open on the remote machine where nobody sees it. Unless the user named another target, serve the page on the tailnet and print its URL instead.
+- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux.
+
+Deploy when the user names a target in plain words, now or in a later message. The commands are in `references/deploy.md`.
+
+| The user says | Target |
+| --- | --- |
+| "tailscale", "my tailnet" | Tailscale serve, reachable only on the tailnet |
+| "argentlabs vercel", "work vercel", "company vercel" | Vercel, work scope |
+| "personal vercel", "my vercel" | Vercel, personal scope |
+| "vercel" alone | Work scope for an argentlabs repo, personal scope otherwise |
+
+A deploy of a page that already passed the render check skips the check, and the URL needs no test fetch.
+
+Report the local path and each URL as a plain URL on its own line, where the page opened, and the section titles.
+
+**Done when** the user has a path or URL they can open now.
