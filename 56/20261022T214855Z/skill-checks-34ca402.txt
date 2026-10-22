@@ -1,0 +1,39 @@
+skill-text checks at 34ca402, run from the repo root
+== check-ac1.sh
+ok: step 2 opens with the sketch: 1. **The sketch.** The answer's first line is the sketch's opening fence, with no status line, note or label above it. Draw the change before and after in a fenced `text` block: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines, each under 40 characters, so it reads on a phone.
+ok: the example's sketch (line 2) comes before its prose (line 11)
+exit 0
+== check-ac2.sh
+ok: no zoom-in ending or example in skills/explain-diff/SKILL.md
+ok: a reader still lost is sent to ../eli25/SKILL.md
+exit 0
+== check-ac3.sh
+ok: repo-relative file link (T3 file panel): src/intake/store.ts:31
+ok: repo-relative file link (T3 file panel): src/intake/schema.ts:14
+ok: repo-relative file link (T3 file panel): src/intake/store.ts:31
+ok: repo-relative file link (T3 file panel): src/intake/load.ts:9
+ok: the trace format is not a code-formatted path
+ok: no review-checkout links
+exit 0
+
+== the same checks on the base skill (f162b42)
+== check-ac1.sh
+FAIL: step 2's first item is not the sketch: 1. **The problem.** One or two sentences, no code.
+FAIL: the example has no sketch before its prose (fence: none, first prose: 2)
+exit 1
+== check-ac2.sh
+FAIL: zoom-in ending still present:
+43:End with two or three labelled zoom-in choices, and ask which part is still unclear.
+58:> **Zoom in?** (a) where the run log is stored (b) why passthrough matters (c) the restart test
+FAIL: no eli25 next try in skills/explain-diff/SKILL.md
+exit 1
+== check-ac3.sh
+FAIL: link opens outside T3: /abs/path/src/intake/store.ts:31
+FAIL: link opens outside T3: /repo/src/intake/schema.ts:14
+FAIL: link opens outside T3: /repo/src/intake/store.ts:31
+FAIL: link opens outside T3: /repo/src/intake/load.ts:9
+FAIL: trace format is a code-formatted path, which T3 links into the checkout:
+34:3. **The trace.** One realistic input followed through the changed code. Write one line per step, each with `path:line`. Add one edge value when it changes the outcome.
+FAIL: still links into a review checkout:
+51:- Every trace step is a Markdown link to the file and line at the explained revision, such as `[store.ts:31](/abs/path/src/intake/store.ts:31)`, so the host opens it in its own editor. For a PR that is not checked out, make the read-only review checkout from pr-review step 1 first and link into it, never to GitHub.
+exit 1

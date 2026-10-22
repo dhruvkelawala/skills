@@ -1,0 +1,47 @@
+explain-diff live runs at 34ca402: a headless agent (claude-sonnet-5) told to read skills/explain-diff/SKILL.md and follow it, in a scratch clone of the branch.
+"Explain this change.": the checkout is at the explained revision, so repo-relative links are expected.
+"Explain commit 55f9ab8.": the checkout is past that commit, so plain-text file and line, no links, are expected.
+Each answer checked for: the sketch's fence as its first line; no zoom-in menu outside fences; only links that open in T3.
+
+== "Explain this change." (run 1)
+ok: opens with the sketch: ```text
+ok: no zoom-in menu
+ok: repo-relative link: skills/explain-diff/SKILL.md:24
+ok: repo-relative link: skills/explain-diff/SKILL.md:32
+ok: repo-relative link: skills/explain-diff/SKILL.md:53
+ok: repo-relative link: skills/explain-diff/SKILL.md:44
+ok: repo-relative link: skills/explain-diff/SKILL.md:52
+exit 0
+== "Explain commit 55f9ab8." (run 1)
+FAIL: opens with prose before the sketch: Good, I have what I need to write the explanation now.
+ok: no zoom-in menu
+ok: no code-formatted path:line
+exit 1
+== "Explain commit 55f9ab8." (run 2)
+ok: opens with the sketch: ```text
+ok: no zoom-in menu
+ok: no code-formatted path:line
+exit 0
+== "Explain commit 55f9ab8." (run 3)
+ok: opens with the sketch: ```text
+ok: no zoom-in menu
+ok: no code-formatted path:line
+exit 0
+== "Explain commit 55f9ab8." (run 4)
+ok: opens with the sketch: ```text
+ok: no zoom-in menu
+ok: no code-formatted path:line
+exit 0
+
+== the same request on the base skill (f162b42)
+FAIL: opens with prose before the sketch: **Problem:** `unslop` could only fire when the user named it or a calling skill (`how`, `why`, `eli25`, `explain-diff`) told it to run as a last step. Anything else the agent wrote and filed away or posted, like a PR description it drafts unprompted, never got a cleanup pass, because `disable-model-invocation: true` kept the agent from choosing the skill on its own.
+FAIL: zoom-in menu present
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:3
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:12
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:20
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:12
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/README.md:39
+FAIL: link opens outside T3: /private/tmp/explain-diff-eval-M9LPey/skills/skills/bro/SKILL.md:4
+ok: no code-formatted path:line
+exit 1

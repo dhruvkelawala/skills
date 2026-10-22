@@ -1,0 +1,28 @@
+explain-diff headless run: before-old-commit
+scratch clone of the checkout at f162b42 (the base skill, detached)
+request: Explain commit 55f9ab8.
+---- answer ----
+**Problem:** `unslop` could only fire when the user named it or a calling skill (`how`, `why`, `eli25`, `explain-diff`) told it to run as a last step. Anything else the agent wrote and filed away or posted, like a PR description it drafts unprompted, never got a cleanup pass, because `disable-model-invocation: true` kept the agent from choosing the skill on its own.
+
+**Key idea:** Drop that flag and let the description itself carry the trigger, the same way every other skill's description does.
+
+**Trace:** Agent finishes drafting a PR body meant to be posted, with no calling skill in the loop.
+- Without `disable-model-invocation`, the agent now scans skill descriptions as usual and matches [unslop/SKILL.md:3](/private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:3), which now reads "Use when you write or edit docs, READMEs, PR or issue text... apply it before you save or post them."
+- The new section at [unslop/SKILL.md:12](/private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:12) confirms the scope: run on writing that lands in a file or gets posted, and skip chat replies, code, commit messages and logs.
+- [unslop/SKILL.md:20](/private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:20) adds that a calling skill's own instructions still override this when they differ.
+- The agent edits the PR body in place before posting it.
+
+Edge case: if the agent instead writes a commit message or a quick chat answer, [unslop/SKILL.md:12](/private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md:12) excludes both, so no self-triggered pass happens there.
+
+**Not in this change:** The 33 numbered patterns the skill scans for are untouched; only when and on what it fires changed.
+
+**The parts**
+
+- [unslop/SKILL.md](/private/tmp/explain-diff-eval-M9LPey/skills/skills/unslop/SKILL.md): frontmatter loses `disable-model-invocation`, the description becomes the trigger, and a new "What it runs on and what it leaves alone" section states the scope and the override rule.
+- [README.md:39](/private/tmp/explain-diff-eval-M9LPey/skills/README.md:39): the unslop row in the parts table gets a clause noting the agent now also runs it unprompted on docs, PR/issue text and messages, but not chat replies.
+
+**Hidden machinery:** `disable-model-invocation` is a Claude Code skill frontmatter field that stops the agent from ever picking a skill on its own; [bro/SKILL.md:4](/private/tmp/explain-diff-eval-M9LPey/skills/skills/bro/SKILL.md:4) still uses it, which is why `bro` still needs to be asked for by name while `unslop` no longer does.
+
+**Zoom in?** (a) what counts as "writing that gets posted" versus a chat reply (b) how a calling skill's instructions override this file in practice (c) `bro` as a contrast case still gated by `disable-model-invocation`
+
+Which part would help most?

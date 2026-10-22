@@ -1,0 +1,24 @@
+explain-diff headless run: final-old-2
+scratch clone of the checkout at 34ca402 (branch feat/56-explain-diff-sketch)
+request: Explain commit 55f9ab8.
+---- answer ----
+```text
+skills/unslop/SKILL.md
+- disable-model-invocation: true
++ description: use on text that
++   goes in a file or gets posted
++   not chat, code, commit msgs
+
++ ## What it runs on and what
++   it leaves alone
+```
+
+**Problem:** `disable-model-invocation: true` kept unslop from firing on its own. Only a calling skill like how, why, eli25 or explain-diff could load it, so a PR description, an issue body, or any other posted text an agent writes on its own kept whatever stilted phrasing it started with.
+
+**Key idea:** The commit deletes that flag and replaces it with judgment. The new description and a "What it runs on and what it leaves alone" section now do the gatekeeping the flag used to do by blanket refusal: run it on writing that ends up in a file or gets posted, skip chat replies, code, commit messages and logs.
+
+**Trace:** An agent finishes drafting a GitHub issue body, text that gets posted for someone else to read. skills/unslop/SKILL.md line 3's description names issue text as an example to run before posting it. Line 12 confirms the rule: "run unslop only on writing that goes into a file or gets posted... Skip chat replies, code, commit messages." The issue body qualifies, so the agent edits it with unslop before posting. If the same agent instead writes a chat message summarizing that issue, line 12's "skip chat replies" applies and it leaves the message alone, unless the skill that told it to write the summary, such as how or why, says otherwise. Line 12 names that override directly, and line 20 states the general rule: "A calling skill's own instructions win where they differ from this file."
+
+README.md line 39 picks up the same split: the unslop row now says it runs "on its own as the last edit to docs, PR and issue text, and messages, but not chat replies."
+
+**Not in this change:** The actual rewrite rules in the Process and "Patterns to detect and fix" sections stay the same; this commit only changes when unslop gets invoked, not what it does once invoked.

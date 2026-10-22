@@ -1,0 +1,30 @@
+explain-diff headless run: final-branch
+scratch clone of the checkout at 34ca402 (branch feat/56-explain-diff-sketch)
+request: Explain this change.
+---- answer ----
+```text
+ explain-diff answer
+-  problem
+-  key idea
+-  trace: /abs/path link
+-  zoom-in menu
++  sketch (before/after)
++  problem, links PR
++  key idea
++  trace: repo-relative link
++  stops, no menu
+```
+
+**Problem:** The old skill jumped straight into prose, and every trace link pointed at an absolute filesystem path meant for a local editor. That path broke for a PR that wasn't checked out, and gave T3's reader nothing to scan before the words started.
+
+**Key idea:** Every answer now opens with a before-and-after sketch, and every link is addressed to T3's own file and PR panels instead of a local filesystem path.
+
+**Trace:** A user asks to explain PR #312, which isn't checked out locally. [SKILL.md:24](skills/explain-diff/SKILL.md:24) now has the agent fetch `pull/312/head` and run `git rev-parse FETCH_HEAD` right away, pinning the commit before a later fetch moves the ref. [SKILL.md:32](skills/explain-diff/SKILL.md:32) puts the sketch on the first line of the answer, ahead of any note or status line. Because PR #312 isn't checked out, [SKILL.md:53](skills/explain-diff/SKILL.md:53) has the agent write each trace step's file and line as plain text instead of a link, since a link would open whatever the current checkout holds, not PR #312's code. [SKILL.md:44](skills/explain-diff/SKILL.md:44) ends the answer right after the "Not in this change" line; a reader who still doesn't follow gets pointed to eli25 instead of a list of zoom-in choices. When the diff being explained is already checked out, like this branch against main, [SKILL.md:52](skills/explain-diff/SKILL.md:52) switches back to real file links, which is why the links above work.
+
+**Not in this change:** The skill still doesn't say what to sketch when a change has no flow or shape to draw, such as this wording-only diff.
+
+**The parts:**
+**The sketch:** a before-and-after fenced block, now the literal first line of every answer.
+**Link addressing:** trace links use repo-relative paths for T3's panels, and fall back to plain text when the checkout doesn't match the explained revision.
+**PR fetch pinning:** fetching an unchecked-out PR now pins `FETCH_HEAD` right after fetching it, before a later fetch can move it.
+**No zoom-in menu:** the answer stops after its last section; eli25 is the next step instead of a menu.

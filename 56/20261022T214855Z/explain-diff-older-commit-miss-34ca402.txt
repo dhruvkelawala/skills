@@ -1,0 +1,38 @@
+explain-diff headless run: final-old-1
+scratch clone of the checkout at 34ca402 (branch feat/56-explain-diff-sketch)
+request: Explain commit 55f9ab8.
+---- answer ----
+Good, I have what I need to write the explanation now.
+
+---
+
+```text
+ skills/unslop/SKILL.md
+ frontmatter:
+-  description: short
+-  disable-model-invocation: true
++  description: longer, says when
++  (flag removed)
+ body:
++  new section:
++  "what it runs on,
++   what it leaves
++   alone"
+
+ agent's own writing
+   docs, PR text, msgs
+-    (unslop never fires
+-     unless a skill says so)
++    (agent can fire
++     unslop itself)
+```
+
+**Problem:** Until now, unslop only ran when another skill, such as how or why, explicitly told the agent to run it on a chat answer. The agent itself couldn't reach for it while writing a doc, a PR, or a message, so slop could slip into anything the agent wrote on its own initiative.
+
+**Key idea:** The commit deletes `disable-model-invocation: true` from the skill's frontmatter. That flag had kept the agent from ever picking this skill on its own; a skill had to name it directly. Dropping it, paired with a description that now states exactly when to self-invoke ("as the last edit on writing that goes into a file or gets posted") and when not to (chat replies, code, commit messages), lets the agent trigger unslop by itself at the right moments instead of needing every caller to ask for it.
+
+**Trace:** Say the agent finishes writing a new README section on its own, with no calling skill involved. Before this change: the agent has no instruction to run unslop, since `disable-model-invocation: true` kept it out of the agent's own trigger list, and only an explicit call from another skill (listed in the description's "Use when...") would fire it, so the AI-ish phrasing lands unchanged. After this change: the agent reads the new description in skills/unslop/SKILL.md (line 3), recognizes the README edit as "writing that goes into a file", and the new "What it runs on and what it leaves alone" section (skills/unslop/SKILL.md, lines 10-20) tells it to run the edit pass before saving, while leaving quoted text, code, and the user's own words untouched. The edge case: if the agent were instead drafting a commit message or a chat reply, that same section says to skip it, so routine git work doesn't get the treatment.
+
+The README.md line listing unslop as a "part" also gets a wording update, from "run it last on what they write" to add "the agent runs it on its own as the last edit to docs, PR and issue text, and messages, but not chat replies" — so the README's description of unslop's reach now matches the skill's own.
+
+**Not in this change:** The rule list (items 3-33) that defines what counts as an AI tell is untouched; this commit only changes when the pass fires, not what it fixes.
