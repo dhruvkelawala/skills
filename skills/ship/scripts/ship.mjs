@@ -213,6 +213,42 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
   return { run, ceiling: null };
 }
 
+const CHECK_PASSED = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
+// Ruleset rules that a squash merge made by GitHub keeps, or that bypassBlockers confirms itself.
+const BYPASS_SAFE_RULES = new Set(["PULL_REQUEST", "REQUIRED_STATUS_CHECKS", "DELETION", "NON_FAST_FORWARD", "CREATION", "REQUIRED_LINEAR_HISTORY", "REQUIRED_SIGNATURES"]);
+
+// What stops ship from taking GitHub's admin bypass for --force. The bypass skips every branch rule,
+// not only the review, so ship takes it only when each other rule holds as GitHub would judge it:
+// a required check passes on the test merge commit where that has results and on the head
+// otherwise, from the app the rule names, every run of it included; and any other rule is one a
+// squash merge keeps or one checked here. Takes the repository that needsAdminBypass reads, and
+// whether the head is behind its base. A classic protection rule shows its details only to admins.
+export function bypassBlockers(r, { behind }) {
+  const classic = r.ref?.branchProtectionRule;
+  const rules = r.ref?.rules.nodes ?? [];
+  const blockers = [];
+  if (r.ref?.refUpdateRule && !classic) blockers.push("only admins can read the branch's protection");
+  if (classic?.lockBranch) blockers.push("the branch is locked");
+  if (classic?.requiresDeployments) blockers.push("the branch requires deployments");
+  for (const rule of rules) if (!BYPASS_SAFE_RULES.has(rule.type)) blockers.push(`the branch has a ${rule.type} rule`);
+  const resolveThreads = classic?.requiresConversationResolution || rules.some((rule) => rule.parameters?.requiredReviewThreadResolution);
+  if (resolveThreads && r.pullRequest.reviewThreads.nodes.some((t) => !t.isResolved)) blockers.push("a review conversation is unresolved");
+  const upToDate = classic?.requiresStrictStatusChecks || rules.some((rule) => rule.parameters?.strictRequiredStatusChecksPolicy);
+  if (upToDate && behind) blockers.push("the head is behind its base, which the branch requires it to include");
+  const required = [
+    ...(classic?.requiredStatusChecks ?? []).map((c) => ({ context: c.context, app: c.app?.databaseId })),
+    ...rules.flatMap((rule) => rule.parameters?.requiredStatusChecks?.map((c) => ({ context: c.context, app: c.integrationId })) ?? []),
+  ];
+  const results = (commit) => commit?.statusCheckRollup?.contexts.nodes ?? [];
+  for (const { context, app } of required) {
+    const counted = (c) => (c.name ?? c.context) === context && (!app || c.checkSuite?.app?.databaseId === app);
+    const onMerge = results(r.pullRequest.potentialMergeCommit).filter(counted);
+    const runs = onMerge.length > 0 ? onMerge : results(r.object).filter(counted);
+    if (runs.length === 0 || !runs.every((c) => CHECK_PASSED.has(c.conclusion ?? c.state))) blockers.push(`required check ${context} has not passed`);
+  }
+  return blockers;
+}
+
 // ---------- io ----------
 
 const sh = (cmd, args, { trimOutput = true, ...opts } = {}) => {
@@ -372,34 +408,23 @@ function postComment(n, body, repo) {
   );
 }
 
-const CHECK_PASSED = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
-
-// --force skips only the wait for a required approval, through GitHub's admin bypass. The bypass
-// would skip the required checks as well, so ship takes it only while GitHub still shows the PR as
-// REVIEW_REQUIRED, and only once every check the base branch requires has passed at `head`, every
-// run of it included. The required names come from the branch's rules, because a required check
-// that has not reported yet is missing from the commit's results.
+// --force skips only the wait for a required approval, through GitHub's admin bypass, which ship
+// takes only while GitHub still shows the PR as REVIEW_REQUIRED and bypassBlockers finds nothing else
+// missing at `head`.
 function needsAdminBypass(n, head, repo) {
   try {
     const pr = JSON.parse(gh(["pr", "view", String(n), "--json", "reviewDecision,baseRefName"], repo));
     if (pr.reviewDecision !== "REVIEW_REQUIRED") return false;
     const [owner, name] = nameWithOwner(repo).split("/");
-    const q = "query($o:String!,$n:String!,$q:String!,$h:GitObjectID!){repository(owner:$o,name:$n){ref(qualifiedName:$q){refUpdateRule{requiredStatusCheckContexts} rules(first:100){nodes{type parameters{... on RequiredStatusChecksParameters{requiredStatusChecks{context}}}}}} object(oid:$h){... on Commit{statusCheckRollup{contexts(first:100){nodes{__typename ... on CheckRun{name conclusion} ... on StatusContext{context state}}}}}}}}";
-    const r = JSON.parse(sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `q=refs/heads/${pr.baseRefName}`, "-f", `h=${head}`])).data.repository;
-    const required = new Set([
-      ...(r.ref?.refUpdateRule?.requiredStatusCheckContexts ?? []),
-      ...(r.ref?.rules.nodes ?? []).flatMap((rule) => rule.parameters?.requiredStatusChecks?.map((c) => c.context) ?? []),
-    ]);
-    const passed = new Map();
-    for (const c of r.object?.statusCheckRollup?.contexts.nodes ?? []) {
-      const check = c.name ?? c.context;
-      passed.set(check, passed.get(check) !== false && CHECK_PASSED.has(c.conclusion ?? c.state));
-    }
-    const open = [...required].filter((check) => passed.get(check) !== true);
-    if (open.length) throw new Error(`--force still needs every required check to pass at ${head.slice(0, 12)}; not passed: ${open.join(", ")}`);
+    const checks = "statusCheckRollup{contexts(first:100){nodes{__typename ... on CheckRun{name conclusion checkSuite{app{databaseId}}} ... on StatusContext{context state}}}}";
+    const q = `query($o:String!,$n:String!,$pr:Int!,$q:String!,$h:GitObjectID!){repository(owner:$o,name:$n){ref(qualifiedName:$q){target{oid} refUpdateRule{pattern} branchProtectionRule{lockBranch requiresDeployments requiresConversationResolution requiresStrictStatusChecks requiredStatusChecks{context app{databaseId}}} rules(first:100){nodes{type parameters{... on PullRequestParameters{requiredReviewThreadResolution} ... on RequiredStatusChecksParameters{strictRequiredStatusChecksPolicy requiredStatusChecks{context integrationId}}}}}} pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved}} potentialMergeCommit{${checks}}} object(oid:$h){... on Commit{${checks}}}}}`;
+    const r = JSON.parse(sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-F", `pr=${n}`, "-f", `q=refs/heads/${pr.baseRefName}`, "-f", `h=${head}`])).data.repository;
+    const behind = Boolean(r.ref) && restJson(`repos/${owner}/${name}/compare/${r.ref.target.oid}...${head}`).behind_by > 0;
+    const blockers = bypassBlockers(r, { behind });
+    if (blockers.length) throw new Error(`--force would take GitHub's admin bypass, which skips every branch rule, and ${blockers.join("; ")}`);
     return true;
   } catch (error) {
-    if (isRateLimited(error)) throw new Error("--force reads the review rule and required checks through GitHub's GraphQL API, whose quota is spent; try again once it resets");
+    if (isRateLimited(error)) throw new Error("--force reads the branch's rules and checks through GitHub's GraphQL API, whose quota is spent; try again once it resets");
     throw error;
   }
 }

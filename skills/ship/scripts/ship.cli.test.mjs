@@ -153,6 +153,7 @@ if (args[0] === "pr" && args[1] === "comment") {
 }
 const endpoint = (args.find((a) => a === "user" || a.startsWith("repos/")) ?? "").split("?")[0];
 const method = args.includes("-X") ? args[args.indexOf("-X") + 1] : "GET";
+if (endpoint.startsWith("repos/fixture/repo/compare/")) answer({ behind_by: state.behindBy ?? 0 });
 const field = (name) => args.find((a) => a.startsWith(name + "="))?.slice(name.length + 1);
 const pages = (list) => (args.includes("--slurp") ? [list] : list);
 switch (method + " " + endpoint) {
@@ -283,9 +284,12 @@ test("--force lands a PR waiting only on a required approval, once ship has seen
   const branch = (...checks) => ({
     mergeQueue: null,
     ref: {
+      target: { oid: "b".repeat(40) },
       refUpdateRule: { requiredApprovingReviewCount: 1, requiredStatusCheckContexts: ["build"] },
-      rules: { nodes: [{ type: "REQUIRED_STATUS_CHECKS", parameters: { requiredStatusChecks: [{ context: "lint" }] } }] },
+      branchProtectionRule: { lockBranch: false, requiresDeployments: false, requiresConversationResolution: false, requiresStrictStatusChecks: true, requiredStatusChecks: [{ context: "build", app: null }] },
+      rules: { nodes: [{ type: "REQUIRED_STATUS_CHECKS", parameters: { strictRequiredStatusChecksPolicy: false, requiredStatusChecks: [{ context: "lint", integrationId: null }] } }] },
     },
+    pullRequest: { reviewThreads: { nodes: [] }, potentialMergeCommit: null },
     object: { statusCheckRollup: { contexts: { nodes: checks } } },
   });
   const { head, ship, cli, state, setState } = fixtureGitHub(t, { graphql: true, reviewDecision: "REVIEW_REQUIRED", branch: branch(build) });
@@ -295,12 +299,14 @@ test("--force lands a PR waiting only on a required approval, once ship has seen
   assert.equal(ship("merge", "7", "--head", head).status, 2, "without --force, GitHub's review rule still refuses the merge");
   const unreported = ship("merge", "7", "--head", head, "--force");
   assert.equal(unreported.status, 2, "the admin bypass would skip a required check that has not reported yet");
-  assert.match(unreported.stderr, /not passed: lint/);
+  assert.match(unreported.stderr, /required check lint has not passed/);
   setState({ branch: branch(build, { ...build, conclusion: null }, lint) });
-  assert.match(ship("merge", "7", "--head", head, "--force").stderr, /not passed: build/, "every run of a check must pass");
+  assert.match(ship("merge", "7", "--head", head, "--force").stderr, /required check build has not passed/, "every run of a check must pass");
+  setState({ branch: branch(build, lint), behindBy: 2 });
+  assert.match(ship("merge", "7", "--head", head, "--force").stderr, /behind its base/, "a branch that must be up to date");
   assert.equal(state().mergedAs, null);
 
-  setState({ branch: branch(build, lint) });
+  setState({ branch: branch(build, lint), behindBy: 0 });
   assert.deepEqual(cli("merge", "7", "--head", head, "--force"), { number: 7, head, mergeCommit: "c".repeat(40) });
   assert.deepEqual(state().calls.filter((c) => c[0] === "pr" && c[1] === "merge").map((c) => c.includes("--admin")), [false, true]);
 });

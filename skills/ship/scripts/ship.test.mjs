@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FINGERPRINT_DIFF_FLAGS, actor, formatVerdict, humanApprovers, landableRun, latestVerdict, parseArgs, parseDoor, patchFingerprint, planQueue, verdictStatus, walkStack } from "./ship.mjs";
+import { FINGERPRINT_DIFF_FLAGS, actor, bypassBlockers, formatVerdict, humanApprovers, landableRun, latestVerdict, parseArgs, parseDoor, patchFingerprint, planQueue, verdictStatus, walkStack } from "./ship.mjs";
 
 const TWO = "## Merge Danger\n\n**Door:** two-way\n\n**Blast Radius:** local";
 const ONE = "## Merge Danger\n\n**Door:** one-way\n\n**Blast Radius:** every user";
@@ -286,4 +286,33 @@ test("landableRun: someone else's PR needs a verdict from another account, and a
   assert.deepEqual(noApproval.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval of this patch" });
   const selfVerdict = landableRun([theirs], new Map([[1, ok("vlad")]]), { me: "dhruv" });
   assert.equal(selfVerdict.ceiling.blocker, "verdict was not recorded by someone other than the PR author");
+});
+
+// --- --force: GitHub's admin bypass skips every branch rule, so ship takes it only when the review is all that is missing
+
+const checkRun = (name, conclusion, app = 7) => ({ __typename: "CheckRun", name, conclusion, checkSuite: { app: { databaseId: app } } });
+const rollup = (...nodes) => ({ statusCheckRollup: { contexts: { nodes } } });
+const guarded = ({ classic = {}, rules = [], threads = [], onMerge = null, onHead = [checkRun("build", "SUCCESS")] } = {}) => ({
+  ref: {
+    target: { oid: "b".repeat(40) }, refUpdateRule: { pattern: "main" },
+    branchProtectionRule: classic && { lockBranch: false, requiresDeployments: false, requiresConversationResolution: false, requiresStrictStatusChecks: false, requiredStatusChecks: [{ context: "build", app: { databaseId: 7 } }], ...classic },
+    rules: { nodes: rules },
+  },
+  pullRequest: { reviewThreads: { nodes: threads }, potentialMergeCommit: onMerge && rollup(...onMerge) },
+  object: rollup(...onHead),
+});
+
+test("bypassBlockers: the admin bypass is taken only when every other rule holds as GitHub would judge it", () => {
+  assert.deepEqual(bypassBlockers(guarded(), { behind: false }), []);
+  assert.deepEqual(bypassBlockers(guarded({ rules: [{ type: "DELETION", parameters: null }, { type: "PULL_REQUEST", parameters: { requiredReviewThreadResolution: false } }] }), { behind: false }), [], "rules a squash merge keeps");
+  const cases = [
+    [{ onHead: [checkRun("build", "SUCCESS", 99)] }, false, "required check build has not passed", "a pass from an app other than the one the rule names"],
+    [{ onMerge: [checkRun("build", "FAILURE")] }, false, "required check build has not passed", "GitHub judges the test merge commit when it has results"],
+    [{ classic: { requiresDeployments: true } }, false, "the branch requires deployments"],
+    [{ rules: [{ type: "REQUIRED_DEPLOYMENTS", parameters: {} }] }, false, "the branch has a REQUIRED_DEPLOYMENTS rule"],
+    [{ classic: null }, false, "only admins can read the branch's protection"],
+    [{ classic: { requiresConversationResolution: true }, threads: [{ isResolved: true }, { isResolved: false }] }, false, "a review conversation is unresolved"],
+    [{ classic: { requiresStrictStatusChecks: true } }, true, "the head is behind its base, which the branch requires it to include"],
+  ];
+  for (const [shape, behind, blocker, why = blocker] of cases) assert.deepEqual(bypassBlockers(guarded(shape), { behind }), [blocker], why);
 });
