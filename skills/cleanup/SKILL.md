@@ -89,7 +89,7 @@ Delete each approved simulator item by its own ID, so the deletion matches the l
 
 Remove artifacts after worktrees, and skip an artifact whose path went with its worktree. Just before each removal, check that the path is still a directory and not a symlink. For a row marked `CANDIDATE-CHECK-USAGE`, also check that `git -C <worktree> check-ignore -q -- <path>` still succeeds and that the worktree is not in use. A failed check moves the item to the hold list. Then run `rm -rf -- <path>`, with `<path>` taken from the row.
 
-Clear each approved cache with its `CLEAN` command, or with `rm -rf -- <path>` when `CLEAN` is `delete`. When the tool is not installed, hold the cache with that reason.
+Clear each approved cache with its `CLEAN` command, or with `rm -rf -- <path>` when `CLEAN` is `delete`. Run the commands from `$HOME`, because inside a repo a tool can follow that project's settings and clear the project's own cache instead. When the tool is not installed, hold the cache with that reason.
 
 Complete when every approved item is removed or on the hold list with a reason.
 

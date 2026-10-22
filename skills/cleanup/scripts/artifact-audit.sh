@@ -56,9 +56,9 @@ done <<'EOF'
 npm|npm cache clean --force|.npm/_cacache
 pnpm|pnpm store prune|Library/pnpm/store
 pnpm|pnpm store prune|.local/share/pnpm/store
-yarn|yarn cache clean|Library/Caches/Yarn
-yarn|yarn cache clean|.cache/yarn
-yarn-berry|delete|.yarn/berry/cache
+yarn|delete|Library/Caches/Yarn
+yarn|delete|.cache/yarn
+yarn|delete|.yarn/berry/cache
 bun|bun pm cache rm|.bun/install/cache
 go-build|go clean -cache|Library/Caches/go-build
 go-build|go clean -cache|.cache/go-build
