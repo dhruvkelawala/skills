@@ -22,7 +22,7 @@ Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<pr
 
 1. **Helper.** The review helper is the `autoreview` script. Resolve the first that exists and keep it as `$AUTOREVIEW`:
    `.agents/skills/autoreview/scripts/autoreview`, `.claude/skills/autoreview/scripts/autoreview`, `$AGENTS_HOME/skills/autoreview/scripts/autoreview`, `~/.agents/skills/autoreview/scripts/autoreview`, `~/.claude/skills/autoreview/scripts/autoreview`. If none exists and review was not skipped, stop, because autoreview is required and an inline review cannot replace it.
-2. **Engine and model.** Read the `second-opinion` job from the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`). The chosen entry gives `--model <model>`, plus `--thinking <effort>` when it names an effort. A model or effort the user names replaces these. Keep the flags as `$ENGINE_FLAGS`. The engine and model stay fixed for the whole run. On capacity, rate-limit or latency errors, retry the same command up to three times, then report the blocker, because this job waits for its model rather than run on another. Only the helper's own documented account-access retry may change the model, and then the report and the PR body name the model the helper printed, not the one asked for.
+2. **Engine and model.** Read the `second-opinion` job from the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`). The chosen entry gives `--model <model>`, plus `--thinking <effort>` when it names an effort. A model or effort the user names replaces these. Keep the flags as `$ENGINE_FLAGS`. The engine and model stay fixed for the whole run. On capacity, rate-limit or latency errors, retry the same command up to three times, then report the blocker, because this job waits for its model rather than run on another. Only the helper's own documented account-access retry may change the model. That retry cannot be switched off, and the helper announces it on stderr as `retrying with <model>`. The model it ran is that one when the line appears, and otherwise the one on its `model:` line.
 3. **Base.** `--base` if given. Otherwise the predecessor branch's remote-tracking ref when stacked, else the remote default branch from `gh repo view --json defaultBranchRef` (REST: `gh api repos/{owner}/{repo} --jq .default_branch`). Record the resolved base SHA with `git rev-parse`.
 4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker. `gh pr` and `gh repo view` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
 
@@ -95,13 +95,13 @@ Skip with `--no-watch`. Otherwise load and follow `/pr-watch <PR URL> --max-repa
 
 ## PR body
 
-With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, model and result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: a Summary with one diagram, Evidence before and after, and Merge danger with the door and the blast radius. Under Evidence, give the exact verification and autoreview commands with their results, rather than "tests pass". For a fix, name the root cause in the Summary.
+With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, the model it ran (step 1) and the result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: a Summary with one diagram, Evidence before and after, and Merge danger with the door and the blast radius. Under Evidence, give the exact verification and autoreview commands with their results, rather than "tests pass". For a fix, name the root cause in the Summary.
 
 ## Report
 
 - Branch, commit SHA and subject
 - PR URL, base branch, and whether it is a stack layer
 - Tests run
-- Autoreview engine and model, the command with `$ENGINE_FLAGS` filled in, and the clean result; the clean result reused from `--run-record` with its engine and model; or `review skipped by --skip-review`
+- Autoreview engine, the model it ran (step 1), the command with `$ENGINE_FLAGS` filled in, and the clean result; the clean result reused from `--run-record` with its engine and model; or `review skipped by --skip-review`
 - `/pr-watch`'s gate result, the reviewers it required and the repairs it made against the budget, or `watch skipped by --no-watch`
 - Findings fixed, and findings rejected with the reason
