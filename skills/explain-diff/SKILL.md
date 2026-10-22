@@ -21,7 +21,7 @@ Pick the command that matches what the user means by "the change":
 
 With no target, explain the uncommitted changes when there are any, otherwise the branch against the default branch.
 
-Read the changed files themselves, their callers and their tests, not just the hunks. For a PR that isn't checked out, run `git fetch <remote> pull/<n>/head` and read each file with `git show FETCH_HEAD:<path>`, without making a checkout. Find the reason for the change in the linked issue, the PR body or the commit message. When the reason comes only from reading the code, say it is inferred.
+Read the changed files themselves, their callers and their tests, not just the hunks. For a PR that isn't checked out, run `git fetch <remote> pull/<n>/head`, pin its head with `git rev-parse FETCH_HEAD` straight away, since any later fetch moves `FETCH_HEAD`, and read each file with `git show <head-sha>:<path>`, without making a checkout. Find the reason for the change in the linked issue, the PR body or the commit message. When the reason comes only from reading the code, say it is inferred.
 
 **Complete when** both ends of the comparison are pinned, and every claim you plan to make has a file and line behind it.
 
