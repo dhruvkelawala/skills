@@ -1,0 +1,12 @@
+$ which stage and step of skills/issue-to-pr/SKILL.md names each T3 tool
+t3_thread_launch:
+    ## 1. Pin the contract step 3.
+t3_worktree_handoff:
+    ## 1. Pin the contract step 3.
+delegate_task:
+    ## 3. Review, at most two passes step 1.
+    ## 3. Review, at most two passes step 2.
+watch_pull_request:
+    ## 6. Watch step 4.
+link_pull_request:
+    ## 5. Publish step 4.
