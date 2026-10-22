@@ -1,0 +1,19 @@
+# live run of publish-evidence.sh at 68f53ed, from a checkout that fetched only main, with no manual fetch
+$ git config --get-all remote.origin.fetch
++refs/heads/main:refs/remotes/origin/main
+# local refs before (left by earlier runs)
+refs/remotes/origin/evidence f233455
+refs/heads/evidence 10955ef
+$ git ls-remote origin refs/heads/evidence   # the live tip
+06e3c49
+$ bash skills/evidence/scripts/publish-evidence.sh --repo dhruvkelawala/skills --label 53 fix-test-before.txt fix-test-after.txt
+https://github.com/dhruvkelawala/skills/blob/evidence/53/20261022T140513Z/fix-test-before.txt?raw=true
+https://github.com/dhruvkelawala/skills/blob/evidence/53/20261022T140513Z/fix-test-after.txt?raw=true
+exit=0
+$ git ls-remote origin refs/heads/evidence   # new tip
+8d0083a
+$ git log -1 --format='parent %p  %s' 8d0083a
+parent 06e3c49  evidence: 53 20261022T140513Z (2 files)
+# local refs after
+refs/remotes/origin/evidence f233455
+refs/heads/evidence 10955ef
