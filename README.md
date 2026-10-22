@@ -62,7 +62,7 @@ Or install a single skill:
 
 ## Credits
 
-Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory. `test-audit` adapts OpenClaw's `test-audit`, MIT licensed, at `openclaw/openclaw@3195fba`, with the license in its directory.
+Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory. `test-audit` adapts OpenClaw's `test-audit`, MIT licensed, at `openclaw/openclaw@3195fba`, with the license in its directory. `unslop` adapts Siqi Chen's `humanizer`, MIT licensed, at `blader/humanizer@d8085c7`, with the license in its directory.
 
 ## License
 
