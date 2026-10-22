@@ -6,6 +6,7 @@
 |-------|-------------|
 | [apr](skills/apr/SKILL.md) | Autoreview from a pinned base, commit, push, open or update a ready-for-review PR, then watch and repair PR review findings until clean. |
 | [bro](skills/bro/SKILL.md) | Restate the last message in plain human language, with no jargon. |
+| [cleanup](skills/cleanup/SKILL.md) | Free disk space: a read-only audit of Git worktrees, iOS simulators, build artifacts and package-manager caches, then removal by approved bucket, with a hold list for anything that could lose work. `audit` stops after the proposal and can run as a Saturday scheduled task. (pstack) |
 | [code-walkthrough](skills/code-walkthrough/SKILL.md) | Paced, file-by-file review of an unfamiliar or agent-written codebase, fixing as you go with a living checklist. |
 | [eli25](skills/eli25/SKILL.md) | Explain a PR, stack, plan, spike, system or incident as a short visual page shaped by its topic, optionally hosted on Vercel. |
 | [evidence](skills/evidence/SKILL.md) | Write a repo's EVIDENCE.md: how to launch each surface, drive a feature, capture screenshots, recordings, or transcripts, and publish them so PRs can prove changes work. |
@@ -29,7 +30,6 @@
 | [verification-skill](skills/verification-skill/SKILL.md) | Write a project-local `verify-<app>` skill that launches, health-checks and drives the real app with a feature map (`create`), or check every feature from source and live (`check`). (pstack) |
 | [verify](skills/verify/SKILL.md) | Discover and run every verification a project defines and report each as passed, failed, or could-not-run. |
 | [why](skills/why/SKILL.md) | Why code or a decision looks the way it does, from git and the PR with a confidence word, or why the agent took an action this session. `--deep` searches every source. (pstack) |
-| [worktree-cleanup](skills/worktree-cleanup/SKILL.md) | Read-only audit of git worktrees and iOS simulators, then removal by approved bucket, with a hold list for anything that could lose work. Branch deletion is a separate approval. (pstack) |
 
 ## Parts
 
