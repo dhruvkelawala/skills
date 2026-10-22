@@ -41,7 +41,7 @@ A repair is one commit that changes code to fix a review finding, a failed check
 6. Read enough code to state the contract: in-scope paths, out-of-scope items, acceptance criteria, any human gate the work item names, and for each criterion the surface it lands on and the capture that will prove it.
 7. Run `/review-ready` in preflight mode against the contract. The test seam it names becomes `test_seam`.
 8. Append the contract to the run record, print it, and continue. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
-9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt: leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
+9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt, so leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
 
 **Complete when:** this thread is in the build's worktree, the run record holds the work item, mode, base ref and SHA, branch and contract, and the branch is checked out at `base_sha`.
 
@@ -117,11 +117,11 @@ This thread watches its own PR, and T3 wakes it when the PR changes.
 2. Add each pr-watch repair to the counter, and append one line per repair to the run record with its source thread or check, the head it was reviewed at, and its commit.
 3. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
 4. Record the stage from where pr-watch leaves the PR:
-   - **Clean.** The gate exits `0` at the current head: record `ready`.
+   - **Clean.** When the gate exits `0` at the current head, record `ready`.
    - **Waiting on someone else**, such as a running check or a reviewer who has not covered the head. pr-watch has called `watch_pull_request`, so record `watching` with the open reasons and end the turn. When T3 wakes this thread, start this stage again at step 1.
-   - **Waiting on the user's word**, such as replies held until "post": record `awaiting-human` with what is held.
-   - **Budget spent:** record `blocked: repair budget` and ask the user whether to raise it.
-   - **Any other hand-back**, such as a draft or closed PR, a head mismatch, or a reason that needs the user's decision: record `blocked` with the reason and ask the user.
+   - **Waiting on the user's word**, such as replies held until "post". Record `awaiting-human` with what is held.
+   - **Budget spent.** Record `blocked: repair budget` and ask the user whether to raise it.
+   - **Any other hand-back**, such as a draft or closed PR, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.
 
 **Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`.
 
