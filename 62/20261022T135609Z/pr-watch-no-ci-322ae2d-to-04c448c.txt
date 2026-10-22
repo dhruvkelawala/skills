@@ -1,0 +1,19 @@
+== live, dhruvkelawala/skills#80 at 04c448c: a repository with no CI ==
+$ gh api repos/dhruvkelawala/skills/commits/<head>/check-suites   # apps register suites that never post
+  vercel status=queued runs=0
+  pullfrog status=queued runs=0
+  kody-ai status=queued runs=0
+  kodiseus status=queued runs=0
+  expo status=queued runs=0
+$ gh api repos/dhruvkelawala/skills/actions/workflows --jq .total_count
+0
+
+== before (gate at 322ae2d), no --allow-no-checks ==
+$ pr-gate.mjs --repo dhruvkelawala/skills --pr 80 --expected-head 04c448c… --json
+{"state":"pending","reasons":["No check runs found on head commit"],"threads":[]}
+exit 1
+
+== after (gate at 04c448c), no --allow-no-checks ==
+$ pr-gate.mjs --repo dhruvkelawala/skills --pr 80 --expected-head 04c448c… --json
+{"state":"ready","reasons":[],"threads":[],"notes":["No CI in this repository, so there are no checks to wait on"]}
+exit 0

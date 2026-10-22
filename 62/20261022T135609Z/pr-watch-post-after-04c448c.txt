@@ -1,0 +1,59 @@
+== after (04c448c) ==
+
+-- criterion 2: which threads are a bot's (a teammate's thread, a Codex thread, a CodeRabbit thread a teammate replied in)
+
+$ pr-gate.mjs ... --json | jq '.threads[] | {id, author, bot}'
+"blocked"
+{"id":"PRRT_person","author":"teammate","bot":false}
+{"id":"PRRT_bot","author":"chatgpt-codex-connector","bot":true}
+{"id":"PRRT_mixed","author":"coderabbitai","bot":false}
+
+-- criterion 1: the fix for a teammate's thread is pushed (GitHub marks the thread outdated), its reply is held, and the gate waits on post
+
+$ pr-gate.mjs ... --json | jq '{state, reasons, thread: .threads[0] | {id, replyTo, lastCommentId, author, bot}}'
+{"state":"blocked","reasons":["1 unresolved review thread(s) on the PR"],"thread":{"id":"PRRT_person","replyTo":201,"lastCommentId":201,"author":"teammate","bot":false}}
+
+$ held.mjs hold --file held.json --thread PRRT_person --reply-to 201 --seen 201 --to teammate --body-file reply.md
+held reply to teammate in thread PRRT_person; 1 item(s) wait for "post"
+exit 0
+
+$ held.mjs hold --file held.json --rerequest teammate
+held review request to teammate; 2 item(s) wait for "post"
+exit 0
+0 write(s) to GitHub
+
+$ pr-gate.mjs ... --held-file held.json --json
+{"state":"pending","reasons":["2 item(s) to people held until \"post\""],"threads":[]}
+exit 1
+
+-- criterion 3: the user says "post"
+
+$ held.mjs post --file held.json --repo o/r --pr 7 --record run-record.md
+sent reply to teammate: https://github.com/o/r/pull/7#discussion_r301
+sent resolved teammate's thread: https://github.com/o/r/pull/7#discussion_r301
+sent review re-requested from teammate: https://github.com/o/r/pull/7
+exit 0
+3 write(s) to GitHub
+  POST repos/o/r/pulls/7/comments/201/replies  body=Renamed to joinAll in 1a2b3c4. 
+  POST graphql  query=mutation  id=PRRT_person
+  POST repos/o/r/pulls/7/requested_reviewers  reviewers[]=teammate
+
+$ cat run-record.md
+stage: watching
+
+sent on "post" at 2026-10-22T13:55:51.062Z
+- reply to teammate: https://github.com/o/r/pull/7#discussion_r301
+- resolved teammate's thread: https://github.com/o/r/pull/7#discussion_r301
+- review re-requested from teammate: https://github.com/o/r/pull/7
+
+$ held.mjs post --file held.json --repo o/r --pr 7 --record run-record.md   # again
+nothing held
+exit 0
+
+-- criterion 3, safety: the teammate commented again after the draft
+
+$ held.mjs post --file held.json --repo o/r --pr 7 --record run-record.md
+held: reply to teammate in thread PRRT_person was not sent: teammate commented in thread PRRT_person after this was drafted; read it and hold a new draft
+1 item(s) still held
+exit 2
+0 write(s) to GitHub
