@@ -29,7 +29,7 @@ Read the changed files themselves, their callers and their tests, not just the h
 
 Write it in this order, with about 400 words of prose after the sketch:
 
-1. **The sketch.** A small drawing of the change, before and after, in a fenced `text` block, ahead of any prose: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines under 40 characters, so it reads on a phone.
+1. **The sketch.** A small drawing of the change, before and after, in a fenced `text` block, ahead of any prose: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines, each under 40 characters, so it reads on a phone.
 2. **The problem.** One or two sentences, no code.
 3. **The key idea.** The one thing that makes the change click: a method, a flag, an inversion.
 4. **The trace.** One realistic input followed through the changed code. Write one line per step, each with `path:line`. Add one edge value when it changes the outcome.
@@ -50,7 +50,7 @@ Run `../unslop/SKILL.md` on the explanation last. Keep the order and length abov
 - Plain English: short active sentences, real names and values, and a short gloss on any term the reader may not know, at first use.
 - Use the repository's own names for things; read `CONTEXT.md` when it exists.
 - Every link opens in T3, so it works from a phone too. Write each trace step as a Markdown link with a repo-relative path, such as `[store.ts:31](src/intake/store.ts:31)`, which T3 opens in its file panel at that line. Name a PR by its GitHub URL, which T3 opens in its PR panel on the diff. Never write an absolute path, a `file://` URL, `localhost`, or a link to a file on GitHub.
-- A file link opens whatever the thread's checkout holds, so link a step only when the checkout is at the explained revision. For a PR that isn't checked out, or an older commit, link the PR in the problem line and give each step's file and line as plain text outside backticks, because T3 turns a code-formatted path into a file link too.
+- A file link opens whatever the thread's checkout holds, so link a step only when the checkout is at the explained revision. When it isn't, as for a PR that isn't checked out or an older commit, give each step's file and line as plain text outside backticks, because T3 turns a code-formatted path into a file link too. Link the PR, if there is one, in the problem line.
 
 Example:
 
