@@ -59,7 +59,7 @@ Before and after, from `support-report-pr-349-eli25.html`:
 ## 3. Build the page
 
 1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same file in place and show it again.
-2. Build it in the Field Guide look. Read `../visual-explainer/references/field-guide.md`, then take the parts the page needs from `../visual-explainer/templates/field-guide.html`: its tokens, fonts, plates, chips and cards, not its outline. A short page needs few of them.
+2. Build it in the Field Guide look, which lives in the visual-explainer skill's folder. Read its `references/field-guide.md`, then take the parts the page needs from its `templates/field-guide.html`: the tokens, fonts, plates, chips and cards, not the outline. A short page needs few of them.
 3. Follow T3's light or dark mode. T3 gives a visual page its colours as CSS variables but leaves `prefers-color-scheme` unset, so Field Guide's switch cannot see the mode. Drop the Light and Dark switch and its stored choice, keep the dark token blocks, and put this script first in `<head>`:
 
    ```html
