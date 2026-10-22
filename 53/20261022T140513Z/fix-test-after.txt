@@ -1,0 +1,13 @@
+# publish-evidence.test.mjs at 68f53ed
+$ node --test skills/evidence/scripts/publish-evidence.test.mjs
+✔ publishes on the remote's latest evidence commit when the checkout has no remote-tracking ref for it (675.015041ms)
+✔ publishes on the remote's latest evidence commit when the checkout keeps a local evidence branch from an earlier run (784.941375ms)
+✔ publishes on the remote's latest evidence commit when the checkout has a stale remote-tracking ref for it (812.446875ms)
+✔ publishes on the remote's latest evidence commit when the checkout tracks every branch and keeps a stale tracking ref nested under its name (783.749042ms)
+✔ creates the evidence branch with only a README and the capture on the first publish (376.054334ms)
+✔ keeps an earlier capture published under the same label in the same second (642.142083ms)
+✔ refuses a branch name that has a remote branch nested under it, and names the clash (349.038ms)
+✔ refuses a branch name that would nest under a remote branch, and names the clash (354.565042ms)
+ℹ tests 8
+ℹ pass 8
+ℹ fail 0

@@ -1,0 +1,21 @@
+# publish-evidence.test.mjs from 68f53ed, run against the script at a4b78d7 (before the fix)
+$ node --test skills/evidence/scripts/publish-evidence.test.mjs
+✖ publishes on the remote's latest evidence commit when the checkout has no remote-tracking ref for it (606.776125ms)
+✖ publishes on the remote's latest evidence commit when the checkout keeps a local evidence branch from an earlier run (628.725959ms)
+✖ publishes on the remote's latest evidence commit when the checkout has a stale remote-tracking ref for it (772.854959ms)
+✖ publishes on the remote's latest evidence commit when the checkout tracks every branch and keeps a stale tracking ref nested under its name (729.503375ms)
+✔ creates the evidence branch with only a README and the capture on the first publish (399.272583ms)
+✖ keeps an earlier capture published under the same label in the same second (526.647458ms)
+✖ refuses a branch name that has a remote branch nested under it, and names the clash (538.488625ms)
+✖ refuses a branch name that would nest under a remote branch, and names the clash (648.023375ms)
+ℹ tests 8
+ℹ pass 1
+ℹ fail 7
+✖ failing tests:
+  AssertionError [ERR_ASSERTION]: To $TMPDIR/publish-evidence-Kn9EB1/remote.git
+   ! [rejected]        evidence -> evidence (non-fast-forward)
+  AssertionError [ERR_ASSERTION]: fatal: a branch named 'evidence' already exists
+  AssertionError [ERR_ASSERTION]: To $TMPDIR/publish-evidence-qnjhY5/remote.git
+  AssertionError [ERR_ASSERTION]: To $TMPDIR/publish-evidence-F6XA4m/remote.git
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /branch 'evidence' clashes with 'evidence\/field-guide' on origin/. Input:
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /branch 'evidence\/pr' clashes with 'evidence' on origin/. Input:
