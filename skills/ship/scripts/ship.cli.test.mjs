@@ -128,6 +128,20 @@ if (args[0] === "pr" && args[1] === "list") {
 if (args[0] === "pr" && args[1] === "view" && flag("--json") === "comments") {
   answer({ comments: state.comments.map((c) => ({ body: c.body, author: { login: c.user.login }, createdAt: c.created_at })) });
 }
+if (args[0] === "pr" && args[1] === "view" && flag("--json") === "reviewDecision,baseRefName") {
+  answer({ reviewDecision: state.reviewDecision, baseRefName: pr.base.ref });
+}
+if (args[0] === "pr" && args[1] === "view" && flag("--json") === "state,autoMergeRequest,mergeCommit") {
+  answer({ state: state.mergedAs ? "MERGED" : "OPEN", autoMergeRequest: null, mergeCommit: state.mergedAs && { oid: state.mergedAs } });
+}
+if (args[0] === "pr" && args[1] === "merge") {
+  if (flag("--match-head-commit") !== pr.head.sha) fail("", "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)");
+  if (state.reviewDecision === "REVIEW_REQUIRED" && !args.includes("--admin")) {
+    fail("", "X Pull request fixture/repo#7 is not mergeable: the base branch policy prohibits the merge.");
+  }
+  state.mergedAs = "c".repeat(40);
+  answer("");
+}
 if (args[0] === "pr" && args[1] === "comment") {
   state.comments.push({ body: flag("--body"), user: { login: state.login }, created_at: "2026-10-21T12:00:00Z" });
   answer("");
@@ -182,7 +196,7 @@ test("GraphQL quota spent: queue, verdict and run read and post through REST", (
   assert.equal(state().comments.length, 1, "the verdict comment went through REST");
   assert.equal(cli("verdict", "check", "7").status, "current");
   assert.deepEqual(cli("run", "7"), {
-    run: [{ number: 7, head, door: "two-way", verdict: "PASS", approvedBy: ["dhruv (land request)"] }],
+    run: [{ number: 7, head, door: "two-way", verdict: "PASS", approvedBy: ["dhruv (land request)"], forced: false }],
     ceiling: null,
     stackStop: null,
   });
@@ -247,6 +261,34 @@ test("run refuses a flag it does not know, such as the removed --policy", (t) =>
 
 test("run: a PR outside rule B lands without a verdict, and --rule-b holds it for one", (t) => {
   const { head, cli } = fixtureGitHub(t, { graphql: true });
-  assert.deepEqual(cli("run", "7").run, [{ number: 7, head, door: "two-way", verdict: "not needed", approvedBy: ["dhruv (land request)"] }]);
+  assert.deepEqual(cli("run", "7").run, [{ number: 7, head, door: "two-way", verdict: "not needed", approvedBy: ["dhruv (land request)"], forced: false }]);
   assert.deepEqual(cli("run", "7", "--rule-b", "7").ceiling, { number: 7, blocker: "verdict missing (rule B: named in --rule-b)" });
+});
+
+test("--force lands a PR waiting only on a required approval, once ship has seen every required check pass", (t) => {
+  const build = { __typename: "CheckRun", name: "build", conclusion: "SUCCESS" };
+  const lint = { __typename: "StatusContext", context: "lint", state: "SUCCESS" };
+  const branch = (...checks) => ({
+    mergeQueue: null,
+    ref: {
+      refUpdateRule: { requiredApprovingReviewCount: 1, requiredStatusCheckContexts: ["build"] },
+      rules: { nodes: [{ type: "REQUIRED_STATUS_CHECKS", parameters: { requiredStatusChecks: [{ context: "lint" }] } }] },
+    },
+    object: { statusCheckRollup: { contexts: { nodes: checks } } },
+  });
+  const { head, ship, cli, state, setState } = fixtureGitHub(t, { graphql: true, reviewDecision: "REVIEW_REQUIRED", branch: branch(build) });
+  assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT);
+  assert.deepEqual(cli("run", "7", "--force").run.map((r) => [r.number, r.approvedBy, r.forced]), [[7, [], true]]);
+
+  assert.equal(ship("merge", "7", "--head", head).status, 2, "without --force, GitHub's review rule still refuses the merge");
+  const unreported = ship("merge", "7", "--head", head, "--force");
+  assert.equal(unreported.status, 2, "the admin bypass would skip a required check that has not reported yet");
+  assert.match(unreported.stderr, /not passed: lint/);
+  setState({ branch: branch(build, { ...build, conclusion: null }, lint) });
+  assert.match(ship("merge", "7", "--head", head, "--force").stderr, /not passed: build/, "every run of a check must pass");
+  assert.equal(state().mergedAs, null);
+
+  setState({ branch: branch(build, lint) });
+  assert.deepEqual(cli("merge", "7", "--head", head, "--force"), { number: 7, head, mergeCommit: "c".repeat(40) });
+  assert.deepEqual(state().calls.filter((c) => c[0] === "pr" && c[1] === "merge").map((c) => c.includes("--admin")), [false, true]);
 });

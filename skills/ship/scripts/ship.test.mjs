@@ -11,7 +11,7 @@ function pr(number, base, head, extra = {}) {
 }
 
 test("parseArgs separates flags, values, and positionals", () => {
-  assert.deepEqual(parseArgs(["run", "12", "--trusted", "a,b", "--json"]), { _: ["run", "12"], trusted: "a,b", json: true });
+  assert.deepEqual(parseArgs(["run", "12", "--force", "--trusted", "a,b", "--json"]), { _: ["run", "12"], force: true, trusted: "a,b", json: true });
 });
 
 test("parseDoor reads the pr skill's Merge Danger line", () => {
@@ -247,6 +247,19 @@ test("latestVerdict: on the caller's own PR, the caller's verdict counts", () =>
 test("latestVerdict: on someone else's PR, their own verdict is still ignored", () => {
   const forged = comment({ ...V, verdict: "PASS" }, "vlad", "2026-10-05T12:00:00Z");
   assert.equal(latestVerdict([forged], { prAuthor: "vlad", me: "dhruv" }), null);
+});
+
+test("landableRun: --force skips only the wait for a required approval", () => {
+  const own = pr(1, "main", "a", { author: { login: "dhruv" } });
+  const forced = landableRun([own], new Map(), { me: "dhruv", reviewRequired: true, force: true });
+  assert.deepEqual([forced.ceiling, forced.run[0].approvedBy, forced.run[0].forced], [null, [], true]);
+  for (const [p, opts, blocker] of [
+    [{ ...own, body: ONE }, {}, /^verdict missing \(rule B: the door is one-way\)$/],
+    [{ ...own, reviewDecision: "CHANGES_REQUESTED" }, {}, /requested changes/],
+    [own, { mergeQueue: true }, /merge queue/],
+  ]) {
+    assert.match(landableRun([p], new Map(), { me: "dhruv", reviewRequired: true, force: true, ...opts }).ceiling.blocker, blocker);
+  }
 });
 
 test("landableRun: where GitHub requires no review, the caller's verdict counts on their own PR and their land request stands in for approval", () => {

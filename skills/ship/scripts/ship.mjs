@@ -4,8 +4,8 @@
 //   ship.mjs queue   [--repo o/r] [--me <login>] [--json]
 //   ship.mjs verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes <file>] [--repo o/r]
 //   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
-//   ship.mjs run     <bottom-pr> [--rule-b <pr,pr>] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
-//   ship.mjs merge   <pr> --head <run[0].head> [--repo o/r] [--json]
+//   ship.mjs run     <bottom-pr> [--rule-b <pr,pr>] [--force] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
+//   ship.mjs merge   <pr> --head <run[0].head> [--force] [--repo o/r] [--json]
 //
 // Nothing here rebases, retargets, or force-pushes, and `merge` lands only the head it is given. The
 // caller runs `run` before each merge and does the rest, one PR at a time.
@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 
 export const MARKER = "ship-verdict:v1";
 const PASSING = new Set(["PASS", "PASS+NOTES"]);
+const BOOLEAN_FLAGS = new Set(["json", "force"]);
 const MERGEABLE = new Set(["CLEAN", "HAS_HOOKS"]);
 
 // ---------- pure ----------
@@ -25,9 +26,9 @@ export function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--json") out.json = true;
-    else if (a.startsWith("--")) out[a.slice(2)] = argv[++i];
-    else out._.push(a);
+    if (!a.startsWith("--")) out._.push(a);
+    else if (BOOLEAN_FLAGS.has(a.slice(2))) out[a.slice(2)] = true;
+    else out[a.slice(2)] = argv[++i];
   }
   return out;
 }
@@ -182,11 +183,12 @@ function verdictReason(p, door, status, ruleB) {
 // as REVIEW_REQUIRED waits too. Where a review is required, the PR waits for a human approval
 // (`approversByNumber` holds humanApprovers() per PR; reviewDecision alone is not trusted, because a
 // bot can approve). Where none is required, the caller's request to land stands in for it.
+// `force` skips only the wait for a required approval; a standing change request still blocks.
 // The caller's own verdict counts on their own PR (`me`).
 //
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned
 // head cannot be enforced. ship never lands onto a branch with a merge queue.
-export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), reviewRequired = false, ruleB = [], mergeQueue = false, me } = {}) {
+export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), reviewRequired = false, ruleB = [], force = false, mergeQueue = false, me } = {}) {
   if (mergeQueue && stack.length) return { run: [], ceiling: { number: stack[0].number, blocker: "the target branch uses a merge queue, which merges later heads ship cannot pin" } };
   const run = [];
   for (const p of stack) {
@@ -199,9 +201,11 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
     let blocker = null;
     if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
     else if (why && (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr))) blocker = "verdict was not recorded by someone other than the PR author";
-    else if (needsReview && approvers.length === 0) blocker = "GitHub requires a review: waiting for a human approval";
+    else if (needsReview && approvers.length === 0 && !force) blocker = "GitHub requires a review: waiting for a human approval";
+    else if (needsReview && approvers.length === 0 && p.reviewDecision === "CHANGES_REQUESTED") blocker = "a reviewer requested changes, and --force skips only the wait for an approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
-    run.push({ number: p.number, head: p.headRefOid, door, verdict: why ? s.verdict : "not needed", approvedBy: approvers.length > 0 ? approvers : [`${me} (land request)`] });
+    const forced = needsReview && approvers.length === 0;
+    run.push({ number: p.number, head: p.headRefOid, door, verdict: why ? s.verdict : "not needed", approvedBy: approvers.length > 0 || forced ? approvers : [`${me} (land request)`], forced });
   }
   return { run, ceiling: null };
 }
@@ -336,11 +340,44 @@ function postComment(n, body, repo) {
   );
 }
 
+const CHECK_PASSED = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
+
+// --force skips only the wait for a required approval, through GitHub's admin bypass. The bypass
+// would skip the required checks as well, so ship takes it only while GitHub still shows the PR as
+// REVIEW_REQUIRED, and only once every check the base branch requires has passed at `head`, every
+// run of it included. The required names come from the branch's rules, because a required check
+// that has not reported yet is missing from the commit's results.
+function needsAdminBypass(n, head, repo) {
+  try {
+    const pr = JSON.parse(gh(["pr", "view", String(n), "--json", "reviewDecision,baseRefName"], repo));
+    if (pr.reviewDecision !== "REVIEW_REQUIRED") return false;
+    const [owner, name] = nameWithOwner(repo).split("/");
+    const q = "query($o:String!,$n:String!,$q:String!,$h:GitObjectID!){repository(owner:$o,name:$n){ref(qualifiedName:$q){refUpdateRule{requiredStatusCheckContexts} rules(first:100){nodes{type parameters{... on RequiredStatusChecksParameters{requiredStatusChecks{context}}}}}} object(oid:$h){... on Commit{statusCheckRollup{contexts(first:100){nodes{__typename ... on CheckRun{name conclusion} ... on StatusContext{context state}}}}}}}}";
+    const r = JSON.parse(sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `q=refs/heads/${pr.baseRefName}`, "-f", `h=${head}`])).data.repository;
+    const required = new Set([
+      ...(r.ref?.refUpdateRule?.requiredStatusCheckContexts ?? []),
+      ...(r.ref?.rules.nodes ?? []).flatMap((rule) => rule.parameters?.requiredStatusChecks?.map((c) => c.context) ?? []),
+    ]);
+    const passed = new Map();
+    for (const c of r.object?.statusCheckRollup?.contexts.nodes ?? []) {
+      const check = c.name ?? c.context;
+      passed.set(check, passed.get(check) !== false && CHECK_PASSED.has(c.conclusion ?? c.state));
+    }
+    const open = [...required].filter((check) => passed.get(check) !== true);
+    if (open.length) throw new Error(`--force still needs every required check to pass at ${head.slice(0, 12)}; not passed: ${open.join(", ")}`);
+    return true;
+  } catch (error) {
+    if (isRateLimited(error)) throw new Error("--force reads the review rule and required checks through GitHub's GraphQL API, whose quota is spent; try again once it resets");
+    throw error;
+  }
+}
+
 // Squash-merges only while the PR's head is still `head`: GitHub refuses once anything is pushed
 // after it. A merge GitHub deferred, such as an auto-merge request, is not pinned, so it is undone.
-function mergeAt(n, head, repo) {
+function mergeAt(n, head, repo, force) {
   const endpoint = `repos/${nameWithOwner(repo)}/pulls/${n}`;
-  graphqlOrRest(
+  if (force && needsAdminBypass(n, head, repo)) gh(["pr", "merge", String(n), "--squash", "--admin", "--match-head-commit", head], repo);
+  else graphqlOrRest(
     () => gh(["pr", "merge", String(n), "--squash", "--match-head-commit", head], repo),
     () => sh("gh", ["api", "-X", "PUT", `${endpoint}/merge`, "-f", "merge_method=squash", "-f", `sha=${head}`]),
   );
@@ -378,7 +415,7 @@ function textQueue(q) {
 }
 
 // A flag ship does not know, such as a misspelt or removed one, could loosen a rule if ignored.
-const FLAGS = ["json", "repo", "me", "trusted", "rule-b", "head", "by", "notes"];
+const FLAGS = ["json", "repo", "me", "trusted", "rule-b", "force", "head", "by", "notes"];
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
@@ -424,15 +461,15 @@ async function main() {
     const statuses = new Map(stack.map((p) => [p.number, statusFor(p, repo, trusted, me)]));
     const approvers = new Map(stack.map((p) => [p.number, humanApprovers(prReviews(p.number, repo), { prAuthor: p.author?.login, reviewDecision: p.reviewDecision })]));
     const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(defaultBranch(repo), repo) : {};
-    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, ruleB, mergeQueue, me }), stackStop: stop ?? null };
+    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
-      [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}`).join(" -> ") || "(none)"}`,
+      [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}${x.forced ? " (approval skipped by --force)" : ""}`).join(" -> ") || "(none)"}`,
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",
        r.stackStop ? `note: ${r.stackStop}` : ""].filter(Boolean).join("\n"));
   }
   if (cmd === "merge") {
     if (!sub || !/^[0-9a-f]{40}$/.test(a.head ?? "")) throw new Error("usage: merge <pr> --head <the full head SHA from run>");
-    return print(mergeAt(Number(sub), a.head, repo), a.json, (m) => `merged #${m.number} at ${m.head.slice(0, 12)} as ${m.mergeCommit?.slice(0, 12)}`);
+    return print(mergeAt(Number(sub), a.head, repo, a.force), a.json, (m) => `merged #${m.number} at ${m.head.slice(0, 12)} as ${m.mergeCommit?.slice(0, 12)}`);
   }
   throw new Error("usage: ship.mjs queue | verdict record|check | run <bottom-pr> | merge <pr> --head <sha>");
 }
