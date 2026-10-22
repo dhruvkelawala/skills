@@ -1,7 +1,8 @@
 // Runs the pr-review skill in headless Claude Code on a teammate's PR, with gh, T3's t3-code MCP server and the
-// autoreview helper faked at the outer boundary. Two first visits to PR #7 run side by side.
+// autoreview helper faked at the outer boundary. Two chains run side by side. Each one reviews PR #7, says
+// "approve", and then the author either pushes a fix or rebases onto a newer main before the review comes back.
 // From the repo root: node --test skills/pr-review/evals/pr-review.eval.mjs
-// Needs git, jq, the claude CLI signed in through environment variables (each run gets its own config dir and
+// Needs git, jq, the claude CLI signed in through environment variables (each chain gets its own config dir and
 // HOME), and the outside code-review skill that scripts/sync-skills.mjs installs. Each turn is a live agent run,
 // so results can vary between runs.
 import { describe, test } from "node:test";
@@ -11,7 +12,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BASE_FILES, HEAD_BRANCH, PR, PR_COMMITS, PR_URL, flaggedFiles } from "./fixture.mjs";
+import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, flaggedFiles } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
@@ -35,7 +36,7 @@ function executable(path, script) {
   chmodSync(path, 0o755);
 }
 
-// One run's world: the origin repo holding the PR, the author's clone, the user's checkout, and the fakes.
+// One chain's world: the origin repo holding the PR, the author's clone, the user's checkout, and the fakes.
 function scratch(kind) {
   if (!existsSync(join(codeReview, "SKILL.md"))) throw new Error(`no code-review skill at ${codeReview}; run scripts/sync-skills.mjs`);
   const root = mkdtempSync(join(tmpdir(), `pr-review-eval-${kind}-`));
@@ -54,7 +55,7 @@ function scratch(kind) {
     git(c.author, "add", ".");
     git(c.author, "commit", "-qm", commit.message);
   }
-  git(c.author, "push", "-q", "origin", `HEAD:refs/heads/${HEAD_BRANCH}`, `HEAD:refs/pull/${PR}/head`);
+  pushPr(c);
   git(root, "clone", "-q", c.origin, c.work);
   writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase: "first" }));
 
@@ -68,6 +69,34 @@ function scratch(kind) {
   // Drop the markers of an enclosing Claude Code session, and the other agents' homes, so each run stands alone.
   for (const key of Object.keys(c.env)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_") || ["AGENTS_HOME", "CODEX_HOME", "PI_CODING_AGENT_DIR"].includes(key)) delete c.env[key];
   return c;
+}
+
+function pushPr(c, force = false) {
+  git(c.author, "push", "-q", ...(force ? ["--force"] : []), "origin", `HEAD:refs/heads/${HEAD_BRANCH}`, `HEAD:refs/pull/${PR}/head`);
+}
+
+function setPhase(c, phase) {
+  writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase }));
+}
+
+// The author's next move after the first review: a push that fixes the findings, or a rebase that keeps the patch.
+function authorMoves(c) {
+  if (c.kind === "push") {
+    for (const [path, [from, to]] of Object.entries(FIX_COMMIT.edit)) writeFileSync(join(c.author, path), readFileSync(join(c.author, path), "utf8").replace(from, to));
+    for (const [path, text] of Object.entries(FIX_COMMIT.append)) writeFileSync(join(c.author, path), readFileSync(join(c.author, path), "utf8") + text);
+    git(c.author, "commit", "-qam", FIX_COMMIT.message);
+    pushPr(c);
+    setPhase(c, "fixed");
+  } else {
+    git(c.author, "checkout", "-q", "main");
+    writeFiles(c.author, MAIN_COMMIT.files);
+    git(c.author, "add", ".");
+    git(c.author, "commit", "-qm", MAIN_COMMIT.message);
+    git(c.author, "push", "-q", "origin", "main");
+    git(c.author, "checkout", "-q", HEAD_BRANCH);
+    git(c.author, "rebase", "-q", "main");
+    pushPr(c, true);
+  }
 }
 
 async function turn(c, name, prompt, session) {
@@ -113,7 +142,22 @@ async function turn(c, name, prompt, session) {
 
 const chains = {};
 function chain(kind) {
-  if (!chains[kind]) chains[kind] = { first: turn(scratch(kind), "first-visit", `/pr-review ${PR}`) };
+  if (!chains[kind]) {
+    const c = scratch(kind);
+    const first = turn(c, "first-visit", `/pr-review ${PR}`);
+    let back;
+    chains[kind] = {
+      first,
+      back: () =>
+        (back ??= first.then(async (visit) => {
+          await turn(c, "approve", "approve", visit.sessionId);
+          const seen = git(c.work, "rev-parse", "--verify", "-q", `refs/pr-review/${PR}-seen`);
+          if (seen !== visit.head) throw new Error(`${kind}: "approve" left refs/pr-review/${PR}-seen at "${seen}", not ${visit.head}`);
+          authorMoves(c);
+          return turn(c, "return-visit", `/pr-review ${PR}`);
+        })),
+    };
+  }
   return chains[kind];
 }
 
@@ -163,4 +207,18 @@ describe("pr-review", { concurrency: true }, () => {
     }
   });
 
+  test("a return visit after a real push reruns both reviewers on the new head", async (t) => {
+    const v = await chain("push").back();
+    describeVisit(t, v);
+    assert.deepEqual([...new Set(reviewerTasks(v).map((d) => d.axis))].sort(), ["spec", "standards"], `${v.name}: /code-review's reviewers did not rerun`);
+    assert.ok(secondOpinionsAt(v).length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
+  });
+
+  test("a return visit after a pure rebase runs no reviewer", async (t) => {
+    const v = await chain("rebase").back();
+    describeVisit(t, v);
+    assert.match(v.reply, /rebas/i, `${v.name}: the review does not say the PR was rebased`);
+    assert.deepEqual(v.t3.filter((e) => e.tool === "delegate_task"), [], `${v.name}: a reviewer ran`);
+    assert.deepEqual(v.secondOpinion, [], `${v.name}: the second opinion ran`);
+  });
 });

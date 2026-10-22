@@ -54,10 +54,11 @@ Prep comes before anything you write about the PR, on every PR.
 2. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
 3. Prep is ready once both reviewers have reported. Check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 4. When the PR needs the verifier (step 3), start it now.
+5. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
 
 For a stack or a queue, start with one table: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. Order a stack from the bottom. Order a queue so the PR that unblocks the most other PRs comes first, then the smallest. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
-**Complete when** both reviewers have reported on the PR's head, you have read every changed file, and every finding is sorted.
+**Complete when** both reviewers have reported on the PR's head, you have read every changed file, and every finding is sorted and in the prep record.
 
 ## 3. Walk one PR at a time
 
@@ -131,14 +132,14 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 ## 4. Return visits
 
-When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, then show only what changed since the user last looked:
+When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record.
 
-- If the branch was rebased, use `git range-diff <old base>..<seen> <base>..<head>`.
-- Otherwise, use `git diff <seen>..<head>`.
+1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
+2. **A pure rebase.** Compute the patch ID as prep does. When it matches the record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. That line is the whole tour.
+3. **A real change** reruns both reviewers on the new head, over the whole PR, as in step 2. Show only the new findings, and mark each earlier one fixed or still open. Tour only what changed since the user last looked: `git range-diff <old base>..<seen> <base>..<head>` when the branch was also rebased, otherwise `git diff <seen>..<head>`. Then the wrap-up, as in step 3.
+4. Update the prep record to the new head.
 
-Walk only that change, as in step 3, and say which earlier findings it fixes.
-
-**Complete when** every change since the `seen` ref has a tag, and every earlier finding is marked fixed or still open.
+**Complete when** every earlier finding is marked fixed or still open, and every change since the `seen` ref is in the tour or the rebase line.
 
 ## 5. Comments
 

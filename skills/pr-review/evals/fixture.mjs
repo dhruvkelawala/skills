@@ -144,7 +144,7 @@ const MYSTERIOUS_NAMES = {
   file: "src/config.js",
   line: 1,
   title: "Possible Mysterious Name: `retryCfg.n` and `retryCfg.ms`",
-  body: "The names don't say which is the retry count and which is the delay, and client.js:10 already mixes them up. `retries` and `delayMs` would match withRetry's options.",
+  body: "The names don't say which is the retry count and which is the delay. `retries` and `delayMs` would match withRetry's options.",
 };
 const SWAPPED_SETTINGS = {
   priority: "P1",
