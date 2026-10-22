@@ -1,0 +1,237 @@
+# AC2: running the script twice in a row changes nothing the second time (head 0e30b51, tree 3ea06d6)
+
+$ node scripts/sync-skills.mjs   # first run
+~/.agents/skills
+  link     apr -> <checkout>/skills/apr
+  link     bro -> <checkout>/skills/bro
+  link     code-walkthrough -> <checkout>/skills/code-walkthrough
+  link     eli25 -> <checkout>/skills/eli25
+  link     evidence -> <checkout>/skills/evidence
+  link     explain-diff -> <checkout>/skills/explain-diff
+  link     hillclimb -> <checkout>/skills/hillclimb
+  link     how -> <checkout>/skills/how
+  link     idea-foundry -> <checkout>/skills/idea-foundry
+  link     issue-to-pr -> <checkout>/skills/issue-to-pr
+  link     perf -> <checkout>/skills/perf
+  update   pr -> <checkout>/skills/pr (was a folder)
+  link     pr-review -> <checkout>/skills/pr-review
+  link     pr-watch -> <checkout>/skills/pr-watch
+  link     product-description -> <checkout>/skills/product-description
+  link     promote -> <checkout>/skills/promote
+  link     recap -> <checkout>/skills/recap
+  link     research-explainer -> <checkout>/skills/research-explainer
+  link     review-ready -> <checkout>/skills/review-ready
+  link     ship -> <checkout>/skills/ship
+  link     test-audit -> <checkout>/skills/test-audit
+  link     verification-skill -> <checkout>/skills/verification-skill
+  link     verify -> <checkout>/skills/verify
+  link     why -> <checkout>/skills/why
+  link     worktree-cleanup -> <checkout>/skills/worktree-cleanup
+  install  code-review from mattpocock/skills@5beb35b
+  install  wait-what from mattpocock/skills@5beb35b
+  install  handoff from mattpocock/skills@5beb35b
+  install  wayfinder from mattpocock/skills@5beb35b
+  install  to-spec from mattpocock/skills@5beb35b
+  install  to-tickets from mattpocock/skills@5beb35b
+  install  grilling from mattpocock/skills@5beb35b
+  install  domain-modeling from mattpocock/skills@5beb35b
+  install  prototype from mattpocock/skills@5beb35b
+  install  research from mattpocock/skills@5beb35b
+  install  codebase-design from mattpocock/skills@5beb35b
+  install  diagnosing-bugs from mattpocock/skills@5beb35b
+  install  writing-for-agents from mattpocock/skills@5beb35b
+  install  setup-matt-pocock-skills from mattpocock/skills@5beb35b
+  install  tdd from mattpocock/skills@5beb35b
+  install  resolving-merge-conflicts from mattpocock/skills@153fc1b
+  install  show-me from humanlayer/skills@653b641
+  install  visual-recap from BuilderIO/agent-native@014aec9
+  install  visual-plan from BuilderIO/agent-native@014aec9
+  install  gh-stack from github/gh-stack@a644af6
+  install  autoreview from openclaw/agent-skills@4f587b6
+  install  simplify from bholmesdev/skills@81be879
+  install  improve from shadcn/improve@cac56e1
+  install  impeccable from pbakaus/impeccable@8644175
+  install  typesafe-ai from typesafe-ai/skills@65a39f3
+  install  building-with-typesafe-jev from aaddrick/building-with-typesafe-jev@a46856c
+  install  cua-driver from trycua/cua@c2a21e7
+  install  linear-cli from schpet/linear-cli@63463ac
+  install  visual-explainer from dhruvkelawala/visual-explainer@d0b817f
+~/.claude/skills
+  link     apr -> <checkout>/skills/apr
+  link     bro -> <checkout>/skills/bro
+  link     code-walkthrough -> <checkout>/skills/code-walkthrough
+  link     eli25 -> <checkout>/skills/eli25
+  link     evidence -> <checkout>/skills/evidence
+  link     explain-diff -> <checkout>/skills/explain-diff
+  link     hillclimb -> <checkout>/skills/hillclimb
+  link     how -> <checkout>/skills/how
+  link     idea-foundry -> <checkout>/skills/idea-foundry
+  link     issue-to-pr -> <checkout>/skills/issue-to-pr
+  link     perf -> <checkout>/skills/perf
+  update   pr -> <checkout>/skills/pr (was a link to ~/.agents/skills/pr)
+  link     pr-review -> <checkout>/skills/pr-review
+  link     pr-watch -> <checkout>/skills/pr-watch
+  link     product-description -> <checkout>/skills/product-description
+  link     promote -> <checkout>/skills/promote
+  link     recap -> <checkout>/skills/recap
+  link     research-explainer -> <checkout>/skills/research-explainer
+  link     review-ready -> <checkout>/skills/review-ready
+  link     ship -> <checkout>/skills/ship
+  link     test-audit -> <checkout>/skills/test-audit
+  link     verification-skill -> <checkout>/skills/verification-skill
+  link     verify -> <checkout>/skills/verify
+  link     why -> <checkout>/skills/why
+  link     worktree-cleanup -> <checkout>/skills/worktree-cleanup
+  link     code-review -> ~/.agents/skills/code-review
+  link     wait-what -> ~/.agents/skills/wait-what
+  link     handoff -> ~/.agents/skills/handoff
+  link     wayfinder -> ~/.agents/skills/wayfinder
+  link     to-spec -> ~/.agents/skills/to-spec
+  link     to-tickets -> ~/.agents/skills/to-tickets
+  link     grilling -> ~/.agents/skills/grilling
+  link     domain-modeling -> ~/.agents/skills/domain-modeling
+  link     prototype -> ~/.agents/skills/prototype
+  link     research -> ~/.agents/skills/research
+  link     codebase-design -> ~/.agents/skills/codebase-design
+  link     diagnosing-bugs -> ~/.agents/skills/diagnosing-bugs
+  link     writing-for-agents -> ~/.agents/skills/writing-for-agents
+  link     setup-matt-pocock-skills -> ~/.agents/skills/setup-matt-pocock-skills
+  link     tdd -> ~/.agents/skills/tdd
+  link     resolving-merge-conflicts -> ~/.agents/skills/resolving-merge-conflicts
+  link     show-me -> ~/.agents/skills/show-me
+  link     visual-recap -> ~/.agents/skills/visual-recap
+  link     visual-plan -> ~/.agents/skills/visual-plan
+  link     gh-stack -> ~/.agents/skills/gh-stack
+  link     autoreview -> ~/.agents/skills/autoreview
+  link     simplify -> ~/.agents/skills/simplify
+  link     improve -> ~/.agents/skills/improve
+  link     impeccable -> ~/.agents/skills/impeccable
+  link     typesafe-ai -> ~/.agents/skills/typesafe-ai
+  link     building-with-typesafe-jev -> ~/.agents/skills/building-with-typesafe-jev
+  link     cua-driver -> ~/.agents/skills/cua-driver
+  link     linear-cli -> ~/.agents/skills/linear-cli
+  link     visual-explainer -> ~/.agents/skills/visual-explainer
+~/.codex/skills
+  link     apr -> <checkout>/skills/apr
+  link     bro -> <checkout>/skills/bro
+  link     code-walkthrough -> <checkout>/skills/code-walkthrough
+  link     eli25 -> <checkout>/skills/eli25
+  link     evidence -> <checkout>/skills/evidence
+  link     explain-diff -> <checkout>/skills/explain-diff
+  link     hillclimb -> <checkout>/skills/hillclimb
+  link     how -> <checkout>/skills/how
+  link     idea-foundry -> <checkout>/skills/idea-foundry
+  link     issue-to-pr -> <checkout>/skills/issue-to-pr
+  link     perf -> <checkout>/skills/perf
+  link     pr -> <checkout>/skills/pr
+  link     pr-review -> <checkout>/skills/pr-review
+  link     pr-watch -> <checkout>/skills/pr-watch
+  link     product-description -> <checkout>/skills/product-description
+  link     promote -> <checkout>/skills/promote
+  link     recap -> <checkout>/skills/recap
+  link     research-explainer -> <checkout>/skills/research-explainer
+  link     review-ready -> <checkout>/skills/review-ready
+  link     ship -> <checkout>/skills/ship
+  link     test-audit -> <checkout>/skills/test-audit
+  link     verification-skill -> <checkout>/skills/verification-skill
+  link     verify -> <checkout>/skills/verify
+  link     why -> <checkout>/skills/why
+  link     worktree-cleanup -> <checkout>/skills/worktree-cleanup
+  link     code-review -> ~/.agents/skills/code-review
+  link     wait-what -> ~/.agents/skills/wait-what
+  link     handoff -> ~/.agents/skills/handoff
+  link     wayfinder -> ~/.agents/skills/wayfinder
+  link     to-spec -> ~/.agents/skills/to-spec
+  link     to-tickets -> ~/.agents/skills/to-tickets
+  link     grilling -> ~/.agents/skills/grilling
+  link     domain-modeling -> ~/.agents/skills/domain-modeling
+  link     prototype -> ~/.agents/skills/prototype
+  link     research -> ~/.agents/skills/research
+  link     codebase-design -> ~/.agents/skills/codebase-design
+  link     diagnosing-bugs -> ~/.agents/skills/diagnosing-bugs
+  link     writing-for-agents -> ~/.agents/skills/writing-for-agents
+  link     setup-matt-pocock-skills -> ~/.agents/skills/setup-matt-pocock-skills
+  link     tdd -> ~/.agents/skills/tdd
+  link     resolving-merge-conflicts -> ~/.agents/skills/resolving-merge-conflicts
+  link     show-me -> ~/.agents/skills/show-me
+  link     visual-recap -> ~/.agents/skills/visual-recap
+  link     visual-plan -> ~/.agents/skills/visual-plan
+  link     gh-stack -> ~/.agents/skills/gh-stack
+  link     autoreview -> ~/.agents/skills/autoreview
+  link     simplify -> ~/.agents/skills/simplify
+  link     improve -> ~/.agents/skills/improve
+  link     impeccable -> ~/.agents/skills/impeccable
+  link     typesafe-ai -> ~/.agents/skills/typesafe-ai
+  link     building-with-typesafe-jev -> ~/.agents/skills/building-with-typesafe-jev
+  link     cua-driver -> ~/.agents/skills/cua-driver
+  link     linear-cli -> ~/.agents/skills/linear-cli
+  link     visual-explainer -> ~/.agents/skills/visual-explainer
+  unlisted eli5
+~/.pi/agent/skills
+  link     apr -> <checkout>/skills/apr
+  link     bro -> <checkout>/skills/bro
+  link     code-walkthrough -> <checkout>/skills/code-walkthrough
+  link     eli25 -> <checkout>/skills/eli25
+  link     evidence -> <checkout>/skills/evidence
+  link     explain-diff -> <checkout>/skills/explain-diff
+  link     hillclimb -> <checkout>/skills/hillclimb
+  link     how -> <checkout>/skills/how
+  link     idea-foundry -> <checkout>/skills/idea-foundry
+  link     issue-to-pr -> <checkout>/skills/issue-to-pr
+  link     perf -> <checkout>/skills/perf
+  link     pr -> <checkout>/skills/pr
+  link     pr-review -> <checkout>/skills/pr-review
+  link     pr-watch -> <checkout>/skills/pr-watch
+  link     product-description -> <checkout>/skills/product-description
+  link     promote -> <checkout>/skills/promote
+  link     recap -> <checkout>/skills/recap
+  link     research-explainer -> <checkout>/skills/research-explainer
+  link     review-ready -> <checkout>/skills/review-ready
+  link     ship -> <checkout>/skills/ship
+  link     test-audit -> <checkout>/skills/test-audit
+  link     verification-skill -> <checkout>/skills/verification-skill
+  link     verify -> <checkout>/skills/verify
+  link     why -> <checkout>/skills/why
+  link     worktree-cleanup -> <checkout>/skills/worktree-cleanup
+  link     code-review -> ~/.agents/skills/code-review
+  link     wait-what -> ~/.agents/skills/wait-what
+  link     handoff -> ~/.agents/skills/handoff
+  link     wayfinder -> ~/.agents/skills/wayfinder
+  link     to-spec -> ~/.agents/skills/to-spec
+  link     to-tickets -> ~/.agents/skills/to-tickets
+  link     grilling -> ~/.agents/skills/grilling
+  link     domain-modeling -> ~/.agents/skills/domain-modeling
+  link     prototype -> ~/.agents/skills/prototype
+  link     research -> ~/.agents/skills/research
+  link     codebase-design -> ~/.agents/skills/codebase-design
+  link     diagnosing-bugs -> ~/.agents/skills/diagnosing-bugs
+  link     writing-for-agents -> ~/.agents/skills/writing-for-agents
+  link     setup-matt-pocock-skills -> ~/.agents/skills/setup-matt-pocock-skills
+  link     tdd -> ~/.agents/skills/tdd
+  link     resolving-merge-conflicts -> ~/.agents/skills/resolving-merge-conflicts
+  link     show-me -> ~/.agents/skills/show-me
+  link     visual-recap -> ~/.agents/skills/visual-recap
+  link     visual-plan -> ~/.agents/skills/visual-plan
+  link     gh-stack -> ~/.agents/skills/gh-stack
+  link     autoreview -> ~/.agents/skills/autoreview
+  link     simplify -> ~/.agents/skills/simplify
+  link     improve -> ~/.agents/skills/improve
+  link     impeccable -> ~/.agents/skills/impeccable
+  link     typesafe-ai -> ~/.agents/skills/typesafe-ai
+  link     building-with-typesafe-jev -> ~/.agents/skills/building-with-typesafe-jev
+  link     cua-driver -> ~/.agents/skills/cua-driver
+  link     linear-cli -> ~/.agents/skills/linear-cli
+  link     visual-explainer -> ~/.agents/skills/visual-explainer
+made 216 changes
+1 unlisted skill kept; --remove-unlisted removes it
+exit=0
+
+$ node scripts/sync-skills.mjs   # second run
+~/.codex/skills
+  unlisted eli5
+nothing to change
+1 unlisted skill kept; --remove-unlisted removes it
+exit=0
+
+$ diff of every entry's inode, mtime and path after run 1 and after run 2
+no difference across 517 entries

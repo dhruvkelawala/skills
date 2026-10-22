@@ -1,0 +1,48 @@
+# AC3: each agent folder links this repo's skills into the checkout, holds the outside skills at their pinned commits, and pr is this repo's (head 0e30b51, tree 3ea06d6)
+
+$ for each agent folder: where pr resolves, and its SKILL.md name line
+~/.agents/skills     pr -> <checkout>/skills/pr   (<checkout>/skills/pr)
+~/.claude/skills     pr -> <checkout>/skills/pr   (<checkout>/skills/pr)
+~/.codex/skills      pr -> <checkout>/skills/pr   (<checkout>/skills/pr)
+~/.pi/agent/skills   pr -> <checkout>/skills/pr   (<checkout>/skills/pr)
+<checkout>/skills/pr/SKILL.md first lines:
+name: pr
+description: "Use when writing a PR body."
+
+$ own skills: every agent folder links each skills/<name> in the checkout
+~/.agents/skills: 25/25 own skills link into <checkout>/skills
+~/.claude/skills: 25/25 own skills link into <checkout>/skills
+~/.codex/skills: 25/25 own skills link into <checkout>/skills
+~/.pi/agent/skills: 25/25 own skills link into <checkout>/skills
+
+$ outside skills: each installed folder against git ls-tree at its pinned commit
+match code-review                 mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match wait-what                   mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match handoff                     mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match wayfinder                   mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match to-spec                     mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match to-tickets                  mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match grilling                    mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match domain-modeling             mattpocock/skills@5beb35b 4 files, linked from claude, codex and pi
+match prototype                   mattpocock/skills@5beb35b 4 files, linked from claude, codex and pi
+match research                    mattpocock/skills@5beb35b 2 files, linked from claude, codex and pi
+match codebase-design             mattpocock/skills@5beb35b 4 files, linked from claude, codex and pi
+match diagnosing-bugs             mattpocock/skills@5beb35b 3 files, linked from claude, codex and pi
+match writing-for-agents          mattpocock/skills@5beb35b 3 files, linked from claude, codex and pi
+match setup-matt-pocock-skills    mattpocock/skills@5beb35b 7 files, linked from claude, codex and pi
+match tdd                         mattpocock/skills@5beb35b 4 files, linked from claude, codex and pi
+match resolving-merge-conflicts   mattpocock/skills@153fc1b 2 files, linked from claude, codex and pi
+match show-me                     humanlayer/skills@653b641 2 files, linked from claude, codex and pi
+match visual-recap                BuilderIO/agent-native@014aec9 4 files, linked from claude, codex and pi
+match visual-plan                 BuilderIO/agent-native@014aec9 7 files, linked from claude, codex and pi
+match gh-stack                    github/gh-stack@a644af6 4 files, linked from claude, codex and pi
+match autoreview                  openclaw/agent-skills@4f587b6 32 files, linked from claude, codex and pi
+match simplify                    bholmesdev/skills@81be879 1 files, linked from claude, codex and pi
+match improve                     shadcn/improve@cac56e1 4 files, linked from claude, codex and pi
+match impeccable                  pbakaus/impeccable@8644175 62 files, linked from claude, codex and pi
+match typesafe-ai                 typesafe-ai/skills@65a39f3 2 files, linked from claude, codex and pi
+match building-with-typesafe-jev  aaddrick/building-with-typesafe-jev@a46856c 16 files, linked from claude, codex and pi
+match cua-driver                  trycua/cua@c2a21e7 11 files, linked from claude, codex and pi
+match linear-cli                  schpet/linear-cli@63463ac 21 files, linked from claude, codex and pi
+match visual-explainer            dhruvkelawala/visual-explainer@d0b817f 36 files, linked from claude, codex and pi
+29/29 outside skills match their pinned tree in ~/.agents/skills and are linked from every other agent folder

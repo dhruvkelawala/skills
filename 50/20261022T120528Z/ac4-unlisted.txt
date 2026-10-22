@@ -1,0 +1,21 @@
+# AC4: a skill that is not on the list is reported, and removed only with --remove-unlisted (head 0e30b51, tree 3ea06d6)
+
+$ node scripts/sync-skills.mjs
+~/.codex/skills
+  unlisted eli5
+nothing to change
+1 unlisted skill kept; --remove-unlisted removes it
+exit=0
+
+$ ls ~/.codex/skills/eli5
+SKILL.md
+
+$ node scripts/sync-skills.mjs --remove-unlisted
+~/.codex/skills
+  remove   eli5
+made 1 change
+exit=0
+
+$ ls -a ~/.codex/skills | grep -E "^(eli5|\.system)$"
+.system
+(eli5 is gone; Codex's hidden .system is kept)
