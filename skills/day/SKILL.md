@@ -87,9 +87,11 @@ Stop each run marked stop, as [Stop a run](#stop-a-run) says, and write the [nig
 
 Stop each thread marked stop in four moves, in this order:
 
-1. **Interrupt.** When the thread had an active run in step 1, call `t3_thread_interrupt` with its `threadId`, `runId` set to that run, `reason: "Stopped by the goodnight check. Say \"go on\" to restart."` and `clientRequestId: "day-stop-<runId>"`. Pinning the run leaves alone any run the user started after the list, and the request ID makes a retry interrupt once. Then call `t3_thread_wait` with the same `runId` and a 60 second timeout, and check that the run ended as `interrupted`, `completed`, `failed` or `cancelled`. When the wait times out, read the thread once more. If it is still running, its line in the record and the reply says so.
-2. **Unwatch.** Call `unwatch_pull_request` with the `threadId` and the `url` of each PR in its `pullRequests`. The PR stays linked to the thread.
-3. **Save where it stopped.** Read its checkout with `git -C <worktreePath> rev-parse --short HEAD` and `git -C <worktreePath> status`, keeping the head, the count of uncommitted files, and any rebase, merge or cherry-pick that `git status` names as in progress. The worktree keeps the files as they are, and the thread picks them up when it restarts. Take where it stopped from its last message, or from its run record's `stage`, in one line.
+1. **Unwatch.** Call `unwatch_pull_request` with the `threadId` and the `url` of each PR in its `pullRequests`, so no PR event wakes the thread again. The PR stays linked to the thread.
+2. **Interrupt.** Read the thread again with `t3_thread_read`, since the reply can come long after the list and a new run may have started. When it has an `activeRunId`, call `t3_thread_interrupt` with the `threadId`, that `runId`, `reason: "Stopped by the goodnight check. Say \"go on\" to restart."` and `clientRequestId: "day-stop-<runId>"`. The pinned run and the request ID make a retry interrupt that run once.
+
+   Then call `t3_thread_wait` with the same `runId` and a 60 second timeout, and check that the run ended as `interrupted`, `completed`, `failed` or `cancelled`. When the wait times out and one more read shows the run still going, mark the thread "still stopping" in the record and in the reply.
+3. **Save where it stopped.** Read its checkout with `git -C <worktreePath> rev-parse --short HEAD` and `git -C <worktreePath> status`, keeping the head, the count of uncommitted files, and any rebase, merge or cherry-pick that `git status` names as in progress. The worktree keeps the files as they are, and the thread picks them up when it restarts. A thread with no `worktreePath` has no checkout to read. Take where it stopped from its last message, or from its run record's `stage`, in one line.
 4. **Record** it in the night record.
 
 **Complete when:** each stopped thread's run has ended or is recorded as still stopping, each of its PRs got an unwatch call, and the night record has its line.
@@ -102,13 +104,13 @@ The night record is `~/.agent/day/night-<YYYY-MM-DD>-<HHMM>.md`, written when th
 # Night record, <YYYY-MM-DD> <HH:MM>
 
 ## Stopped
-- <ISO time> · [<title>](t3-thread://v1/<threadId>) · PR <url, or none> · <branch> at <short sha>, <n> uncommitted files<, rebase in progress> · stopped at: <one line>
+- <ISO time with offset> · [<title>](t3-thread://v1/<threadId>) · PRs <urls, or none> · <branch> at <short sha>, <n> uncommitted files<, rebase in progress> · stopped at: <one line><, still stopping>
 
 ## Continued
-- <ISO time> · [<title>](t3-thread://v1/<threadId>) · <the reason it continued>
+- <ISO time with offset> · [<title>](t3-thread://v1/<threadId>) · <the reason it continued>
 ```
 
-The morning report lists, under "stopped last night", each stopped line whose thread has not run since its stop time. `t3_thread_read` shows this in `recentRuns`: a run requested after the stop time means the thread restarted, whoever restarted it.
+The morning report reads the newest night record. Under "stopped last night" it lists each stopped line whose thread has not run since its stop time. In `t3_thread_read`'s `recentRuns`, a run requested after the stop time means the thread restarted, whoever restarted it. A run stopped on an earlier night and never restarted shows up in the next goodnight check as gone quiet.
 
 ## "go on"
 
