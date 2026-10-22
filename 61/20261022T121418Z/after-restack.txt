@@ -1,0 +1,8 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head 339d468c4130
+# feature is a parent PR; PR #7 is a child stacked on it, approved by vlad while it sat on feature.
+# The parent squash-merges into main, the child is rebased onto main and retargeted:
+$ ship run 7 --repo fixture/repo
+landable run: #7@766c3cdacbeeb0e2d573b0b86834465d1b8297c2
+ceiling: none, the whole stack is landable
+[exit 0]
+

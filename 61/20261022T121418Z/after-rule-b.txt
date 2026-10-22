@@ -1,0 +1,28 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head 2bdf49aa18c7
+# Named under rule B with no verdict:
+$ ship run 7 --rule-b 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, verdict missing (rule B: named in --rule-b)
+[exit 0]
+
+# A one-way door with no verdict:
+$ ship run 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, verdict missing (rule B: the door is one-way)
+[exit 0]
+
+# A verdict recorded at the head lets both land:
+$ ship verdict record 7 PASS --head 2bdf49aa18c724e1755fb2da23be20d627f48f8c --by verifier --repo fixture/repo
+recorded PASS on #7 at 2bdf49aa18c7
+[exit 0]
+
+$ ship run 7 --rule-b 7 --repo fixture/repo
+landable run: #7@2bdf49aa18c724e1755fb2da23be20d627f48f8c
+ceiling: none, the whole stack is landable
+[exit 0]
+
+# A trailing --rule-b with no value is refused, not read as no PR:
+$ ship run 7 --rule-b
+ship: --rule-b needs a value
+[exit 2]
+

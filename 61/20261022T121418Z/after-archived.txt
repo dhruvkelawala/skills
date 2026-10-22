@@ -1,0 +1,23 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head 9118a5e88a65
+# The repository is archived.
+$ ship queue --repo fixture/repo
+ship: fixture/repo is archived, and ship skips archived repositories
+[exit 2]
+
+$ ship verdict record 7 PASS --head 9118a5e88a65ba0db64db3bda5a1e00a1a533b56 --by verifier --repo fixture/repo
+ship: fixture/repo is archived, and ship skips archived repositories
+[exit 2]
+
+$ ship verdict check 7 --repo fixture/repo
+ship: fixture/repo is archived, and ship skips archived repositories
+[exit 2]
+
+$ ship run 7 --repo fixture/repo
+ship: fixture/repo is archived, and ship skips archived repositories
+[exit 2]
+
+$ ship merge 7 --head 9118a5e88a65ba0db64db3bda5a1e00a1a533b56 --repo fixture/repo
+ship: fixture/repo is archived, and ship skips archived repositories
+[exit 2]
+
+# gh calls the stub saw: ["repo view","repo view","repo view","repo view","repo view"]

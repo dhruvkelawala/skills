@@ -1,0 +1,10 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head c1999d8c71f9
+# The repository is archived; base ship.mjs:
+$ ship queue --repo fixture/repo
+MERGE NOW (0)
+REVIEW (0), highest unblock first, then smallest
+WAITING ON PARENT (0)
+YOURS, NOT MERGED (1)
+  #7    NONE              unblocks 0       1 lines  two-way  pr 7
+[exit 0]
+

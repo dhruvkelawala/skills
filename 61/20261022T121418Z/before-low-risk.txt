@@ -1,0 +1,7 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head 9118a5e88a65
+# No verdict on record, not named under rule B, default branch asks for no review.
+$ ship run 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, verdict missing
+[exit 0]
+

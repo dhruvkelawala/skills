@@ -1,0 +1,19 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head 61a9e7c3d3e8
+# Default branch asks for 1 approval; vlad approved the head.
+$ ship run 7 --repo fixture/repo
+landable run: #7@61a9e7c3d3e8f82ea9059f526880540c599e681f
+ceiling: none, the whole stack is landable
+[exit 0]
+
+# main moves on and the PR is rebased; the patch is unchanged:
+$ ship run 7 --repo fixture/repo
+landable run: #7@308fe12580781676801b1c943d674bf3d972967a
+ceiling: none, the whole stack is landable
+[exit 0]
+
+# A real change is pushed; GitHub still shows APPROVED, from the earlier patch:
+$ ship run 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, GitHub requires a review: waiting for a human approval of this patch
+[exit 0]
+

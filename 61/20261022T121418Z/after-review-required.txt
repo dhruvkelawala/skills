@@ -1,0 +1,13 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head a708755b30f2
+# The default branch's classic protection asks for 1 approving review; no human has approved.
+$ ship run 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, GitHub requires a review: waiting for a human approval of this patch
+[exit 0]
+
+# A ruleset asking for 2 approvals, one current-patch approval from vlad:
+$ ship run 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, GitHub requires 2 approvals: 1 human approval of this patch so far
+[exit 0]
+

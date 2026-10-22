@@ -1,0 +1,42 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head 17b4b0a9ffcb
+# GitHub shows REVIEW_REQUIRED; classic protection asks for 1 approval and the build check (from app 15368); a ruleset asks for lint.
+$ ship run 7 --repo fixture/repo
+landable run: (none)
+ceiling: #7, GitHub requires a review: waiting for a human approval of this patch
+[exit 0]
+
+# ship land --force: run skips only the approval wait.
+$ ship run 7 --force --repo fixture/repo
+landable run: #7@17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 (approval skipped by --force)
+ceiling: none, the whole stack is landable
+[exit 0]
+
+# merge without --force: GitHub's own review rule refuses.
+$ ship merge 7 --head 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --repo fixture/repo
+ship: Command failed: gh pr merge 7 --squash --match-head-commit 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --repo fixture/repo
+X Pull request fixture/repo#7 is not mergeable: the base branch policy prohibits the merge.
+[exit 2]
+
+# merge --force while lint has not reported: refused before any merge call.
+$ ship merge 7 --head 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --force --repo fixture/repo
+ship: --force would take GitHub's admin bypass, which skips every branch rule, and required check lint has not passed
+[exit 2]
+
+# merge --force with a build pass posted by another app: refused.
+$ ship merge 7 --head 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --force --repo fixture/repo
+ship: --force would take GitHub's admin bypass, which skips every branch rule, and required check build has not passed
+[exit 2]
+
+# merge --force on a branch with a required-deployments ruleset rule: refused.
+$ ship merge 7 --head 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --force --repo fixture/repo
+ship: --force would take GitHub's admin bypass, which skips every branch rule, and the branch has a REQUIRED_DEPLOYMENTS rule
+[exit 2]
+
+# merge --force with every rule confirmed:
+$ ship merge 7 --head 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --force --repo fixture/repo
+merged #7 at 17b4b0a9ffcb as cccccccccccc
+[exit 0]
+
+# gh pr merge calls the stub saw (--admin only on the confirmed forced merge):
+  gh pr merge 7 --squash --match-head-commit 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --repo fixture/repo
+  gh pr merge 7 --squash --admin --match-head-commit 17b4b0a9ffcb3dfd48095ef43ea1bf8b33ff67d0 --repo fixture/repo

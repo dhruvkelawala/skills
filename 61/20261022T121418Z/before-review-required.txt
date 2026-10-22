@@ -1,0 +1,11 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head e23df56f8815
+# Same fixture against the base ship.mjs (approval policy), with a verdict recorded since the base needs one:
+$ ship verdict record 7 PASS --head e23df56f8815d524b5dc5fe4060e687bf10eea74 --by verifier --repo fixture/repo
+recorded PASS on #7 at e23df56f8815
+[exit 0]
+
+$ ship run 7 --repo fixture/repo
+landable run: #7@e23df56f8815d524b5dc5fe4060e687bf10eea74
+ceiling: none, the whole stack is landable
+[exit 0]
+

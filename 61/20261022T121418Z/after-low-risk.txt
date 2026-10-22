@@ -1,0 +1,7 @@
+# fixture: PR #7, the caller's own (dhruv), two-way door, head b27334149519
+# No verdict on record, not named under rule B, default branch asks for no review.
+$ ship run 7 --repo fixture/repo
+landable run: #7@b27334149519aaca356c3b0f8198f708c2c1c1a6
+ceiling: none, the whole stack is landable
+[exit 0]
+
