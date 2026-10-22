@@ -42,12 +42,12 @@ Keep the held items for a PR in `HELD=~/.agent/pr-watch/<owner>/<repo>/<pr>.held
 
 ```bash
 node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --thread <id> --reply-to <replyTo> \
-  --seen <lastCommentId> --to <author> --body-file <draft>
-node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --review <id> --to <author> --body-file <draft>
+  --seen <lastCommentId> --to <person> --body-file <draft>
+node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --review <id> --to <person> --body-file <draft>
 node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --rerequest <login>
 ```
 
-Holding again for the same thread, review or person replaces the earlier draft. Show the user each draft when you hold it. With `--held-file "$HELD"`, the gate stops counting a thread or written review as a repair once its reply is held, and waits at pending with `<n> item(s) to people held until "post"`. A newer comment in a held thread brings the thread back, so read it and hold a new draft.
+`--to` names the person you answer, who in a thread a bot opened is the person who spoke in it. Holding again for the same thread, review or person replaces the earlier draft. Show the user each draft when you hold it. With `--held-file "$HELD"`, the gate stops counting a thread or written review as a repair once its reply is held, and waits at pending with `<n> item(s) to people held until "post"`. A newer comment in a held thread brings the thread back, so read it and hold a new draft.
 
 ## When the user says "post"
 
@@ -59,7 +59,7 @@ node "$SKILL_DIR/scripts/held.mjs" post --file "$HELD" --repo "$OWNER/$REPO" --p
 
 It sends the items in the order they were held: each reply and then the resolve of its thread, each comment, and each re-request. It removes an item from the held file once GitHub accepts it, and appends one line per send, with its link, to the run record. On a failure it stops with exit `2`, names the item, and keeps it and the rest held. A second run never sends anything twice.
 
-- When someone has commented in a thread since its reply was drafted, `post` sends nothing to that thread and stops. Read the new comment, hold a new draft, and show it to the user.
+- When someone has commented in a thread since its reply was drafted, `post` sends nothing to that thread and stops, and the gate lists the thread again.
 - Reading a thread and resolving it need the GraphQL quota, so after `API rate limit exceeded` run `post` again once the quota resets.
 
 Then go back to step 1 of the watch loop.
@@ -90,12 +90,12 @@ Then go back to step 1 of the watch loop.
 4. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
    - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
-   - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request. Once `/apr` has pushed the fix (step 5), hold a reply that names the fix commit before you run the gate again, because the fix can mark the thread outdated and the gate then stops listing it. For a request you would decline, hold a reply that gives your reason, and change no code. `post` resolves the thread after the reply, so when you need the person's answer before you can act, ask the user instead of holding a question. Leave resolving to `post`.
-   - **Written review** (`kind: "review"`). Read it and fix each clear point. After the push, hold one PR comment that answers it point by point.
+   - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request, and hold its reply in step 5, once the fix commit exists. Answer a question in a held reply. For a request you would decline, hold a reply that gives your reason, and change no code. `post` resolves the thread after the reply, so when you need the person's answer before you can act, ask the user instead of holding a question.
+   - **Written review** (`kind: "review"`). Read it and fix each clear point. Hold one PR comment that answers it point by point, in step 5 when a point needed a fix.
    - **Changes requested by a person.** Fix the points in their threads as above. Answer the points in the review's own text in one held comment, where `--review` takes the review's `node_id` from `gh api repos/{owner}/{repo}/pulls/<n>/reviews`. Then hold a re-request, and leave their review in place. The gate shows CHANGES_REQUESTED until they review again. It is not a repair while the re-request is held, and once they appear in `gh pr view --json reviewRequests` (REST: `.requested_reviewers` from `gh api repos/{owner}/{repo}/pulls/<n>`), the PR waits on them.
    - **Merge conflict or wrong base.** Rebase onto the live base, rerun the project's tests, and push with `--force-with-lease`.
    - **Draft, closed, or mismatched HEAD.** Stop and report, because these are not repairs.
-5. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Return to step 1 with the new HEAD.
+5. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Then hold each reply and comment to a person that names the fix commit, and return to step 1 with the new HEAD.
 6. Once nothing is left to repair, decide who the PR waits on:
    - **Someone else**, such as a running check, a reviewer that has not covered the HEAD, or a person who has your posted reply or re-request. Call `watch_pull_request` for the PR and end the turn. T3 wakes the thread when a check fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict, and you start again at step 1. It wakes only for comments made after the call, so handle the existing ones first. A wake is news, so run the gate before acting on it.
    - **The user**, when the gate exits `0`, anything is held for "post", the budget is spent, or a reason needs the user's decision. Call `unwatch_pull_request`, which returns the thread to the user's inbox, and report.
