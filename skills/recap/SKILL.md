@@ -1,6 +1,6 @@
 ---
 name: recap
-description: Write a brief of the current work session for the person who resumes it tomorrow — goal, what shipped, decisions and why, what is in flight, next action — and save it so the next session can read it. Use when the user invokes /recap, says they are wrapping up, or starts a session asking what we did last time.
+description: Write a brief of the current work session for the person who resumes it tomorrow — goal, what shipped, decisions and why, what is in flight, next action — and save it so the next session can read it. Use when the user invokes /recap or asks what we did last time.
 ---
 
 # Recap
