@@ -1,0 +1,14 @@
+# at head a4b78d7
+$ git ls-files skills/pr-review
+skills/pr-review/SKILL.md
+skills/pr-review/agents/openai.yaml
+$ node --test $(git ls-files "*.test.mjs")
+ℹ tests 106
+ℹ suites 0
+ℹ pass 106
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4591.8245
+exit=0
