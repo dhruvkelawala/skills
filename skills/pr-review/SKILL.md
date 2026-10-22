@@ -46,7 +46,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 Prep comes before anything you write about the PR, on every PR.
 
-1. **Start the guide.** T3 writes the PR's review guide, the tour the user reads in the PR panel's Guide tab with each stop's lines in place. It takes a few minutes, so start it first, with `write_pull_request_guides` for the PR. T3 writes it on the model its own settings name, and the models file has no job for it.
+1. **Start the guide.** T3 writes the PR's review guide, the tour the user reads in the PR panel's Guide tab with each stop's lines in place. It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a queue, name every PR in scope that needs a guide in one call, so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
    - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
    - **The second opinion,** on the `second-opinion` job, from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
@@ -118,7 +118,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 ## 4. Return visits
 
-When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record.
+When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Its guide is for the old head, so start it again and check it before you write, as prep does, after a pure rebase too.
 
 1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
 2. **A pure rebase.** Compute the patch ID as prep does. When it matches the record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour.

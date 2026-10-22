@@ -243,6 +243,22 @@ describe("pr-review", { concurrency: true }, () => {
     assert.ok(secondOpinionsAt(v).length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
   });
 
+  test("a return visit rewrites the guide written for the old head before its intro", async (t) => {
+    for (const kind of ["push", "rebase"]) {
+      const first = await chain(kind).first;
+      assert.ok(guideWritten(first).length, `${first.name}: no guide written to go stale`);
+      const v = await chain(kind).back();
+      describeVisit(t, v);
+      assert.notEqual(v.head, first.head, `${v.name}: the head did not move`);
+      const writes = guideWrites(v);
+      assert.ok(writes.length, `${v.name}: no write_pull_request_guides for #${PR} at ${v.head}`);
+      const written = guideWritten(v);
+      assert.ok(written.length, `${v.name}: no read_pull_request_guide found the guide written for ${v.head}`);
+      assert.ok(v.introAt, `${v.name}: no review opening with ${PR_URL}`);
+      assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the review came before the guide was rewritten and read back`);
+    }
+  });
+
   test("a return visit after a pure rebase runs no reviewer", async (t) => {
     const v = await chain("rebase").back();
     describeVisit(t, v);
