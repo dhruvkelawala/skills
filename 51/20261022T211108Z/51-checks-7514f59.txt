@@ -1,0 +1,84 @@
+# issue 51: unslop as a part. Checks run from the repo root at head 7514f59.
+# <links> is a temp folder of per-skill links into this checkout, the layout the agent skill folders use.
+
+## Before, at base 4a345b2
+$ git ls-tree --name-only 4a345b2 skills/unslop/ | grep . || echo "no skills/unslop at base"
+no skills/unslop at base
+
+$ git grep -c "unslop" 4a345b2 -- skills README.md || echo "no skill or README mentions unslop at base"
+no skill or README mentions unslop at base
+
+## After, at head 7514f59
+### AC1: unslop carries the installed rules, and no personal names or paths
+# Changed in review, at the owner's request: unslop is model-invoked, scoped to written artifacts. The only differences from the installed copy:
+$ diff ~/.agents/skills/unslop/SKILL.md skills/unslop/SKILL.md
+3,4c3
+< description: Cut AI tells from any writing. Must always apply.
+< disable-model-invocation: true
+---
+> description: Cut AI tells from prose a person will read. Use when you write or edit docs, READMEs, PR or issue text, review comments or messages to people, and apply it before you save or post them. Also use when the user asks to cut AI tells. Not for chat replies, code or commit messages.
+10a10,21
+> ## What it runs on and what it leaves alone
+> 
+> On your own, run unslop only on writing that goes into a file or gets posted for people to read. Skip chat replies, code, commit messages and logs. A skill that tells you to run unslop, such as how or why, runs it on its chat answer too.
+> 
+> While editing, leave these as they are:
+> 
+> - Quoted text, code, identifiers, paths, commands and error strings.
+> - A shape the calling skill or the user requires, such as fixed headings, `Label:` lines, and word or sentence limits. Rewrite inside that shape.
+> - Text the user wrote, unless they asked you to edit it.
+> 
+> A calling skill's own instructions win where they differ from this file.
+> 
+
+$ cmp <(sed -n "/^## Process\$/,\$p" skills/unslop/SKILL.md) <(sed -n "/^## Process\$/,\$p" ~/.agents/skills/unslop/SKILL.md) && echo "Process and rules 3 to 33: byte-identical to the installed copy"
+Process and rules 3 to 33: byte-identical to the installed copy
+
+$ grep -nE "/Users/|/home/|~/|\\\$HOME" skills/unslop/SKILL.md || echo "no home paths"
+no home paths
+
+$ grep -niF -e "$(git config user.name | cut -d" " -f1)" -e "$(git config user.name | cut -d" " -f2)" skills/unslop/SKILL.md || echo "no owner names"
+no owner names
+
+$ ls skills/unslop && head -3 skills/unslop/LICENSE
+LICENSE
+SKILL.md
+MIT License
+
+Copyright (c) 2025 Siqi Chen
+
+### AC2: eli25, how, explain-diff and why run ../unslop/SKILL.md on their prose last
+$ grep -n "\.\./unslop/SKILL\.md" skills/eli25/SKILL.md skills/how/SKILL.md skills/explain-diff/SKILL.md skills/why/SKILL.md
+skills/eli25/SKILL.md:63:4. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
+skills/how/SKILL.md:61:Run `../unslop/SKILL.md` on the answer last. Keep the shape and length above, and leave quoted text and code as they are.
+skills/explain-diff/SKILL.md:45:Run `../unslop/SKILL.md` on the explanation last. Keep the order and length above, and leave quoted text and code as they are.
+skills/why/SKILL.md:15:In every mode, run `../unslop/SKILL.md` on your answer last. Keep the mode's answer shape and sentence limit, and leave quoted text and code as they are.
+
+$ for s in eli25 how explain-diff why; do test -f skills/$s/../unslop/SKILL.md && echo "$s: resolves in the checkout"; test -f <links>/skills/$s/../unslop/SKILL.md && echo "$s: resolves through <links> (physical)"; test -f "$(python3 -c "import os,sys;print(os.path.normpath(sys.argv[1]))" <links>/skills/$s/../unslop/SKILL.md)" && echo "$s: resolves through <links> (lexical)"; done
+eli25: resolves in the checkout
+eli25: resolves through <links> (physical)
+eli25: resolves through <links> (lexical)
+how: resolves in the checkout
+how: resolves through <links> (physical)
+how: resolves through <links> (lexical)
+explain-diff: resolves in the checkout
+explain-diff: resolves through <links> (physical)
+explain-diff: resolves through <links> (lexical)
+why: resolves in the checkout
+why: resolves through <links> (physical)
+why: resolves through <links> (lexical)
+
+### AC3: the README lists unslop as a part
+$ sed -n "/^## Parts/,/^## Installation/p" README.md | sed "\$d"
+## Parts
+
+A part is a skill that other skills run as one of their steps. They load it from its sibling folder, such as `../unslop/SKILL.md`, so the path works wherever the repo's skills are linked.
+
+| Part | Description |
+|-------|-------------|
+| [unslop](skills/unslop/SKILL.md) | Cut AI tells from prose. eli25, how, explain-diff and why run it last on what they write, and the agent runs it on its own when it writes docs, PR and issue text, or messages to people, but not on chat replies. |
+
+
+$ grep -o "\`unslop\` adapts.*directory\." README.md
+`unslop` adapts Siqi Chen's `humanizer`, MIT licensed, at `blader/humanizer@d8085c7`, with the license in its directory.
+

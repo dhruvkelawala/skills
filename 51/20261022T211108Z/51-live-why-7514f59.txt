@@ -1,0 +1,32 @@
+# issue 51: a live headless agent run of the why skill at head 7514f59
+# <links> is a temp folder of per-skill links into this checkout, the layout the agent skill folders use.
+# Skills and slash commands were off (--disable-slash-commands), so the agent saw only the files it read.
+# The question is unrelated to unslop, so any read of unslop comes from why's instruction.
+# $ claude -p "Answer this question by following the skill file at <links>/skills/why/SKILL.md exactly. ...
+#   Question: why does skills/pr-watch/scripts/pr-gate.mjs read the PR through REST sometimes?" \
+#   --model sonnet --disable-slash-commands --no-session-persistence --add-dir <links> \
+#   --allowedTools Read Grep Glob "Bash(git log:*)" "Bash(git blame:*)" "Bash(git show:*)" --output-format stream-json --verbose
+
+model: claude-sonnet-5-5
+
+Tool calls, in order:
+1. Read: <links>/skills/why/SKILL.md
+2. Read: <links>/skills/unslop/SKILL.md
+3. Grep: {"pattern": "REST|rest|graphql|gh api", "path": "skills/pr-watch/scripts/pr-gate.mjs", "output_mode": "content"}
+4. Read: <repo>/skills/pr-watch/scripts/pr-gate.mjs
+5. Read: <repo>/skills/pr-watch/scripts/pr-gate.mjs
+6. Bash: git log -S'REST draws on its own quota' --format='%h %s' -- skills/pr-watch/scripts/pr-gate.mjs
+7. Bash: git show -s --format='%h%n%B' 0da9a4a; git log -1 --format=%s 0da9a4a | grep -o '#[0-9]*'; gh pr list --state all --search 0da9a4a --json number,title,url 2>&1 | head
+8. Bash: git show -s --format='%h%n%B' 0da9a4a
+9. Bash: gh issue view 45 --json title,body,url
+
+Final answer:
+
+`pr-gate.mjs` reads the PR through REST when GraphQL fails because the account's shared GraphQL quota has run out. REST draws on a separate quota, so the gate can still read the PR's checks, reviews, comments and reactions. REST can't show whether a review thread is resolved, so the gate reports the threads as unknown and stays at pending instead of ready.
+
+Evidence: commit 0da9a4a, "On a rate-limit error it now reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with 'review threads unknown: GraphQL quota'". The same reasoning appears at `skills/pr-watch/scripts/pr-gate.mjs:39-40` and `:446-447`. The commit refs issue #45, which I didn't open because `gh issue view` needed approval.
+Confidence: Direct
+
+turns: 10
+
+Note: this run read unslop up front (call 2), not after its evidence. The 4ecb7b7 run read it last. The answer keeps why's shape.

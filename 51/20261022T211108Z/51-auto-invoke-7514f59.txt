@@ -1,0 +1,32 @@
+# issue 51: does the agent load unslop on its own? Headless runs, model claude-sonnet-5-5.
+# Each run used a fresh, empty config folder whose only added skill was unslop: the installed copy for 'before',
+# else a link to this checkout's skills/unslop. Each ran in its own empty scratch folder.
+#   CLAUDE_CONFIG_DIR=<temp config> claude -p "<prompt>" --model sonnet --no-session-persistence \
+#     --allowedTools Write Read Edit Skill --output-format stream-json --verbose
+# The skills/unslop/SKILL.md the head runs read is the one committed at 7514f59.
+
+Prompts:
+  readme   Write a short README.md in the current directory for a small CLI called tidy that deletes empty folders under a path. Keep it under 150 words.
+  prbody   Write a PR description into pr-body.md for a change that adds a --dry-run flag to a CLI called tidy, which deletes empty folders. Under 120 words.
+  message  Draft a reply to a teammate who asked whether we can ship the tidy CLI's --dry-run flag this week. Say yes, but tests for nested folders land first. Save it to reply.md.
+  chat1    In two sentences, what is the difference between git merge and git rebase?
+  chat2    Quick question: is it safe to delete node_modules and reinstall? One or two sentences.
+  commit   Write a one-line conventional commit message for a change that adds a --dry-run flag to a CLI called tidy. Save it to commit-msg.txt.
+  code     Write a Python function in tidy.py that deletes empty folders under a path, with a dry_run parameter.
+
+| unslop at | version | prompt | should fire | tool calls (Bash omitted) |
+| --- | --- | --- | --- | --- |
+| before | installed copy (disable-model-invocation: true) | readme | no | Write |
+| 55f9ab8 | first description ("use as the last edit") | readme | yes | Write |
+| 55f9ab8 | first description | chat1 | no | (none) |
+| 7514f59 | head | readme | yes | Skill(unslop), Write |
+| 7514f59 | head | readme | yes | Skill(unslop), Write |
+| 7514f59 | head | prbody | yes | Skill(unslop), Write |
+| 7514f59 | head | message | yes | Skill(unslop), Write |
+| 7514f59 | head | chat1 | no | (none) |
+| 7514f59 | head | chat2 | no | (none) |
+| 7514f59 | head | commit | no | Write |
+| 7514f59 | head | code | no | Write |
+
+At head: fired on 4 of 4 writing tasks, and on none of 2 chat replies, a commit message and a code task.
+The first description missed the README task, which led to the reworded trigger at head.
