@@ -36,7 +36,26 @@ function scratchRepo() {
   const git = (...a) => execFileSync("git", ["-c", "user.name=eval", "-c", "user.email=eval@example.com", ...a], { cwd: repo });
   writeFileSync(join(repo, "README.md"), "# demo\n\nA CLI that imports and exports tables.\n");
   mkdirSync(join(repo, "src"));
-  writeFileSync(join(repo, "src", "export.ts"), "export function exportTable(rows: string[][]): string {\n  return rows.map((r) => r.join(',')).join('\\n');\n}\n");
+  writeFileSync(
+    join(repo, "src", "export.ts"),
+    `export type Table = { columns: string[]; rows: string[][] };
+
+// demo export <table>: prints the table as CSV, with a header row of column names.
+export function exportTable(table: Table): string {
+  return [table.columns, ...table.rows].map((row) => row.join(",")).join("\\n");
+}
+`,
+  );
+  writeFileSync(
+    join(repo, "src", "export.test.ts"),
+    `import { test, expect } from "vitest";
+import { exportTable } from "./export";
+
+test("exports a header row, then one line per row", () => {
+  expect(exportTable({ columns: ["id", "name"], rows: [["1", "Ada"]] })).toBe("id,name\\n1,Ada");
+});
+`,
+  );
   git("init", "-q");
   git("remote", "add", "origin", "https://github.com/acme/demo.git");
   git("add", ".");
@@ -118,5 +137,21 @@ describe("ticket", { concurrency: true }, () => {
   test("stays out of splitting a spec into tickets", async (t) => {
     const result = await run(t, "spec");
     assert.ok(!result.skills.includes("ticket"), "spec: ticket fired");
+  });
+
+  test("clear criteria file one issue labelled ready-for-agent", async (t) => {
+    const { created } = await run(t, "clear");
+    assert.equal(created.length, 1, "clear: expected one issue");
+    assert.ok(created[0].labels.includes("ready-for-agent"), "clear: ready-for-agent missing");
+  });
+
+  // `day` lists unlabelled issues by this heading, so the heading text is the contract.
+  test("vague criteria file one unlabelled issue that names what's missing", async (t) => {
+    const { created } = await run(t, "vague");
+    assert.equal(created.length, 1, "vague: expected one issue");
+    assert.ok(!created[0].labels.includes("ready-for-agent"), "vague: labelled ready-for-agent");
+    const missing = created[0].body.split(/^## /m).find((section) => /^What['’]s missing/.test(section));
+    assert.ok(missing, "vague: no \"## What's missing\" section");
+    assert.ok(missing.split("\n").slice(1).join("\n").trim(), "vague: \"## What's missing\" is empty");
   });
 });

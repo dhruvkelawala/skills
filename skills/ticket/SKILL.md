@@ -36,11 +36,24 @@ Read the repo's latest issues and copy their headings and tone: `gh issue list -
 
 Fill each section only from what the thread said, decided or showed. The title names the change in plain words.
 
-## 3. File it
+## 3. Decide the label
+
+The acceptance criteria are **clear** when each one is checkable, so that someone could say pass or fail by running or reading something, and the thread says where the change lands. Then the issue gets the `ready-for-agent` label.
+
+Otherwise leave it unlabelled, and end the body with this section, one bullet per gap that keeps the issue from being ready, such as a criterion nobody can check, an unknown scope or an open product decision:
+
+```md
+## What's missing
+- <gap>
+```
+
+`day` lists unlabelled issues with this section as almost ready, so keep the heading exactly as written.
+
+## 4. File it
 
 Write the body to a temp file, then:
 
-- GitHub: `gh issue create --title <title> --body-file <file>` (REST: `gh api repos/{owner}/{repo}/issues -f title=<title> -F body=@<file>`).
-- Linear: `linear issue create --team <team> --title <title> --description-file <file> --no-interactive`.
+- GitHub: `gh issue create --title <title> --body-file <file>`, adding `--label ready-for-agent` when the criteria are clear (REST: `gh api repos/{owner}/{repo}/issues -f title=<title> -F body=@<file>`, adding `-f 'labels[]=ready-for-agent'`). When the repo has no such label, create it first: `gh label create ready-for-agent --description "Ready to build with /issue-to-pr" --color 0e8a16`.
+- Linear: `linear issue create --team <team> --title <title> --description-file <file> --no-interactive`, adding `--label ready-for-agent` when the criteria are clear. When the team has no such label, create it first: `linear label create --name ready-for-agent --team <team>`.
 
-**Complete when:** one issue exists in the tracker that owns the idea, with a body built only from the thread.
+**Complete when:** one issue exists in the tracker that owns the idea, it carries `ready-for-agent` exactly when its criteria are clear, and otherwise its body ends with `## What's missing`.
