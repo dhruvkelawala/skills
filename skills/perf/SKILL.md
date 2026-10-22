@@ -41,7 +41,7 @@ Go down this list in order and pick the first item that can meet the target:
 6. Do it concurrently. Run independent work in parallel.
 7. Do it cheaper. Use a faster algorithm, query, or library.
 
-Before you remove work, confirm in the source that nothing reads its result. Before you add a cache, name what invalidates it. Make one change. Hand a hard change to an `implement-smart` helper and a mechanical one to an `implement-cheap` helper (see Helpers), and read the diff yourself.
+Before you remove work, confirm in the source that nothing reads its result. Before you add a cache, name what invalidates it. Make one change. Hand it to a helper (see Helpers), and read the diff yourself.
 
 **Done when** one change for one item exists and you have read its diff.
 
@@ -80,7 +80,7 @@ A baseline report is one line: the metric with its median and range, the limiter
 Diagnose mode reads and measures only. It changes no product code and commits nothing. Read [references/diagnose.md](references/diagnose.md) for capture tools, artifact formats, and how to narrow each kind of signal.
 
 1. Get the signal. With a supplied artifact, work from it as it is and leave the original untouched. Without one, reproduce the symptom on the live process and capture the smallest artifact that shows it. Ask before attaching to a shared or production process. **Done when** you have a readable artifact and have recorded the capture command and window.
-2. Reduce it to a ranked finding: the hot path, the chain that keeps memory alive, or the blocked thread. Hand a large artifact to a `research` helper (see Helpers). **Done when** the finding has units and a query or script you can rerun.
+2. Reduce it to a ranked finding: the hot path, the chain that keeps memory alive, or the blocked thread. Hand a large artifact to a helper (see Helpers). **Done when** the finding has units and a query or script you can rerun.
 3. Map the finding to source: file, symbol, and line at the revision that produced the artifact. **Done when** each finding has a `path:line` or is marked unresolved with the reason.
 4. Rate it: confirmed, when a live probe or a paired before-and-after capture agrees; supported hypothesis; or inconclusive. **Done when** the report states the rating and the next check that would settle it.
 

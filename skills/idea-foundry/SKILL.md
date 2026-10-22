@@ -13,7 +13,7 @@ Two modes:
 
 Read `references/agent-prompts.md` before launching any subagents. It holds the lens, red-team, and steelman prompt templates with the hard rules built in.
 
-Every agent in this skill is a helper agent with the `research` role. Hand each one off like this: on Pi or SumoCode spawn role `research`; in Claude Code use the Agent tool (general-purpose); in Codex use the standard subagent. With no helper available, run the templates yourself one after another and say so.
+Every agent in this skill is a native subagent on the thread's model. With no subagent available, run the templates yourself one after another and say so.
 
 ## Stage 0: context harvest (founder profile)
 

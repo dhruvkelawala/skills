@@ -1,6 +1,6 @@
 # Idea foundry agent prompt templates
 
-Fill `{...}` slots. Launch all agents of a stage in one message so they run concurrently. All are helper agents with the `research` role (see SKILL.md for the host-specific hand-off).
+Fill `{...}` slots. Launch all agents of a stage in one message so they run concurrently. All are native subagents on the thread's model (see SKILL.md).
 
 Every template below carries the DATA BOUNDARY block. Keep it: the agents read forum posts, reviews, and competitor pages, and any of those can contain text written to steer an AI.
 
