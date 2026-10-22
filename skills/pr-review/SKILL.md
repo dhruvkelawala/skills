@@ -6,7 +6,7 @@ compatibility: Requires git and gh.
 
 # PR review
 
-Make reviews fast without losing understanding. You read everything, implementation included, and then walk the user through the PR in one message: an intro, a tour of the whole route, and a wrap-up. The user decides, and nothing reaches GitHub until they say so.
+The reviewers find the problems, and you explain them. On every PR, `/code-review` and a second opinion from the other model family read the change before you write about it. You read everything too, implementation included, sort what they found, and walk the user through the PR in one message: an intro, a tour of the whole route, and a wrap-up. The user decides, and nothing reaches GitHub until they say so.
 
 Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue]`.
 
@@ -42,13 +42,22 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 **Complete when** every PR in scope has a pinned range and a review checkout at its head, and its file list matches `gh pr view <n> --json files`.
 
-## 2. Read the PR
+## 2. Prep
 
-Read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
+Prep comes before anything you write about the PR, on every PR.
+
+1. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
+   - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
+   - **The second opinion,** on the `second-opinion` job, from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
+
+   When a job's model can't run, do what its `ifUnavailable` says. For `wait`, tell the user which reviewer is missing and wait for their word.
+2. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
+3. Prep is ready once both reviewers have reported. Check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
+4. When the PR needs the verifier (step 3), start it now.
 
 For a stack or a queue, start with one table: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. Order a stack from the bottom. Order a queue so the PR that unblocks the most other PRs comes first, then the smallest. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
-**Complete when** you have read every changed file and know what the body claims and what proves it.
+**Complete when** both reviewers have reported on the PR's head, you have read every changed file, and every finding is sorted.
 
 ## 3. Walk one PR at a time
 
@@ -73,24 +82,27 @@ When the change can't be followed from the intro and the diff, such as a new sub
 - **Dependencies:** new external services or packages, and which way modules now depend on each other.
 - **Rollout:** production switches, defaults, and changes that cannot be undone.
 
-Each stop is one numbered item: the file and lines as a link, then what to look at there and why, in one or two sentences. For a design change, state the decision as one claim and say what it constrains, couples or makes hard to undo. Every file with a finding is a stop that names the finding and its priority. Point at the lines instead of quoting them. Count the files that carry no design, such as lockfiles and snapshots, in one closing line. When a PR has no design change, say so in one line and start the route at the first file with a finding.
+Each stop is one numbered item: the file and lines as a link, then what to look at there and why, in one or two sentences. For a design change, state the decision as one claim and say what it constrains, couples or makes hard to undo. Every file a reviewer flagged is a stop that names the finding, its priority and its reviewer. Point at the lines instead of quoting them. Count the files that carry no design, such as lockfiles and snapshots, in one closing line. When a PR has no design change, say so in one line and start the route at the first flagged file.
 
 ````md
 1. [fire.ts:351-372](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/fire.ts:351): **a reminder fires as the person who set it.** The tick claims a Slack event as the requester and rechecks membership, `slack:reply` and the channel audience on every attempt, so a reminder carries its requester's authority days after it was set.
-2. [store.ts:88](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/store.ts:88): the claim is one `UPDATE` guarded by `claimed_at IS NULL`. **P1:** the row is read before the update, so two ticks can claim the same reminder.
+2. [store.ts:88](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/store.ts:88): the claim is one `UPDATE` guarded by `claimed_at IS NULL`. **P1, second opinion:** the row is read before the update, so two ticks can claim the same reminder.
 ````
 
 **Wrap-up.**
 
-1. **Findings.** The P0 and P1 problems and the design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority and a link.
-2. **Questions for the author.** What the code alone cannot settle.
-3. **Suggested verdict.** One line with the reason. Choose one of:
+1. **Findings.** The reviewers' P0 and P1 findings and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer and a link. A finding you think is wrong stays here with your reason.
+2. **Questions for the author.** What neither the reviewers nor the code could settle.
+3. **Verifier.** Its result, when it ran.
+4. **Suggested verdict.** One line with the reason. Choose one of:
    - approve
    - approve with "please fix before <flag> is enabled", for features shipped behind a switch
    - request changes, only for a P0 or P1, or a change to production authority
-4. One line that counts the style and smell notes, such as "4 style and smell notes; say `what else` to see them".
+5. One line that counts the style and smell notes, such as "4 style and smell notes; say `what else` to see them".
 
 Keep the intro and the wrap-up under about 300 words together.
+
+**Verifier.** Run the `verifier` job only for a PR that touches authority, data, money or a production switch where its proof doesn't cover that, or when the user says `verify`. Give a fresh `delegate_task` child on that job's entry, `onTeammatePr` on someone else's PR, the PR number, the head SHA and the three lanes in step 2 of [ship's verify](../ship/SKILL.md#verify). Its PASS, PASS+NOTES or FAIL, with the evidence for each lane, goes into the wrap-up and into the review you post, rather than a comment of its own. When it is still running at the intro, the wrap-up says so, and its result follows when it returns.
 
 Write every code reference, in the tour and the wrap-up, as a Markdown link to the file in the review checkout, with the line after a colon: `[fire.ts:118](/Users/me/.agent/pr-review/app/540/src/runtime/reminders/fire.ts:118)`. T3 Code, Codex and Claude Code open these links in their own editor. A bare path is not clickable in every host and a GitHub link leaves the host, so code links always point at the local checkout. For a line range, link the first line and put the range in the label.
 
@@ -101,6 +113,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 | `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR |
 | `approve and post` | Post as in step 5, then do the same as `next` |
 | `what else` | List the style and smell notes that were only counted |
+| `verify` | Run the verifier on this PR and add its result to the wrap-up |
 | `how` | Explain one part in full with `/how`, or the whole change with `/explain-diff` |
 | any comment | Add it to the ledger for this PR |
 | `try` | Run the PR so the user can test it by hand, as below |

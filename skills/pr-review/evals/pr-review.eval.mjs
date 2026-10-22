@@ -11,10 +11,11 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BASE_FILES, HEAD_BRANCH, PR, PR_COMMITS, PR_URL } from "./fixture.mjs";
+import { BASE_FILES, HEAD_BRANCH, PR, PR_COMMITS, PR_URL, flaggedFiles } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
+const reviewersModel = JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.reviewers.use.model;
 const codeReview = join(homedir(), ".agents", "skills", "code-review");
 const TOOLS = "Bash,Read,Write,Edit,Glob,Grep,Skill,ToolSearch,mcp__t3-code";
 
@@ -126,9 +127,30 @@ function describeVisit(t, v) {
   t.diagnostic(`${v.name}: review\n${v.reply}`);
 }
 
+const reviewerTasks = (v) => v.t3.filter((e) => e.tool === "delegate_task" && e.target?.model === reviewersModel);
+const reportsOf = (v, tasks) => v.t3.filter((e) => e.tool === "report" && tasks.some((d) => d.taskId === e.taskId));
+const secondOpinionsAt = (v) => v.secondOpinion.filter((e) => e.head === v.head && e.base === v.base);
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
+  test("runs /code-review's two reviewers and the second opinion, and has their reports before the intro", async (t) => {
+    for (const v of await firstVisits(t)) {
+      const tasks = reviewerTasks(v);
+      assert.deepEqual([...new Set(tasks.map((d) => d.axis))].sort(), ["spec", "standards"], `${v.name}: /code-review's two reviewers did not both run on the reviewers job`);
+      const second = secondOpinionsAt(v);
+      assert.ok(second.length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
+      assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
+      const ready = Math.max(...reportsOf(v, tasks).map((e) => e.at), ...second.map((e) => e.at));
+      assert.ok(ready < v.introAt, `${v.name}: the intro came before both reviewers had reported`);
+    }
+  });
+
+  test("the tour names every file a reviewer flagged", async (t) => {
+    for (const v of await firstVisits(t)) {
+      for (const file of flaggedFiles("first")) assert.ok(v.reply.includes(file), `${v.name}: the review never names ${file}`);
+    }
+  });
+
   test("the review has no Judge line, triage block or diff block", async (t) => {
     for (const v of await firstVisits(t)) {
       const text = v.texts.map((x) => x.text).join("\n");
