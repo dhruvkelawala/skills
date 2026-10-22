@@ -155,7 +155,7 @@ const SWAPPED_SETTINGS = {
 };
 
 // Findings per reviewer, by the PR's phase: "first" as opened (and after a pure rebase), "fixed" after FIX_COMMIT.
-export const REVIEWS = {
+const REVIEWS = {
   spec: { first: [OFF_BY_ONE, NO_LIMIT_TEST], fixed: [] },
   standards: { first: [MYSTERIOUS_NAMES], fixed: [MYSTERIOUS_NAMES] },
   autoreview: { first: [SWAPPED_SETTINGS], fixed: [] },
