@@ -1,11 +1,11 @@
 ---
 name: explain-diff
-description: Explain a diff, commit, branch, range or PR in plain words, covering the problem, the one key idea, and one real input traced through the changed code. Use when the user asks to explain a change, asks what a change does, or says they don't understand it, and when pr-review needs a deeper look at one PR.
+description: Explain a diff, commit, branch, range or PR in chat, opening with a before-and-after sketch, then in plain words the problem, the one key idea, and one real input traced through the changed code. Use when the user asks to explain a change, asks what a change does, or says they don't understand it, and when pr-review needs a deeper look at one PR.
 ---
 
 # Explain a diff
 
-Explain a change so it lands on the first read: plain words, one real example traced through the code. Group by idea, never by walking files from top to bottom.
+Explain a change so it lands on the first read: a sketch of what changed, then plain words and one real example traced through the code. Group by idea, never by walking files from top to bottom.
 
 ## 1. Get the change
 
@@ -21,18 +21,19 @@ Pick the command that matches what the user means by "the change":
 
 With no target, explain the uncommitted changes when there are any, otherwise the branch against the default branch.
 
-Read the changed files themselves, their callers and their tests, not just the hunks. Find the reason for the change in the linked issue, the PR body or the commit message. When the reason comes only from reading the code, say it is inferred.
+Read the changed files themselves, their callers and their tests, not just the hunks. For a PR that isn't checked out, run `git fetch <remote> pull/<n>/head`, pin its head with `git rev-parse FETCH_HEAD` straight away, since any later fetch moves `FETCH_HEAD`, and read each file with `git show <head-sha>:<path>`, without making a checkout. Find the reason for the change in the linked issue, the PR body or the commit message. When the reason comes only from reading the code, say it is inferred.
 
 **Complete when** both ends of the comparison are pinned, and every claim you plan to make has a file and line behind it.
 
 ## 2. Explain
 
-Write it in this order, under about 400 words:
+Write the answer in this order, with nothing before the sketch and about 400 words of prose after it:
 
-1. **The problem.** One or two sentences, no code.
-2. **The key idea.** The one thing that makes the change click: a method, a flag, an inversion.
-3. **The trace.** One realistic input followed through the changed code. Write one line per step, each with `path:line`. Add one edge value when it changes the outcome.
-4. **Not in this change.** One line, when the change leaves something out on purpose.
+1. **The sketch.** The answer's first line is the sketch's opening fence, with no status line, note or label above it. Draw the change before and after in a fenced `text` block: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines, each under 40 characters, so it reads on a phone.
+2. **The problem.** One or two sentences, no code.
+3. **The key idea.** The one thing that makes the change click: a method, a flag, an inversion.
+4. **The trace.** One realistic input followed through the changed code. Write one line per step, each naming its file and line in the link form Style gives. Add one edge value when it changes the outcome.
+5. **Not in this change.** One line, when the change leaves something out on purpose.
 
 Add a section only when the change has something for it:
 
@@ -40,7 +41,7 @@ Add a section only when the change has something for it:
 - **Hidden machinery.** Framework behaviour, generated code or storage a newcomer would not guess.
 - **What the tests promise.** Each test restated as a promise. Say which tests you read and which you ran.
 
-End with two or three labelled zoom-in choices, and ask which part is still unclear.
+Stop after the last section, with no menu of follow-up choices. When the reader says they still don't follow, load `../eli25/SKILL.md` and make its short page on the same change as the next try.
 
 Run `../unslop/SKILL.md` on the explanation last. Keep the order and length above, and leave quoted text and code as they are.
 
@@ -48,11 +49,20 @@ Run `../unslop/SKILL.md` on the explanation last. Keep the order and length abov
 
 - Plain English: short active sentences, real names and values, and a short gloss on any term the reader may not know, at first use.
 - Use the repository's own names for things; read `CONTEXT.md` when it exists.
-- Every trace step is a Markdown link to the file and line at the explained revision, such as `[store.ts:31](/abs/path/src/intake/store.ts:31)`, so the host opens it in its own editor. For a PR that is not checked out, make the read-only review checkout from pr-review step 1 first and link into it, never to GitHub.
+- Every link opens in T3, so it works from a phone too. Write each trace step as a Markdown link with a repo-relative path, such as `[store.ts:31](src/intake/store.ts:31)`, which T3 opens in its file panel at that line. Name a PR by its GitHub URL, which T3 opens in its PR panel on the diff. Never write an absolute path, a `file://` URL, `localhost`, or a link to a file on GitHub.
+- A file link opens whatever the thread's checkout holds, so link a step only when the checkout is at the explained revision. When it isn't, as for a PR that isn't checked out or an older commit, give each step's file and line as plain text outside backticks, because T3 turns a code-formatted path into a file link too. Link the PR, if there is one, in the problem line.
 
 Example:
 
+> ```text
+> POST /intake {weirdField: 123}
+>   schema.ts
+> -   strict: drops weirdField
+> +   .passthrough(): keeps it
+>   store.ts: saves it
+>   load.ts: reads it back
+> ```
+>
 > **Problem:** Each source sends a different format, and we need one internal shape that never drops a field.
 > **Key idea:** `.passthrough()` keeps unknown fields instead of deleting them.
-> **Trace:** `POST /intake {..., weirdField: 123}` is checked by [schema.ts:14](/repo/src/intake/schema.ts:14), stored by [store.ts:31](/repo/src/intake/store.ts:31), and read back after a restart by [load.ts:9](/repo/src/intake/load.ts:9) with `weirdField` still present.
-> **Zoom in?** (a) where the run log is stored (b) why passthrough matters (c) the restart test
+> **Trace:** `POST /intake {..., weirdField: 123}` is checked by [schema.ts:14](src/intake/schema.ts:14), stored by [store.ts:31](src/intake/store.ts:31), and read back after a restart by [load.ts:9](src/intake/load.ts:9) with `weirdField` still present.
