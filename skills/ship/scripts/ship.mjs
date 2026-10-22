@@ -181,8 +181,9 @@ function verdictReason(p, door, status, ruleB) {
 }
 
 // ship follows GitHub's review rule for the default branch, where every PR in a stack lands.
-// `reviewRequired` says whether that branch asks for an approving review; a PR GitHub already shows
-// as REVIEW_REQUIRED waits too. Where a review is required, the PR waits for a human approval
+// `requiredApprovals` is how many approving reviews that branch asks for; a PR GitHub already shows
+// as REVIEW_REQUIRED needs at least one. Where a review is required, the PR waits for that many human
+// approvals of its current patch, since GitHub's own count can include an approval gone stale
 // (`approversByNumber` holds humanApprovers() per PR; reviewDecision alone is not trusted, because a
 // bot can approve). Where none is required, the caller's request to land stands in for it.
 // `force` skips only the wait for a required approval; a standing change request still blocks.
@@ -190,7 +191,7 @@ function verdictReason(p, door, status, ruleB) {
 //
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned
 // head cannot be enforced. ship never lands onto a branch with a merge queue.
-export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), reviewRequired = false, ruleB = [], force = false, mergeQueue = false, me } = {}) {
+export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), requiredApprovals = 0, ruleB = [], force = false, mergeQueue = false, me } = {}) {
   if (mergeQueue && stack.length) return { run: [], ceiling: { number: stack[0].number, blocker: "the target branch uses a merge queue, which merges later heads ship cannot pin" } };
   const run = [];
   for (const p of stack) {
@@ -198,12 +199,13 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
     const door = parseDoor(p.body);
     const ownPr = Boolean(me) && actor(p.author?.login) === actor(me);
     const approvers = approversByNumber.get(p.number) ?? [];
-    const waiting = (reviewRequired || p.reviewDecision === "REVIEW_REQUIRED") && approvers.length === 0;
+    const needed = Math.max(requiredApprovals, p.reviewDecision === "REVIEW_REQUIRED" ? 1 : 0);
+    const waiting = approvers.length < needed;
     const why = verdictReason(p, door, s, ruleB);
     let blocker = null;
     if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
     else if (why && (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr))) blocker = "verdict was not recorded by someone other than the PR author";
-    else if (waiting && !force) blocker = "GitHub requires a review: waiting for a human approval of this patch";
+    else if (waiting && !force) blocker = approvers.length === 0 ? "GitHub requires a review: waiting for a human approval of this patch" : `GitHub requires ${needed} approvals: ${approvers.length} human approval${approvers.length > 1 ? "s" : ""} of this patch so far`;
     else if (waiting && p.reviewDecision === "CHANGES_REQUESTED") blocker = "a reviewer requested changes, and --force skips only the wait for an approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
     run.push({ number: p.number, head: p.headRefOid, door, verdict: why ? s.verdict : "not needed", approvedBy: approvers.length > 0 || waiting ? approvers : [`${me} (land request)`], forced: waiting });
@@ -318,7 +320,7 @@ function prReviews(n, repo) {
   return restList(`repos/${nameWithOwner(repo)}/pulls/${n}/reviews?per_page=100`);
 }
 
-// What the branch's rules ask of a merge: a merge queue, and approving reviews. GraphQL shows
+// What the branch's rules ask of a merge: a merge queue, and how many approving reviews. GraphQL shows
 // classic protection (refUpdateRule) and rulesets to anyone who can read the repository.
 function branchRules(branch, repo) {
   const [owner, name] = nameWithOwner(repo).split("/");
@@ -327,7 +329,7 @@ function branchRules(branch, repo) {
     () => {
       const r = JSON.parse(sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`, "-f", `q=refs/heads/${branch}`])).data.repository;
       const counts = [r.ref?.refUpdateRule?.requiredApprovingReviewCount, ...(r.ref?.rules.nodes ?? []).filter((n) => n.type === "PULL_REQUEST").map((n) => n.parameters?.requiredApprovingReviewCount)];
-      return { mergeQueue: Boolean(r.mergeQueue?.id), requiresReview: counts.some((c) => c > 0) };
+      return { mergeQueue: Boolean(r.mergeQueue?.id), approvals: Math.max(0, ...counts.filter(Number.isInteger)) };
     },
     () => {
       let rules = [];
@@ -340,10 +342,10 @@ function branchRules(branch, repo) {
       }
       // REST shows a classic protection rule's details only to admins, so any protected branch
       // counts as asking for a review.
+      const counts = rules.filter((rule) => rule.type === "pull_request").map((rule) => rule.parameters?.required_approving_review_count);
       return {
         mergeQueue: rules.some((rule) => rule.type === "merge_queue"),
-        requiresReview: restJson(`repos/${owner}/${name}/branches/${branch}`).protected === true
-          || rules.some((rule) => rule.type === "pull_request" && rule.parameters?.required_approving_review_count > 0),
+        approvals: Math.max(restJson(`repos/${owner}/${name}/branches/${branch}`).protected === true ? 1 : 0, ...counts.filter(Number.isInteger)),
       };
     },
   );
@@ -503,8 +505,8 @@ async function main() {
     const states = new Map(stack.map((p) => [p.number, landingState(p, repo, trusted, me)]));
     const statuses = new Map([...states].map(([n, s]) => [n, s.status]));
     const approvers = new Map([...states].map(([n, s]) => [n, s.approvers]));
-    const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(repository(repo).defaultBranch, repo) : {};
-    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
+    const { mergeQueue, approvals } = stack.length > 0 ? branchRules(repository(repo).defaultBranch, repo) : {};
+    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, requiredApprovals: approvals, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
       [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}${x.forced ? " (approval skipped by --force)" : ""}`).join(" -> ") || "(none)"}`,
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",

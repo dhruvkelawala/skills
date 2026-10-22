@@ -236,7 +236,7 @@ const REVIEW_WAIT = { number: 7, blocker: "GitHub requires a review: waiting for
 const rules = (refUpdateRule, nodes = []) => ({ mergeQueue: null, ref: { refUpdateRule, rules: { nodes } } });
 
 test("run: where the default branch asks for an approving review, the caller's own PR waits for a human approval", (t) => {
-  const { cli, setState } = fixtureGitHub(t, { graphql: true });
+  const { head, cli, setState } = fixtureGitHub(t, { graphql: true });
   assert.equal(cli("run", "7").ceiling, null, "an unprotected default branch lands on the request to land");
   setState({ branch: rules({ requiredApprovingReviewCount: 1, pattern: "main" }) });
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "classic branch protection");
@@ -244,6 +244,11 @@ test("run: where the default branch asks for an approving review, the caller's o
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "a ruleset");
   setState({ branch: rules({ requiredApprovingReviewCount: 0, pattern: "*" }, [{ type: "PULL_REQUEST", parameters: { requiredApprovingReviewCount: 0 } }]) });
   assert.equal(cli("run", "7").ceiling, null, "rules that ask for no approvals require none");
+  setState({
+    reviewDecision: "APPROVED", branch: rules({ requiredApprovingReviewCount: 2, pattern: "main" }),
+    reviews: [{ user: { login: "vlad", type: "User" }, state: "APPROVED", submitted_at: "2026-10-22T10:00:00Z", commit_id: head }],
+  });
+  assert.deepEqual(cli("run", "7").ceiling, { number: 7, blocker: "GitHub requires 2 approvals: 1 human approval of this patch so far" });
 });
 
 test("GraphQL quota spent: run holds the caller's own PR when the default branch is protected or a ruleset asks for a review", (t) => {

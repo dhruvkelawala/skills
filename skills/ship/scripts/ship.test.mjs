@@ -190,12 +190,14 @@ test("landableRun: a stack lands bottom first, each PR pinned to its head", () =
 
 test("landableRun: where GitHub requires a review, even the caller's own PR waits for a human approval", () => {
   const own = pr(1, "main", "a", { author: { login: "dhruv" } });
-  const waits = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", reviewRequired: true });
+  const waits = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", requiredApprovals: 1 });
   assert.deepEqual(waits.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval of this patch" });
   const shown = landableRun([{ ...own, reviewDecision: "REVIEW_REQUIRED" }], new Map([[1, ok("dhruv")]]), { me: "dhruv" });
   assert.deepEqual(shown.ceiling, waits.ceiling, "GitHub's REVIEW_REQUIRED on the PR counts even when the branch rule reads as none");
-  const approved = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", reviewRequired: true, approversByNumber: new Map([[1, ["vlad"]]]) });
+  const approved = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", requiredApprovals: 1, approversByNumber: new Map([[1, ["vlad"]]]) });
   assert.deepEqual([approved.ceiling, approved.run[0].approvedBy], [null, ["vlad"]]);
+  const short = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", requiredApprovals: 2, approversByNumber: new Map([[1, ["vlad"]]]) });
+  assert.deepEqual(short.ceiling, { number: 1, blocker: "GitHub requires 2 approvals: 1 human approval of this patch so far" }, "a stale approval cannot make up GitHub's count");
 });
 
 test("landableRun: a two-way PR outside rule B lands on its build's own checks, without a verdict", () => {
@@ -260,14 +262,14 @@ test("latestVerdict: on someone else's PR, their own verdict is still ignored", 
 
 test("landableRun: --force skips only the wait for a required approval", () => {
   const own = pr(1, "main", "a", { author: { login: "dhruv" } });
-  const forced = landableRun([own], new Map(), { me: "dhruv", reviewRequired: true, force: true });
+  const forced = landableRun([own], new Map(), { me: "dhruv", requiredApprovals: 1, force: true });
   assert.deepEqual([forced.ceiling, forced.run[0].approvedBy, forced.run[0].forced], [null, [], true]);
   for (const [p, opts, blocker] of [
     [{ ...own, body: ONE }, {}, /^verdict missing \(rule B: the door is one-way\)$/],
     [{ ...own, reviewDecision: "CHANGES_REQUESTED" }, {}, /requested changes/],
     [own, { mergeQueue: true }, /merge queue/],
   ]) {
-    assert.match(landableRun([p], new Map(), { me: "dhruv", reviewRequired: true, force: true, ...opts }).ceiling.blocker, blocker);
+    assert.match(landableRun([p], new Map(), { me: "dhruv", requiredApprovals: 1, force: true, ...opts }).ceiling.blocker, blocker);
   }
 });
 
@@ -280,7 +282,7 @@ test("landableRun: where GitHub requires no review, the caller's verdict counts 
 
 test("landableRun: someone else's PR needs a verdict from another account, and a human approval where GitHub requires a review", () => {
   const theirs = pr(1, "main", "a");
-  const noApproval = landableRun([theirs], new Map([[1, ok("dhruv")]]), { me: "dhruv", reviewRequired: true });
+  const noApproval = landableRun([theirs], new Map([[1, ok("dhruv")]]), { me: "dhruv", requiredApprovals: 1 });
   assert.deepEqual(noApproval.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval of this patch" });
   const selfVerdict = landableRun([theirs], new Map([[1, ok("vlad")]]), { me: "dhruv" });
   assert.equal(selfVerdict.ceiling.blocker, "verdict was not recorded by someone other than the PR author");
