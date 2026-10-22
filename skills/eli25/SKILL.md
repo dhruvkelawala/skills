@@ -65,18 +65,23 @@ Before and after, from `support-report-pr-349-eli25.html`:
    ```html
    <script>
      (() => {
-       const bg = getComputedStyle(document.documentElement).getPropertyValue("--background");
-       if (!bg) return;
-       const c = document.createElement("canvas").getContext("2d");
-       c.fillStyle = bg;
-       c.fillRect(0, 0, 1, 1);
-       const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
-       document.documentElement.dataset.theme = r * 299 + g * 587 + b * 114 < 128000 ? "dark" : "light";
+       const root = document.documentElement;
+       const c = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+       const pick = () => {
+         const bg = getComputedStyle(root).getPropertyValue("--background");
+         if (!bg) return;
+         c.fillStyle = bg;
+         c.fillRect(0, 0, 1, 1);
+         const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
+         root.dataset.theme = r * 299 + g * 587 + b * 114 < 128000 ? "dark" : "light";
+       };
+       pick();
+       new MutationObserver(pick).observe(document.head, { childList: true, subtree: true, characterData: true });
      })();
    </script>
    ```
 
-   The script picks dark when the thread's background is dark. Outside T3, as on a Vercel deploy, it does nothing and the page follows the system scheme. Paint the page ground with `var(--background, var(--bg))`, so it matches the thread in T3 and stays bone elsewhere.
+   The script picks dark when the thread's background is dark, and picks again when the user switches T3's mode with the page open, because T3 then rewrites its theme style in `<head>`. Outside T3, as on a Vercel deploy, it does nothing and the page follows the system scheme. Paint the page ground with `var(--background, var(--bg))`, so it matches the thread in T3 and stays bone elsewhere.
 4. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width, height and ground.
 5. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
 
