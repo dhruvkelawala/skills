@@ -1,0 +1,11 @@
+$ sh skill-text-check.sh   # SKILL.md at the base and at the PR head
+== f162b42 skills/pr-review/SKILL.md
+Judge lines: 2
+triage step or block lines: 3
+diff fences: 1
++/- lines inside fences: 0
+== HEAD skills/pr-review/SKILL.md
+Judge lines: 0
+triage step or block lines: 0
+diff fences: 0
++/- lines inside fences: 0
