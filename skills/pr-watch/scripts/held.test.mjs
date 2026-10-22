@@ -61,7 +61,7 @@ function openPr(threads) {
   return {
     query: { data: { repository: { pullRequest: {
       state: "OPEN", isDraft: false, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN", reviewDecision: null,
-      headRefOid: HEAD, author: { login: "dhruv" },
+      headRefOid: HEAD, author: { login: "pr-author" },
       commits: { nodes: [{ commit: { oid: HEAD, committedDate: "2026-10-22T10:00:00Z", statusCheckRollup: null } }] },
       reviewThreads: page(threads), reviews: page([]), comments: page([]), reactions: page([]),
     } } } },
@@ -72,8 +72,8 @@ function openPr(threads) {
 
 const personThread = {
   id: "PRRT_p", isResolved: false, isOutdated: false, path: "src/join.ts", line: 40,
-  comments: { nodes: [{ databaseId: 201, author: { __typename: "User", login: "teammate" }, body: "Rename this to joinAll" }] },
-  latest: { nodes: [{ databaseId: 201, author: { __typename: "User", login: "teammate" } }] },
+  opening: { nodes: [{ body: "Rename this to joinAll" }] },
+  comments: { nodes: [{ databaseId: 201, author: { __typename: "User", login: "teammate" } }], pageInfo: { hasNextPage: false } },
 };
 const GATE_ARGS = ["--repo", "o/r", "--pr", "7", "--expected-head", HEAD, "--json"];
 

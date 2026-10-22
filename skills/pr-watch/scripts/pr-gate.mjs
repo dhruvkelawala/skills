@@ -16,8 +16,9 @@
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
-//                     authorType, lastAuthor, lastAuthorType, body }]
-//                  // author and replyTo are the first comment's, lastAuthor and lastCommentId the newest's
+//                     authorType, body, commenters: [{ login, type }] }]
+//                  // author, body and replyTo are the first comment's, lastCommentId the newest's,
+//                  // and commenters lists every comment's author in order
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
 //   reviews:       [{ id, author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
@@ -229,12 +230,10 @@ function isBot(login, type) {
   return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
 }
 
-// The gate reads a thread's first and newest comments only, so a person who spoke in between and
-// was answered goes unseen. A reply from the PR author keeps a bot's thread a bot's.
+// A reply from the PR author keeps a bot's thread a bot's.
 function isBotThread(thread, prAuthor) {
-  const last = thread.lastAuthor;
-  const lastIsBotOrAuthor = last == null || isBot(last, thread.lastAuthorType) || sameLogin(last, prAuthor);
-  return isBot(thread.author, thread.authorType) && lastIsBotOrAuthor;
+  return isBot(thread.author, thread.authorType)
+    && (thread.commenters ?? []).every((c) => isBot(c.login, c.type) || sameLogin(c.login, prAuthor));
 }
 
 function sameLogin(a, b) {
@@ -359,8 +358,8 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
       reviewThreads(first:100){
         nodes{
           id isResolved isOutdated path line
-          comments(first:1){ nodes{ databaseId author{ __typename login } body } }
-          latest: comments(last:1){ nodes{ databaseId author{ __typename login } } }
+          opening: comments(first:1){ nodes{ body } }
+          comments(first:100){ nodes{ databaseId author{ __typename login } } pageInfo{ hasNextPage } }
         }
         pageInfo{ hasNextPage }
       }
@@ -447,23 +446,23 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
         || pr.comments?.pageInfo?.hasNextPage
         || pr.reactions?.pageInfo?.hasNextPage
         || contexts?.pageInfo?.hasNextPage
+        || pr.reviewThreads?.nodes?.some((t) => t.comments?.pageInfo?.hasNextPage)
     ),
     reviewThreads: (pr.reviewThreads?.nodes ?? []).map((t) => {
-      const first = t.comments?.nodes?.[0];
-      const last = t.latest?.nodes?.[0];
+      const comments = t.comments?.nodes ?? [];
+      const first = comments[0];
       return {
         id: t.id,
         replyTo: first?.databaseId ?? null,
-        lastCommentId: last?.databaseId ?? null,
+        lastCommentId: comments.at(-1)?.databaseId ?? null,
         isResolved: t.isResolved,
         isOutdated: t.isOutdated,
         path: t.path ?? null,
         line: t.line ?? null,
         author: first?.author?.login ?? null,
         authorType: first?.author?.__typename ?? null,
-        lastAuthor: last?.author?.login ?? null,
-        lastAuthorType: last?.author?.__typename ?? null,
-        body: first?.body ?? "",
+        body: t.opening?.nodes?.[0]?.body ?? "",
+        commenters: comments.map((c) => ({ login: c.author?.login ?? null, type: c.author?.__typename ?? null })),
       };
     }),
     reviews: (pr.reviews?.nodes ?? []).map((r) => ({
