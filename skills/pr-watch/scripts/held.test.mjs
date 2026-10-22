@@ -117,21 +117,18 @@ test("a person's thread: hold keeps the drafted reply off GitHub, and the gate t
 
 const REPLY_URL = "https://github.com/o/r/pull/7#discussion_r301";
 const COMMENT_URL = "https://github.com/o/r/pull/7#issuecomment-401";
-const PR_URL = "https://github.com/o/r/pull/7";
 const newest = (databaseId, login) => ({ data: { node: { comments: { nodes: [{ databaseId, author: { login } }] } } } });
 const SENDS = {
   thread: [newest(201, "teammate"), newest(301, "pr-author")],
   "POST repos/o/r/pulls/7/comments/201/replies": { id: 301, html_url: REPLY_URL },
   mutation: { data: { resolveReviewThread: { thread: { isResolved: true } } } },
   "POST repos/o/r/issues/7/comments": { id: 401, html_url: COMMENT_URL },
-  "POST repos/o/r/pulls/7/requested_reviewers": { number: 7, html_url: PR_URL },
 };
 
 function holdEach(gh, held) {
   const holds = [
     ["--thread", "PRRT_p", "--reply-to", "201", "--seen", "201", "--to", "teammate", "--body-file", gh.file("reply.md", "Renamed to joinAll in 1a2b3c4.")],
     ["--review", "PRR_h", "--to", "reviewer", "--body-file", gh.file("answer.md", "1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed.")],
-    ["--rerequest", "reviewer"],
   ];
   for (const flags of holds) {
     const hold = gh.run(HELD, ["hold", "--file", held, ...flags]);
@@ -152,7 +149,7 @@ function writes(gh) {
 const recordLines = (record) => readFileSync(record, "utf8").split("\n").filter((l) => l.startsWith("- "));
 const post = (gh, held, record) => gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
 
-test("post sends every held reply, resolution, comment and re-request in order, and the run record lists them", (t) => {
+test("post sends every held reply, resolution and comment in order, and the run record lists them", (t) => {
   const gh = stubGh(t, SENDS);
   const held = gh.file("held.json");
   const record = gh.file("run-record.md", "stage: watching\n");
@@ -164,7 +161,6 @@ test("post sends every held reply, resolution, comment and re-request in order, 
     ["POST", "repos/o/r/pulls/7/comments/201/replies", "body=Renamed to joinAll in 1a2b3c4."],
     ["POST", "graphql", "query=mutation", "id=PRRT_p"],
     ["POST", "repos/o/r/issues/7/comments", "body=1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed."],
-    ["POST", "repos/o/r/pulls/7/requested_reviewers", "reviewers[]=reviewer"],
   ]);
   const lines = readFileSync(record, "utf8").split("\n");
   assert.equal(lines[0], "stage: watching", "post appends and keeps what the record held");
@@ -173,12 +169,11 @@ test("post sends every held reply, resolution, comment and re-request in order, 
     `- reply to teammate: ${REPLY_URL}`,
     `- resolved teammate's thread: ${REPLY_URL}`,
     `- comment to reviewer: ${COMMENT_URL}`,
-    `- review re-requested from reviewer: ${PR_URL}`,
   ]);
 
   const again = post(gh, held, record);
   assert.equal(again.status, 0, again.stderr);
-  assert.equal(writes(gh).length, 4, "a second post has nothing left to send");
+  assert.equal(writes(gh).length, 3, "a second post has nothing left to send");
 });
 
 test("post stops at a failed send, the gate still waits on post, and a later post sends only what is left", (t) => {
@@ -200,15 +195,14 @@ test("post stops at a failed send, the gate still waits on post, and a later pos
 
   const gate = gh.run(GATE, [...GATE_ARGS, "--held-file", held]);
   assert.equal(gate.status, 1, gate.stderr);
-  assert.deepEqual(gate.json, { state: "pending", reasons: ['3 item(s) to people held until "post"'], threads: [] },
+  assert.deepEqual(gate.json, { state: "pending", reasons: ['2 item(s) to people held until "post"'], threads: [] },
     "the thread whose resolve is still held is not a repair");
 
   gh.answer("mutation", SENDS.mutation);
   const second = post(gh, held, record);
   assert.equal(second.status, 0, second.stderr);
-  assert.deepEqual(writes(gh).slice(2).map((w) => w[1]), [
-    "graphql", "repos/o/r/issues/7/comments", "repos/o/r/pulls/7/requested_reviewers",
-  ], "the reply already sent is not sent twice");
+  assert.deepEqual(writes(gh).slice(2).map((w) => w[1]), ["graphql", "repos/o/r/issues/7/comments"],
+    "the reply already sent is not sent twice");
 });
 
 test("post sends nothing to a thread where the person commented after the draft, and keeps it held", (t) => {

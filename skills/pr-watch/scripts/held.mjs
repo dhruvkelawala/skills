@@ -4,17 +4,15 @@
 //
 //   held.mjs hold --file F --thread ID --reply-to COMMENT_ID --seen COMMENT_ID --to LOGIN --body-file PATH
 //   held.mjs hold --file F --review ID --to LOGIN --body-file PATH
-//   held.mjs hold --file F --rerequest LOGIN
 //   held.mjs post --file F --repo owner/name --pr N --record PATH
 //
 // The file is a JSON list of items in the order they were held:
 //   { kind: "reply", thread, replyTo, seen, to, body }   a reply in a review thread, then resolving it;
 //                                                        seen is the thread's newest comment when drafted
 //   { kind: "comment", review, to, body }                 a PR comment answering a written review
-//   { kind: "rerequest", to }                             asking the person to review again
 //   { kind: "resolve", thread, seen, to, url }            left by a post whose reply went out but whose
 //                                                        resolve did not; seen and url are the reply's
-// Holding again for the same thread, review or person replaces the earlier item.
+// Holding again for the same thread or review replaces the earlier item.
 //
 // `post` sends the items in order and removes each from the file once GitHub accepts it, so a failed
 // post can run again without sending anything twice. It appends one line per send to the run record.
@@ -29,12 +27,11 @@ import { fileURLToPath } from "node:url";
 const USAGE = [
   "usage: held.mjs hold --file F --thread ID --reply-to COMMENT_ID --seen COMMENT_ID --to LOGIN --body-file PATH",
   "       held.mjs hold --file F --review ID --to LOGIN --body-file PATH",
-  "       held.mjs hold --file F --rerequest LOGIN",
   "       held.mjs post --file F --repo owner/name --pr N --record PATH",
 ].join("\n");
 const RESOLVE = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }";
 const LAST_COMMENT = "query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread{ comments(last:1){ nodes{ databaseId author{ login } } } } } }";
-const FLAGS = new Set(["file", "thread", "reply-to", "seen", "to", "body-file", "review", "rerequest", "repo", "pr", "record"]);
+const FLAGS = new Set(["file", "thread", "reply-to", "seen", "to", "body-file", "review", "repo", "pr", "record"]);
 
 export function readHeld(file) {
   if (!existsSync(file)) return [];
@@ -59,16 +56,13 @@ function writeHeld(file, items) {
 }
 
 function keyOf(item) {
-  if (item.thread) return `thread ${item.thread}`;
-  if (item.review) return `review ${item.review}`;
-  return `rerequest ${String(item.to).toLowerCase()}`;
+  return item.thread ? `thread ${item.thread}` : `review ${item.review}`;
 }
 
 function describe(item) {
   if (item.kind === "reply") return `reply to ${item.to} in thread ${item.thread}`;
   if (item.kind === "resolve") return `resolve of ${item.to}'s thread ${item.thread}`;
-  if (item.kind === "comment") return `comment to ${item.to} answering review ${item.review}`;
-  return `review request to ${item.to}`;
+  return `comment to ${item.to} answering review ${item.review}`;
 }
 
 function parseArgs(argv) {
@@ -94,13 +88,12 @@ function itemFrom(args) {
     return id;
   };
   const body = () => readFileSync(required("body-file"), "utf8");
-  const targets = ["thread", "review", "rerequest"].filter((flag) => args[flag] !== undefined);
-  if (targets.length !== 1) throw new Error("hold needs exactly one of --thread, --review or --rerequest");
+  const targets = ["thread", "review"].filter((flag) => args[flag] !== undefined);
+  if (targets.length !== 1) throw new Error("hold needs exactly one of --thread or --review");
   if (args.thread) {
     return { kind: "reply", thread: args.thread, replyTo: commentId("reply-to"), seen: commentId("seen"), to: required("to"), body: body() };
   }
-  if (args.review) return { kind: "comment", review: args.review, to: required("to"), body: body() };
-  return { kind: "rerequest", to: required("rerequest") };
+  return { kind: "comment", review: args.review, to: required("to"), body: body() };
 }
 
 function post(file, args) {
@@ -151,10 +144,6 @@ function send(repo, pr, item) {
     case "comment": {
       const comment = write(`${repo}/issues/${pr}/comments`, [`body=${item.body}`]);
       return { line: `comment to ${item.to}: ${comment.html_url}` };
-    }
-    case "rerequest": {
-      const pull = write(`${repo}/pulls/${pr}/requested_reviewers`, [`reviewers[]=${item.to}`]);
-      return { line: `review re-requested from ${item.to}: ${pull.html_url}` };
     }
     default:
       throw new Error(`unknown held item kind "${item.kind}"`);
