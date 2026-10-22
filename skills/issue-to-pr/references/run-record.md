@@ -26,7 +26,7 @@ tree: <git rev-parse HEAD^{tree} at that head>
 repairs: <used>/<budget>
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
 pr: <URL or none>
-spec_mode: stack   (a spec's own record)
+spec_mode: stack | one-pr   (a spec's own record)
 thread: <the spec thread's id>   (a spec's own record)
 spec: <spec URL>   (a ticket a spec thread started)
 ```
