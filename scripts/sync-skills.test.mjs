@@ -167,37 +167,43 @@ test("a skill that is not on the list is reported, and removed only with --remov
   assert.equal(kind(join(m.folders.codex, ".system")), "folder", "a hidden folder such as Codex's .system is not a skill");
 });
 
-test("a list the script cannot honour stops it before any agent folder changes", (t) => {
+test("a list or folder the script cannot honour stops it before anything changes", (t) => {
+  const list = (skills) => (m) => m.list(skills(m));
   const cases = [
-    ["names one of this repo's skills", (m) => ({ pr: m.entry("pr") }), /pr is one of this repo's skills/],
-    ["pins a branch instead of a commit", (m) => ({ grilling: { ...m.entry("grilling"), ref: "main" } }), /grilling: ref must be a full commit SHA/],
-    ["uses a path as a name", (m) => ({ "../escape": m.entry("grilling") }), /"\.\.\/escape" is not a skill name/],
-    ["pins a commit the source does not have", (m) => ({ grilling: m.entry("grilling", "0".repeat(40)) }), /grilling: cannot fetch 0{40} from file:\/\//],
-    ["points at a folder with no SKILL.md", (m) => ({ grilling: { ...m.entry("grilling"), skillPath: "skills/grilling/scripts/SKILL.md" } }), /grilling: fixture\/upstream@[0-9a-f]{7} has no skills\/grilling\/scripts\/SKILL\.md/],
+    ["names one of this repo's skills", list((m) => ({ pr: m.entry("pr") })), /pr is one of this repo's skills/],
+    ["pins a branch instead of a commit", list((m) => ({ grilling: { ...m.entry("grilling"), ref: "main" } })), /grilling: ref must be a full commit SHA/],
+    ["uses a path as a name", list((m) => ({ "../escape": m.entry("grilling") })), /"\.\.\/escape" is not a skill name/],
+    ["pins a commit the source does not have", list((m) => ({ grilling: m.entry("grilling", "0".repeat(40)) })), /grilling: cannot fetch 0{40} from file:\/\//],
+    ["points at a folder with no SKILL.md", list((m) => ({ grilling: { ...m.entry("grilling"), skillPath: "skills/grilling/scripts/SKILL.md" } })), /grilling: fixture\/upstream@[0-9a-f]{7} has no skills\/grilling\/scripts\/SKILL\.md/],
+    ["finds an agent folder that links into this checkout", (m) => symlinkSync(join(m.checkout, "skills"), m.folders.claude), /~\/\.claude\/skills resolves into this checkout/],
+    ["finds an agent folder that holds this checkout", (m) => symlinkSync(m.root, m.folders.claude), /~\/\.claude\/skills holds this checkout/],
   ];
-  for (const [label, skills, message] of cases) {
+  for (const [label, arrange, message] of cases) {
     const m = machine(t);
-    m.list(skills(m));
+    arrange(m);
+    const watched = [...Object.values(m.folders), join(m.checkout, "skills")];
+    const before = snapshot(watched);
     const result = m.run();
     assert.equal(result.status, 1, label);
     assert.match(result.stderr, message, label);
-    assert.equal(existsSync(join(m.home, ".agents")), false, label);
-    assert.equal(existsSync(m.folders.claude), false, label);
+    assert.deepEqual(snapshot(watched), before, label);
   }
 });
 
 test("an agent folder that is the shared folder under another name is synced once", (t) => {
-  const m = machine(t, { agents: [".claude", ".pi/agent"] });
-  mkdirSync(m.folders.agents, { recursive: true });
-  mkdirSync(join(m.home, ".codex"));
-  symlinkSync(m.folders.agents, m.folders.codex);
+  for (const [label, sharedExists] of [["the shared folder exists", true], ["the shared folder is not made yet", false]]) {
+    const m = machine(t, { agents: [".claude", ".codex", ".pi/agent"] });
+    if (sharedExists) mkdirSync(m.folders.agents, { recursive: true });
+    symlinkSync("../.agents/skills", m.folders.codex);
 
-  const result = m.run();
-  assert.equal(result.status, 0, result.stderr);
+    const result = m.run();
+    assert.equal(result.status, 0, `${label}: ${result.stderr}`);
 
-  const store = join(m.folders.agents, "grilling");
-  assert.equal(kind(store), "folder", "grilling stays a folder instead of a link to itself");
-  assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), "grilling at the pin\n");
+    const store = join(m.folders.agents, "grilling");
+    assert.equal(kind(store), "folder", `${label}: grilling stays a folder instead of a link to itself`);
+    assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), "grilling at the pin\n", label);
+    assert.equal(m.run().stdout, "nothing to change\n", label);
+  }
 });
 
 test("each agent's folder follows its config variable, and an agent that is not installed is skipped", (t) => {

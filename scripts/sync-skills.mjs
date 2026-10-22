@@ -36,7 +36,7 @@ function main(argv) {
   const cache = join(process.env.XDG_CACHE_HOME?.trim() || join(home, ".cache"), "sync-skills");
   for (const skill of outside) skill.pinned = pinnedFiles(cache, skill);
 
-  const { store, folders, skipped } = agentFolders(home, process.env);
+  const { store, folders, skipped } = agentFolders(home, process.env, checkout, show);
   const plans = folders.map((folder) => ({ folder, steps: planFolder(folder.path, store.path, checkout, own, outside, flags, show) }));
   const steps = plans.flatMap((plan) => plan.steps);
   const changes = steps.filter((step) => step.apply).length;
@@ -97,9 +97,16 @@ function readList(path, own) {
   });
 }
 
-// Agent folders that resolve to one real folder are synced once, so none is linked to itself.
-function agentFolders(home, env) {
-  const located = (shown) => ({ shown, path: existsSync(shown) ? realpathSync(shown) : shown });
+// Agent folders that resolve to one real folder are synced once, so none is linked to itself. A
+// folder that overlaps the checkout stops the run: syncing it would replace the checkout's own
+// skills, or list the checkout as unlisted and let --remove-unlisted delete it.
+function agentFolders(home, env, checkout, show) {
+  const located = (shown) => {
+    const path = realPath(shown);
+    if (path === checkout || path.startsWith(`${checkout}/`)) throw new Error(`${show(shown)} resolves into this checkout; make it a plain folder first`);
+    if (checkout.startsWith(`${path}/`)) throw new Error(`${show(shown)} holds this checkout; move the checkout out of it first`);
+    return { shown, path };
+  };
   const store = located(join(home, ".agents", "skills"));
   const folders = [store];
   const skipped = [];
@@ -117,6 +124,16 @@ function agentFolders(home, env) {
     if (!folders.some((other) => other.path === folder.path)) folders.push(folder);
   }
   return { store, folders, skipped };
+}
+
+// Follows links whose target does not exist yet, so on a fresh machine a folder that links to the
+// shared folder is still known as the shared folder.
+function realPath(path, hops = 0) {
+  if (existsSync(path)) return realpathSync(path);
+  const have = inspect(path);
+  if (have.kind === "link" && hops < 40) return realPath(have.target, hops + 1);
+  const parent = dirname(path);
+  return parent === path ? path : join(realPath(parent, hops), basename(path));
 }
 
 // Each wanted entry is a link, or in the shared folder an outside skill's files. An entry that
