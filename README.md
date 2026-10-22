@@ -6,7 +6,7 @@
 |-------|-------------|
 | [apr](skills/apr/SKILL.md) | Autoreview from a pinned base, commit, push, open or update a ready-for-review PR, then watch and repair PR review findings until clean. |
 | [bro](skills/bro/SKILL.md) | Restate the last message in plain human language, with no jargon. |
-| [cleanup](skills/cleanup/SKILL.md) | Read-only audit of git worktrees and iOS simulators, then removal by approved bucket, with a hold list for anything that could lose work. Branch deletion is a separate approval. (pstack) |
+| [cleanup](skills/cleanup/SKILL.md) | Free disk space: a read-only audit of Git worktrees, iOS simulators, build artifacts and package-manager caches, then removal by approved bucket, with a hold list for anything that could lose work. `audit` stops after the proposal and can run as a Saturday scheduled task. (pstack) |
 | [code-walkthrough](skills/code-walkthrough/SKILL.md) | Paced, file-by-file review of an unfamiliar or agent-written codebase, fixing as you go with a living checklist. |
 | [eli25](skills/eli25/SKILL.md) | Explain a PR, stack, plan, spike, system or incident as a short visual page shaped by its topic, optionally hosted on Tailscale or Vercel. |
 | [evidence](skills/evidence/SKILL.md) | Write a repo's EVIDENCE.md: how to launch each surface, drive a feature, capture screenshots, recordings, or transcripts, and publish them so PRs can prove changes work. |
