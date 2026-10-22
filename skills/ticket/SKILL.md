@@ -57,3 +57,16 @@ Write the body to a temp file, then:
 - Linear: `linear issue create --team <team> --title <title> --description-file <file> --no-interactive`, adding `--label ready-for-agent` when the criteria are clear. When the team has no such label, create it first: `linear label create --name ready-for-agent --team <team>`.
 
 **Complete when:** one issue exists in the tracker that owns the idea, it carries `ready-for-agent` exactly when its criteria are clear, and otherwise its body ends with `## What's missing`.
+
+## 5. Reply
+
+Reply with one line: the issue's number or Linear ID, whether it is ready, and its link. The issue body carries the detail.
+
+```text
+Filed <#n or ID>, ready-for-agent: <link>
+Filed <#n or ID>, not ready, missing <the main gap>: <link>
+```
+
+Then stop. A build starts only on the user's word, through `/issue-to-pr`.
+
+**Complete when:** the reply is that one line, and nothing else has started.

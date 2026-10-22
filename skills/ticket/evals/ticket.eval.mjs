@@ -154,4 +154,12 @@ describe("ticket", { concurrency: true }, () => {
     assert.ok(missing, "vague: no \"## What's missing\" section");
     assert.ok(missing.split("\n").slice(1).join("\n").trim(), "vague: \"## What's missing\" is empty");
   });
+
+  test("replies with one line holding the issue link", async (t) => {
+    for (const { name, reply, created } of await Promise.all([run(t, "clear"), run(t, "vague")])) {
+      assert.equal(created.length, 1, `${name}: expected one issue`);
+      assert.equal(reply.trim().split("\n").length, 1, `${name}: reply is not one line`);
+      assert.ok(reply.includes(created[0].url), `${name}: reply lacks ${created[0].url}`);
+    }
+  });
 });
