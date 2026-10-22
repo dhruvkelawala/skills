@@ -26,7 +26,6 @@ export const STATES = [
   "starts", "waits", "building", "blocked", "merged",
   "contract", "implemented", "reviewed", "verified", "published", "watching", "awaiting-human", "ready",
 ];
-// A ticket in one of these waits on the user, so it no longer keeps the spec running.
 const SETTLED = new Set(["ready", "awaiting-human", "merged", "blocked", "waits"]);
 
 class Problem extends Error {}
@@ -74,7 +73,6 @@ function openBlockers(repo, number) {
     });
 }
 
-// Blockers first; among the tickets free to go, the lowest number first.
 function buildOrder(open, blockersOf) {
   const inSpec = new Set(open.map((issue) => issue.number));
   const placed = new Set();
@@ -138,7 +136,6 @@ function ticketLine(n, state, build) {
   return `#${n} ${state}${reason}${build?.pr ? `: ${build.pr}` : ""}`;
 }
 
-// Every run record in the folder, by issue number: the build's stage word, PR, branch and predecessor.
 function buildsBeside(path) {
   const dir = dirname(path);
   const builds = new Map();
@@ -202,7 +199,6 @@ function body(path) {
   return "the body covers every ticket\n";
 }
 
-// A sub-issue or blocker can live in another repository, where its number names a different issue.
 const inRepo = (repo, issue) => issue.repository_url === `https://api.github.com/repos/${repo}`;
 
 // The first word of a header line, so a note after it, such as "(merged ...)", is left out.

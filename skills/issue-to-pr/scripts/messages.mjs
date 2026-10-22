@@ -30,7 +30,6 @@ const SIGN_OFF_WORDS = 12;
 const SAVED = /^## (Brief|Recap), (\S+)\n\n````text\n([\s\S]*?)\n````$/gm;
 const LOCAL_LINK = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1)\b|\blocalhost:\d|\bfile:\/\/|(?:^|[\s(<"'`])(?:~\/|\/(?:Users|home|tmp|private|var|Volumes)\/)/;
 const INSTRUCTION = /(?:^|\s)\/[a-z]|\b(?:reply|redirect)\b/i;
-// A brief's first line, plan steps and lane: a build's, and a spec's, where a stack leaves the lane to each PR.
 const BUILD = { as: "", title: "issue title", step: "criterion", lanes: ["light", "full"] };
 const SPEC_BRIEFS = {
   stack: { as: " as a stack", title: "spec title", step: "ticket", lanes: ["per PR"] },
@@ -82,7 +81,6 @@ function recapProblems(message, record, path) {
   return problems;
 }
 
-// A spec's recap gives every ticket a line, as `spec.mjs next` prints it: its state, and its PR once it has one.
 function ticketLineProblems(lines, tickets, dir) {
   return tickets.flatMap(({ number }) => {
     const line = lines.find((text) => new RegExp(`^#${number}\\b`).test(text));
