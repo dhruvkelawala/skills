@@ -4,9 +4,10 @@
 // Public seam: evaluateGate(snapshot, options) -> { state, reasons, threads, notes? }
 //   state:   "ready" | "pending" | "blocked"
 //   reasons: human-readable strings explaining a non-ready state
-//   threads: what a repair must address: unresolved, non-outdated review threads,
-//            and unanswered written reviews from people (marked kind: "review").
-//            A thread's `bot` is true while no person has spoken in it.
+//   threads: what a repair must address: unresolved review threads that are not outdated,
+//            or are a person's and not yet answered by the PR author, and unanswered written
+//            reviews from people (marked kind: "review"). A thread's `bot` is true while no
+//            person has spoken in it.
 //   notes:   present only when non-empty; checks that are not required and did not
 //            pass. Informational: they never change the state.
 //
@@ -16,8 +17,8 @@
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
-//                     authorType, body, commenters: [{ login, type }], commentersTruncated }]
-//                  // author, body and replyTo are the first comment's, lastCommentId the newest's,
+//                     authorType, body, lastAuthor, commenters: [{ login, type }], commentersTruncated }]
+//                  // author, body and replyTo are the first comment's, lastCommentId and lastAuthor the newest's,
 //                  // and commenters lists the authors of the first 100 comments in order
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
 //   reviews:       [{ id, author, authorType, commitId, state, submittedAt, body }]
@@ -96,7 +97,8 @@ export function evaluateGate(snapshot, options = {}) {
 
   const held = options.held ?? [];
   const activeThreads = reviewThreads
-    .filter((t) => !t.isResolved && !t.isOutdated && !held.some((item) => coversThread(item, t)))
+    .filter((t) => !t.isResolved && (!t.isOutdated || awaitsAnswer(t, pr.author)))
+    .filter((t) => !held.some((item) => coversThread(item, t)))
     .map((t) => ({
       id: t.id ?? null,
       replyTo: t.replyTo ?? null,
@@ -221,6 +223,12 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
 
 function isBot(login, type) {
   return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
+}
+
+// A pushed fix often marks a person's thread outdated before its reply is drafted, so an outdated
+// thread still needs an answer while a person has spoken in it and the PR author has not replied.
+function awaitsAnswer(thread, prAuthor) {
+  return !isBotThread(thread, prAuthor) && !sameLogin(thread.lastAuthor, prAuthor);
 }
 
 function isBotThread(thread, prAuthor) {
@@ -352,7 +360,7 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
         nodes{
           id isResolved isOutdated path line
           opening: comments(first:1){ nodes{ databaseId author{ __typename login } body } }
-          latest: comments(last:1){ nodes{ databaseId } }
+          latest: comments(last:1){ nodes{ databaseId author{ login } } }
           comments(first:100){ nodes{ author{ __typename login } } pageInfo{ hasNextPage } }
         }
         pageInfo{ hasNextPage }
@@ -455,6 +463,7 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
         author: first?.author?.login ?? null,
         authorType: first?.author?.__typename ?? null,
         body: first?.body ?? "",
+        lastAuthor: t.latest?.nodes?.[0]?.author?.login ?? null,
         commenters: (t.comments?.nodes ?? []).map((c) => ({ login: c.author?.login ?? null, type: c.author?.__typename ?? null })),
         commentersTruncated: Boolean(t.comments?.pageInfo?.hasNextPage),
       };

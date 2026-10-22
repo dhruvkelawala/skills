@@ -227,6 +227,18 @@ test("pending: a person's thread whose reply is held waits on post instead of bl
   assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
 });
 
+test("a person's thread still counts after a push marks it outdated, until the PR author answers it", () => {
+  const outdated = personThread({ isOutdated: true });
+  const unanswered = evaluateGate(baseSnapshot({ pr: { ...baseSnapshot().pr, author: PR_AUTHOR }, reviewThreads: [outdated] }));
+  assert.equal(unanswered.state, "blocked");
+  assert.deepEqual(unanswered.threads.map((t) => t.id), ["PRRT_p"]);
+  const answered = evaluateGate(baseSnapshot({
+    pr: { ...baseSnapshot().pr, author: PR_AUTHOR },
+    reviewThreads: [{ ...outdated, lastAuthor: PR_AUTHOR }],
+  }));
+  assert.equal(answered.state, "ready");
+});
+
 test("blocked: a held reply stops covering the thread once the person comments again", () => {
   const result = evaluateGate(baseSnapshot({ reviewThreads: [personThread({ lastCommentId: 202 })] }), { held: [heldReply] });
   assert.equal(result.state, "blocked");
@@ -505,7 +517,7 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
                 nodes: [{
                   id: "PRRT_a", isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
                   opening: { nodes: [{ databaseId: 101, author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
-                  latest: { nodes: [{ databaseId: 102 }] },
+                  latest: { nodes: [{ databaseId: 102, author: { login: "teammate" } }] },
                   comments: {
                     nodes: [{ author: { __typename: "Bot", login: "review-bot" } }, { author: { __typename: "User", login: "teammate" } }],
                     pageInfo: { hasNextPage: false },
@@ -538,7 +550,7 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
   assert.deepEqual(snapshot.reviewThreads, [{
     id: "PRRT_a", replyTo: 101, lastCommentId: 102, isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
     author: "review-bot", authorType: "Bot", body: "fix me",
-    commenters: [{ login: "review-bot", type: "Bot" }, { login: "teammate", type: "User" }], commentersTruncated: false,
+    lastAuthor: "teammate", commenters: [{ login: "review-bot", type: "Bot" }, { login: "teammate", type: "User" }], commentersTruncated: false,
   }]);
   assert.deepEqual(snapshot.reactions, [{ author: BOT, content: "+1", createdAt: REVIEWED_AT }]);
   assert.equal(snapshot.truncated, false);
