@@ -108,4 +108,14 @@ Complete when the user has answered, and each approved branch is deleted or repo
 
 On an audit run, say that nothing was removed.
 
+## Schedule the Saturday audit
+
+A scheduled task runs where its thread runs, so create it from a T3 thread on the machine to audit. Call `schedule_task` with:
+
+- `prompt`: `/cleanup audit <code-root>`
+- `schedule`: `{"type": "fixed_time", "timeOfDay": "12:00", "weekdays": [6]}`, passed as an object, not a string. Weekday 0 is Sunday and 6 is Saturday, and the time is the machine's local time.
+- `title`: `Saturday cleanup audit`
+
+Each run posts into that thread, so the reply that names buckets goes there too. Tell the user the `nextRunAt` the tool returns.
+
 Adapted from pstack's worktree-cleanup playbook by Lauren Tan (MIT), cursor/plugins@e5a8186.
