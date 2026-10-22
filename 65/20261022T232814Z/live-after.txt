@@ -1,0 +1,39 @@
+head: 62d9170
+
+# Spec #49 in this repo, read live from GitHub (read-only), with copies of this machine's run records for its tickets.
+$ node skills/issue-to-pr/scripts/spec.mjs tickets <scratch>/49.md
+Tickets:
+1. #65 issue-to-pr: build a spec as a stack, or as one PR with --one-pr
+2. #70 pr-review: the tour lives in T3's Guide tab
+3. #67 issue-to-pr: your PR's review happens in its build thread
+   blocked by: #70
+4. #68 issue-to-pr: the words after a build, the repair budget, and cleanup on merge
+   blocked by: #67
+5. #71 pr-review owns the review queue and the sitting
+   blocked by: #70
+6. #73 day: the 10:00 report
+   blocked by: #71
+exit 0
+
+# Now: #65 (this build) and #70 have run records and no PR yet.
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/49.md
+#65 building
+#70 building
+#67 waits for #70, which has no PR yet
+#68 waits for #67, which has no PR yet
+#71 waits for #70, which has no PR yet
+#73 waits for #71, which has no PR yet
+running
+exit 0
+
+# The copy of #70's record, edited as if its PR were published (illustrative PR URL): #67 and #71 both start, stacked on that one PR.
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/49.md
+#65 building
+#70 published: https://github.com/dhruvkelawala/skills/pull/NNN
+#67 starts on feat/70-pr-review-guide-tab, stacked on https://github.com/dhruvkelawala/skills/pull/NNN
+#68 waits for #67, which has no PR yet
+#71 starts on feat/70-pr-review-guide-tab, stacked on https://github.com/dhruvkelawala/skills/pull/NNN
+#73 waits for #71, which has no PR yet
+running
+exit 0
+

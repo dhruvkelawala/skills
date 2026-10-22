@@ -1,0 +1,25 @@
+base: ff7db7d
+
+$ git ls-tree --name-only ff7db7d skills/issue-to-pr/scripts/ skills/issue-to-pr/references/
+skills/issue-to-pr/references/pr-body.md
+skills/issue-to-pr/references/resume.md
+skills/issue-to-pr/references/run-record.md
+skills/issue-to-pr/references/stacks.md
+skills/issue-to-pr/scripts/messages.mjs
+skills/issue-to-pr/scripts/messages.test.mjs
+
+$ git show ff7db7d:skills/issue-to-pr/scripts/spec.mjs
+fatal: path 'skills/issue-to-pr/scripts/spec.mjs' exists on disk, but not in 'ff7db7d'
+
+# Spec mode, --one-pr and --spec in the base skill text (stage 1 step 3 names spec mode once, with nothing behind it):
+$ git grep -n -i -e 'spec mode' -e 'one-pr' -e '--spec' -e 'sub-issue' ff7db7d -- skills/issue-to-pr/
+skills/issue-to-pr/SKILL.md:102:   To launch a build's thread, call `t3_thread_launch` with `message` set to `/issue-to-pr <n>` and this run's flags, and `workspaceStrategy` set to `{"type": "worktree", "baseRef": "<base branch>", "branch": "<branch>", "startFromOrigin": true}`. A build started from the 10:00 report or in spec mode starts this way too.
+
+# The base messages.mjs saves a spec's recap that leaves out ticket #2:
+$ node <base>/messages.mjs recap <scratch>/10.md < recap-without-#2.txt
+recap saved to <scratch>/10.md
+exit 0
+
+# The base PR body template has no one-PR section:
+$ git show ff7db7d:skills/issue-to-pr/references/pr-body.md | grep -c 'One PR for a spec'
+0

@@ -1,0 +1,47 @@
+head: 62d9170
+
+# A fixture spec #10 with three open tickets, #3 blocked by #1, served by a stand-in gh (65-evidence/bin/gh).
+$ node skills/issue-to-pr/scripts/spec.mjs tickets <scratch>/10.md
+Tickets:
+1. #1 Show the score
+2. #2 Show a dash for no score
+3. #3 Share the score
+   blocked by: #1
+exit 0
+
+# The spec thread's first wake: #1 and #2 start at once on main, #3 waits.
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/10.md
+#1 starts on main
+#2 starts on main
+#3 waits for #1, which has no PR yet
+running
+exit 0
+
+# It launches #1 and #2 and records each thread, so a later wake never starts them twice.
+$ node skills/issue-to-pr/scripts/spec.mjs started <scratch>/10.md 1 thread-1
+#1 started in thread thread-1
+exit 0
+
+$ node skills/issue-to-pr/scripts/spec.mjs started <scratch>/10.md 2 thread-2
+#2 started in thread thread-2
+exit 0
+
+$ node skills/issue-to-pr/scripts/spec.mjs started <scratch>/10.md 1 thread-9
+spec: #1 already started, in thread thread-1,
+exit 1
+
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/10.md
+#1 building
+#2 building
+#3 waits for #1, which has no PR yet
+running
+exit 0
+
+# #1's build publishes PR 21 on feat/1-score (its run record, as stage 5 writes it):
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/10.md
+#1 published: https://github.com/o/r/pull/21
+#2 building
+#3 starts on feat/1-score, stacked on https://github.com/o/r/pull/21
+running
+exit 0
+

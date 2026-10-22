@@ -1,0 +1,32 @@
+head: 62d9170
+
+# A one-PR build of a fixture spec #10 with tickets #1, #2, #3.
+# "Closes #1, #2, #3." closes only #1 on GitHub:
+$ node skills/issue-to-pr/scripts/spec.mjs body <scratch>/10.md < <scratch>/b1.md
+spec: the body does not cover every ticket:
+- #2 never closes: give it its own keyword, as in `Closes #2`
+- #3 never closes: give it its own keyword, as in `Closes #3`
+exit 1
+
+# Each ticket closes, but #3 has no evidence:
+$ node skills/issue-to-pr/scripts/spec.mjs body <scratch>/10.md < <scratch>/b2.md
+spec: the body does not cover every ticket:
+- #3 has no evidence: give it a bold `#3` line under `## Evidence`, with its criteria below it
+exit 1
+
+# A body that closes and covers every ticket:
+$ node skills/issue-to-pr/scripts/spec.mjs body <scratch>/10.md < <scratch>/b3.md
+the body covers every ticket
+exit 0
+
+# references/pr-body.md:
+## One PR for a spec
+
+A `--one-pr` build's body covers every ticket in the spec:
+
+- The summary closes each ticket with a keyword of its own, as in `Closes #12. Closes #13.`, because GitHub closes only the issue right after each keyword, and `Closes #12, #13` leaves #13 open.
+- Evidence groups the criteria under one bold `**#<n> <title>**` line per ticket, in the `Tickets:` order.
+- The criteria table keeps each criterion's `#<n>:` prefix.
+
+`spec.mjs body <record> < <body file>` checks the first two before the PR is published.
+

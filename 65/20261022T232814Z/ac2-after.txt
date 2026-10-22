@@ -1,0 +1,33 @@
+head: 62d9170
+
+# A fixture spec #10: #3 blocked by #1, #4 blocked by #2, #5 blocked by #3.
+Tickets:
+1. #1 Show the score
+2. #2 Store the score
+3. #3 Share the score
+   blocked by: #1
+4. #4 Sync the score
+   blocked by: #2
+5. #5 Score history
+   blocked by: #3
+
+# #1's run ends blocked on its repair budget, after publishing; #2 publishes.
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/10.md
+#1 blocked (repair budget): https://github.com/o/r/pull/21
+#2 published: https://github.com/o/r/pull/22
+#3 waits for #1, which is blocked
+#4 starts on feat/2-work, stacked on https://github.com/o/r/pull/22
+#5 waits for #3, which has no PR yet
+running
+exit 0
+
+# #4 starts and settles, #2 turns ready: only #3 and #5, above #1, still wait, and the spec is done.
+$ node skills/issue-to-pr/scripts/spec.mjs next <scratch>/10.md
+#1 blocked (repair budget): https://github.com/o/r/pull/21
+#2 ready: https://github.com/o/r/pull/22
+#3 waits for #1, which is blocked
+#4 awaiting-human: https://github.com/o/r/pull/24
+#5 waits for #3, which has no PR yet
+done
+exit 0
+

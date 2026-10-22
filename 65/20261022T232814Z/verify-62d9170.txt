@@ -1,0 +1,15 @@
+head: 62d9170  base: ff7db7d
+
+$ CI=1 node --test $(git ls-files '*.test.mjs')
+ℹ tests 178
+ℹ pass 178
+ℹ fail 0
+exit 0
+
+$ python3 skills/cleanup/scripts/test-artifact-audit.py
+PASS: artifacts, caches, sizes, holds, read-only; fixtures retained in a temp dir
+
+$ python3 skills/cleanup/scripts/test-worktree-audit.py
+PASS: 8 classifications, HEAD SHAs, offline safety, invalid markers, deduplication, whitespace paths, trunk, read-only; fixtures retained in a temp dir
+
+No AGENTS.md, CI workflow, package scripts, lint or typecheck in the repo; the runner is inferred from the *.test.mjs files.

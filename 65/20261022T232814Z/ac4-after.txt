@@ -1,0 +1,55 @@
+head: 62d9170
+
+# A spec record for #10 (stack) and the ticket records beside it: #1 published PR 21, then its run ended blocked; #2 never started.
+# A recap that leaves out #2:
+  | Spec #10 stopped: #1 is blocked, and #2 waits on it
+  | 
+  | - #1 blocked (repair budget): https://github.com/o/r/pull/21
+  | - Built: the results screen shows the score in PR 21; sharing waits.
+  | - Review: each PR carries its own passes.
+  | - Evidence: in each PR body.
+  | - Couldn't check: nothing.
+  | - Next: say "more" in the thread for #1.
+  | 
+  | 🧾 One line short
+
+$ node skills/issue-to-pr/scripts/messages.mjs recap <scratch>/10.md < <scratch>/r1.txt
+recap not saved:
+- the recap has no line for #2: list every ticket with its state, as `spec.mjs next` prints it
+exit 1
+
+# A recap whose #1 line has no PR:
+  | Spec #10 stopped: #1 is blocked, and #2 waits on it
+  | 
+  | - #1 blocked (repair budget)
+  | - #2 waits for #1, which is blocked
+  | - Built: the results screen shows the score in PR 21; sharing waits.
+  | - Review: each PR carries its own passes.
+  | - Evidence: in each PR body.
+  | - Couldn't check: nothing.
+  | - Next: say "more" in the thread for #1.
+  | 
+  | 🧾 One link short
+
+$ node skills/issue-to-pr/scripts/messages.mjs recap <scratch>/10.md < <scratch>/r2.txt
+recap not saved:
+- #1's line needs its PR, https://github.com/o/r/pull/21
+exit 1
+
+# Every ticket with its state, and #1's PR:
+  | Spec #10 stopped: #1 is blocked, and #2 waits on it
+  | 
+  | - #1 blocked (repair budget): https://github.com/o/r/pull/21
+  | - #2 waits for #1, which is blocked
+  | - Built: the results screen shows the score in PR 21; sharing waits.
+  | - Review: each PR carries its own passes.
+  | - Evidence: in each PR body.
+  | - Couldn't check: nothing.
+  | - Next: say "more" in the thread for #1.
+  | 
+  | 🧾 Every line present
+
+$ node skills/issue-to-pr/scripts/messages.mjs recap <scratch>/10.md < <scratch>/r3.txt
+recap saved to <scratch>/10.md
+exit 0
+
