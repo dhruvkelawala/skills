@@ -1,13 +1,13 @@
 ---
 name: pr-watch
-description: Use when the user invokes /pr-watch, asks to wait for a PR's checks or reviews, or wants review findings on a PR fixed until it is clean. Polls the PR with a gate script, repairs failed checks, review threads and written reviews, and stops when CI, threads and each configured reviewer are clean at the exact current HEAD.
+description: Use when the user invokes /pr-watch, asks to watch a PR's checks or reviews, wants review findings on a PR fixed until it is clean, or says "post" in a thread that watches a PR. Checks the PR with a gate script each time T3 wakes the thread, repairs failed checks and bot findings, drafts replies to people and holds them until "post", and hands the PR back once CI, threads and each configured reviewer are clean at the exact current HEAD.
 ---
 
 # PR watch
 
 Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N] [--run-record <path>]`. With no PR argument, use the current branch's PR from `gh pr view` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`). The default repair budget is 10.
 
-The loop observes the PR with the gate script, repairs what it reports, republishes, and observes again. The gate only reads GitHub, so every push and comment comes from you.
+The loop checks the PR with the gate script, repairs what it reports, republishes, and then asks T3 to wake the thread when the PR changes. The gate only reads GitHub, so every push and comment comes from you.
 
 `gh pr` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one of your calls fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
 
@@ -66,24 +66,23 @@ It sends the items in the order they were held: each reply and then the resolve 
 - **Checks.** When the base branch has required checks, only those block or hold the gate. Other checks appear in `notes` and never block. With no required checks, every check counts, so pass `--ignore-check <name>` for each optional check that should not hold the PR, such as a slow visual recap.
 - **Merge state.** GitHub's UNSTABLE merge state does not block on its own. Conflicts, a draft or closed PR, and a HEAD mismatch still block.
 - **Threads.** `threads` lists unresolved review threads with path, line, author, body and `bot`. `bot` is true when a bot opened the thread and no person has spoken in it since. Replies from the PR author keep it a bot's thread.
-- **GraphQL quota.** When the gate's GraphQL query fails with a rate-limit error, it reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with `review threads unknown: GraphQL quota`, because REST cannot tell whether a thread is resolved. Each poll tries GraphQL first, so the reason clears once the quota resets (`gh api rate_limit --jq .resources.graphql.reset`).
+- **GraphQL quota.** When the gate's GraphQL query fails with a rate-limit error, it reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with `review threads unknown: GraphQL quota`, because REST cannot tell whether a thread is resolved. Each run tries GraphQL first, so the reason clears once the quota resets (`gh api rate_limit --jq .resources.graphql.reset`).
 - **Written reviews.** A COMMENTED review with a body, from a human account other than the PR author, appears in `threads` with `kind: "review"` and blocks. It counts as answered once the PR author posts a later PR comment or a later review with a non-empty body, or the same reviewer posts a newer review. The empty review that GitHub creates for a reply inside a thread does not answer it.
 
 ## Watch loop
 
 1. Pin the HEAD. `git rev-parse HEAD` must equal the PR's `headRefOid`. If they differ, push or stop, so that you only watch a HEAD you verified.
-2. Run the gate from this skill's directory:
+2. Run the gate once, from this skill's directory:
 
    ```bash
    node "$SKILL_DIR/scripts/pr-gate.mjs" --repo "$OWNER/$REPO" --pr "$PR_NUMBER" \
      --expected-head "$HEAD_SHA" [--reviewer <login>]... [--request-comment "<text>"] \
-     [--ignore-check "<name>"]... --held-file "$HELD" --watch --json
+     [--ignore-check "<name>"]... --held-file "$HELD" --json
    ```
 
-   Exit `0` is ready, `1` is pending or timed out, and `2` is blocked. Each JSON line is `{ state, reasons, threads, notes }`.
-3. On pending with "has not reviewed the current HEAD" for a reviewer that takes a request comment, post the request once with `gh pr comment` (REST: `gh api -X POST repos/{owner}/{repo}/issues/<n>/comments -f body="<text>"`), note the HEAD it was for, and watch again.
-4. On a pending timeout, report the last reasons and stop. Waiting longer is the user's call.
-5. On blocked, handle each reason:
+   Exit `0` is ready, `1` is pending, and `2` is blocked. The JSON is `{ state, reasons, threads, notes }`.
+3. On pending with "has not reviewed the current HEAD" for a reviewer that takes a request comment, post the request once with `gh pr comment` (REST: `gh api -X POST repos/{owner}/{repo}/issues/<n>/comments -f body="<text>"`) and note the HEAD it was for.
+4. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
    - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
    - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request, then hold a reply that names the fix commit. For a question, or a request that is unclear or that you would decline, hold a reply that answers or asks, and change no code. Leave the thread unresolved.
@@ -91,15 +90,21 @@ It sends the items in the order they were held: each reply and then the resolve 
    - **Changes requested by a person.** Fix their points as above, then hold a re-request. Leave their review in place. The gate shows CHANGES_REQUESTED until they review again, so it is no longer a repair once the re-request is held or sent.
    - **Merge conflict or wrong base.** Rebase onto the live base, rerun the project's tests, and push with `--force-with-lease`.
    - **Draft, closed, or mismatched HEAD.** Stop and report, because these are not repairs.
-6. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Return to step 1 with the new HEAD.
-7. When the budget is spent, stop and report what remains open.
+5. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Return to step 1 with the new HEAD.
+6. Once nothing is left to repair, decide who the PR waits on:
+   - **Someone else**, such as a running check, a reviewer that has not covered the HEAD, or a person who has your posted reply or re-request. Call `watch_pull_request` for the PR and end the turn. T3 wakes the thread when a check fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict, and you start again at step 1. It wakes only for comments made after the call, so handle the existing ones first. A wake is news, so run the gate before acting on it.
+   - **The user**, when the gate exits `0`, anything is held for "post", the budget is spent, or a reason needs the user's decision. Call `unwatch_pull_request`, which returns the thread to the user's inbox, and report.
 
-**Complete when:** the gate exits `0` for the exact current HEAD, or the budget or timeout is spent and the report lists every reason still open.
+   A subagent cannot watch, because its parent thread owns the PR. It runs one pass and returns the PR URL, the HEAD, the gate result and the held file to the parent.
+
+**Complete when:** the gate exits `0` for the exact current HEAD and the PR is unwatched, or the PR waits on someone else and T3 watches it, or it waits on the user, is unwatched, and the report lists what is held and every reason still open.
 
 ## Report
 
 - PR URL and final HEAD SHA
 - Gate result, the reviewers it required, the checks ignored, and any checks left in `notes`
 - Repairs made: the count, and one line per finding with its source thread or check link, the HEAD it was reviewed at, and the repair commit, so that `/promote` can use them
-- Findings rejected, with the reply posted
+- Findings rejected, with the reply posted or held
+- Held for "post": each item with its draft, or what the last "post" sent
+- Who the PR waits on, and whether T3 watches it
 - Reasons still open
