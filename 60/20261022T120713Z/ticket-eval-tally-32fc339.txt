@@ -1,0 +1,56 @@
+ticket eval at 32fc339: three full runs of node --test skills/ticket/evals/ticket.eval.mjs, run in parallel
+
+run 1
+  ✔ fires on a request to capture one idea (39127.392708ms)
+  ℹ vague: skills fired [ticket]
+  ℹ vague: created https://github.com/acme/demo/issues/101 labels [] title "Investigate onboarding drop-off: second screen may be confusing"
+  ℹ clear: skills fired [ticket]
+  ℹ clear: created https://github.com/acme/demo/issues/101 labels [ready-for-agent] title "Add --format json option to demo export"
+  ✔ stays out of splitting a spec into tickets (45951.616667ms)
+  ℹ spec: skills fired []
+  ✔ clear criteria file one issue labelled ready-for-agent (38781.5355ms)
+  ✔ vague criteria file one unlabelled issue that names what's missing (23585.836375ms)
+  ✔ replies with one line holding the issue link (38781.699542ms)
+ℹ pass 5
+ℹ fail 0
+  reply (clear): Filed #101, ready-for-agent: https://github.com/acme/demo/issues/101
+  reply (vague): Filed #101, not ready, missing confirmation that the second screen is the actual cause: https://github.com/acme/demo/issues/101
+
+run 2
+  ✔ fires on a request to capture one idea (28078.502625ms)
+  ℹ clear: skills fired [ticket]
+  ℹ clear: created https://github.com/acme/demo/issues/101 labels [ready-for-agent] title "Add --format json option to demo export"
+  ℹ vague: skills fired [ticket]
+  ℹ vague: created https://github.com/acme/demo/issues/101 labels [] title "Investigate onboarding drop-off"
+  ✔ stays out of splitting a spec into tickets (44860.173625ms)
+  ℹ spec: skills fired []
+  ✔ clear criteria file one issue labelled ready-for-agent (25647.356208ms)
+  ✔ vague criteria file one unlabelled issue that names what's missing (27738.708333ms)
+  ✔ replies with one line holding the issue link (27739.047292ms)
+ℹ pass 5
+ℹ fail 0
+  reply (clear): Filed #101, ready-for-agent: https://github.com/acme/demo/issues/101
+  reply (vague): Filed #101, not ready, missing confirmed drop-off data (second-screen theory is unconfirmed): https://github.com/acme/demo/issues/101
+
+run 3
+  ✔ fires on a request to capture one idea (35960.971708ms)
+  ℹ clear: skills fired [ticket]
+  ℹ clear: created https://github.com/acme/demo/issues/101 labels [ready-for-agent] title "Add --format json option to demo export"
+  ℹ vague: skills fired [ticket]
+  ℹ vague: created https://github.com/acme/demo/issues/101 labels [] title "Investigate onboarding drop-off on the second screen"
+  ✔ stays out of splitting a spec into tickets (7156.45875ms)
+  ℹ spec: skills fired []
+  ✔ clear criteria file one issue labelled ready-for-agent (28258.605333ms)
+  ✔ vague criteria file one unlabelled issue that names what's missing (35621.698542ms)
+  ✔ replies with one line holding the issue link (35622.091917ms)
+ℹ pass 5
+ℹ fail 0
+  reply (clear): Filed #101, ready-for-agent: https://github.com/acme/demo/issues/101
+  reply (vague): Filed #101, not ready, missing confirmed drop-off data: https://github.com/acme/demo/issues/101
+
+spec thread after the description change (ece73c1), three separate runs:
+  ℹ spec: skills fired []
+  ℹ spec: skills fired []
+  ℹ spec: skills fired []
+
+before the description change: stub description (98ae338's red) fired ticket and filed 4 issues; the pass-1 description fired ticket on 1 of 3 runs (none / to-tickets / ticket).

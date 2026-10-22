@@ -1,0 +1,170 @@
+$ node --test skills/ticket/evals/ticket.eval.mjs
+▶ ticket
+  ✔ fires on a request to capture one idea (39127.392708ms)
+  ℹ vague: skills fired [ticket], transcript $TMPDIR/ticket-eval-vague-4RJmql/transcript.jsonl
+  ℹ vague: created https://github.com/acme/demo/issues/101 labels [] title "Investigate onboarding drop-off: second screen may be confusing"
+## What's wrong
+
+New users keep dropping off during onboarding. A team member suspects the second screen of the onboarding flow is confusing, but this hasn't been confirmed.
+
+## What to build
+
+Not yet determined — depends on what's actually causing the drop-off.
+
+## Acceptance criteria
+- Not yet defined.
+
+## In scope
+- Onboarding flow, specifically the second screen.
+
+## What's missing
+- Confirmation that the second screen is actually the cause of drop-off (vs. other steps).
+- Drop-off data/analytics showing where in onboarding users leave.
+- A concrete definition of what "confusing" means for that screen, and what the fix would look like.
+
+  ℹ vague: reply
+Filed #101, not ready, missing confirmation that the second screen is the actual cause: https://github.com/acme/demo/issues/101
+  ℹ clear: skills fired [ticket], transcript $TMPDIR/ticket-eval-clear-ZOCfea/transcript.jsonl
+  ℹ clear: created https://github.com/acme/demo/issues/101 labels [ready-for-agent] title "Add --format json option to demo export"
+## What to build
+
+`demo export` only writes CSV. Add a `--format` option:
+
+- `--format csv` (default, current behavior)
+- `--format json` — writes an array of row objects with the same columns as the CSV
+- any other value, e.g. `--format xml`, exits with code 2 and prints `unknown format: xml`
+
+## Acceptance criteria
+
+- Running `demo export` with no `--format` still writes CSV.
+- Running `demo export --format json` writes an array of row objects with the same columns as the CSV output.
+- Running `demo export --format xml` (or any unrecognized format) exits with code 2 and prints `unknown format: xml`.
+
+## In scope
+
+`src/export.ts` and `src/export.test.ts`.
+
+  ℹ clear: reply
+Filed #101, ready-for-agent: https://github.com/acme/demo/issues/101
+  ✔ stays out of splitting a spec into tickets (45951.616667ms)
+  ℹ spec: skills fired [], transcript $TMPDIR/ticket-eval-spec-I2vnFr/transcript.jsonl
+  ℹ spec: reply
+This repo is just an unrelated demo CLI (export/import tables), so there's no existing billing code to anchor these in — I'll split the spec on its own merits and flag real sequencing dependencies even though each ticket ships independently.
+
+## Ticket 1 — Move plans from config to a `plans` table
+
+**Why:** Plans are currently hardcoded in a config file; billing logic (and the later invoices work) needs them queryable and editable without a deploy.
+
+**Scope:**
+- Create `plans` table schema (id, name, price, interval, currency, features/limits, active flag, timestamps).
+- Write a migration that creates the table and backfills it from the current config file's plan definitions.
+- Replace all config-file reads of plan data with reads from the table.
+- Remove the plan data from the config file once nothing reads it from there (keep non-plan config as-is).
+
+**Acceptance criteria:**
+- App boots and resolves plans identically to before (same prices/names/limits) with the config-file plan data removed.
+- Migration is reversible or has a documented rollback.
+- No remaining code path reads plan data from the config file.
+
+**Out of scope:** Invoices, invoice API, UI, webhooks.
+
+**Dependencies:** None — this is the foundation; tickets 2–4 don't strictly require it to be done first unless invoices reference plan rows (e.g., `invoice.plan_id`), in which case this should land first.
+
+---
+
+## Ticket 2 — Invoices API: list, read, void
+
+**Why:** Account settings UI and the webhook work both need a way to fetch and mutate invoice state.
+
+**Scope:**
+- `GET /invoices` — paginated list for the current account.
+- `GET /invoices/:id` — single invoice detail.
+- `POST /invoices/:id/void` — transitions an invoice to `voided`; reject if already paid/voided with a clear error.
+- Authorization: scoped to the account/owner making the request.
+
+**Acceptance criteria:**
+- Each endpoint has request/response schema and error cases documented (404, 403, invalid state transition).
+- Voiding a paid invoice is rejected; voiding an already-voided invoice is a no-op or 409 (pick one, document it).
+- Integration tests cover list pagination, read of own vs. another account's invoice (403/404), and void state transitions.
+
+**Out of scope:** UI, webhooks, plans table.
+
+**Dependencies:** None required, but if invoices carry a `plan_id`, this is easier after Ticket 1 lands.
+
+---
+
+## Ticket 3 — Invoices page in account settings
+
+**Why:** Customers need visibility into billing history and the ability to void an invoice from the UI.
+
+**Scope:**
+- New page under account settings listing invoices (date, amount, status, plan).
+- Invoice detail view.
+- Void action from the UI, wired to the void endpoint, with confirmation and optimistic/error-state handling.
+
+**Acceptance criteria:**
+- Page renders list and detail using the Ticket 2 endpoints (not mocked data).
+- Void action updates status in the UI without a full reload, and surfaces the API's error cases (already paid/voided).
+- Empty state (no invoices) and loading/error states are handled.
+
+**Out of scope:** Webhook delivery, API implementation itself.
+
+**Dependencies:** Hard dependency on Ticket 2 (consumes the API). Should ship after it.
+
+---
+
+## Ticket 4 — Webhook on invoice paid/voided
+
+**Why:** Downstream systems (customer's own systems, internal services) need to react to invoice state changes.
+
+**Scope:**
+- Define webhook event payloads for `invoice.paid` and `invoice.voided`.
+- Trigger `invoice.voided` from the void path (Ticket 2's endpoint, or wherever void can originate, e.g. admin tooling).
+- Trigger `invoice.paid` from whatever marks an invoice paid today (existing payment processing path).
+- Standard webhook delivery concerns: signing, retries, delivery log.
+
+**Acceptance criteria:**
+- Voiding an invoice via the API fires `invoice.voided` exactly once.
+- A successful payment fires `invoice.paid` exactly once.
+- Failed deliveries retry per the project's existing webhook retry policy (or a documented new one if none exists).
+- Webhook payload documented for consumers.
+
+**Out of scope:** New UI, new API endpoints beyond what's needed to emit the events.
+
+**Dependencies:** The `invoice.voided` trigger needs Ticket 2's void endpoint to exist first. `invoice.paid` may be independent if a payment path already exists outside this spec — confirm that before scoping.
+
+---
+
+**Suggested ship order:** 1 → 2 → (3 and 4 can run in parallel) → 3, 4.
+
+Want me to file these as actual GitHub issues?
+  ✔ clear criteria file one issue labelled ready-for-agent (38781.5355ms)
+  ✔ vague criteria file one unlabelled issue that names what's missing (23585.836375ms)
+  ✔ replies with one line holding the issue link (38781.699542ms)
+✔ ticket (46152.32075ms)
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
+ℹ duration_ms 46203.222708
+exit=0
+
+== clear: commands the agent ran
+Skill(ticket)
+$ ls -la && cat AGENTS.md 2>/dev/null; cat CLAUDE.md 2>/dev/null
+$ gh repo view --json nameWithOwner 2>&1; echo "---"; git remote -v
+$ find src -type f | xargs -I{} echo {}
+$ gh issue list --state all --limit 5 --json title,body -R acme/demo 2>&1; echo "---labels---"; gh label list -R acme/demo 2>&1
+$ cat > /tmp/ticket-body.md << 'EOF'
+$ gh issue create --title "Add --format json option to demo export" --body-file /tmp/ticket-body.md --label ready-for-agent -R acme/demo
+
+== spec: commands the agent ran
+$ find . -maxdepth 3 -not -path './.git*' -not -path './node_modules*' | sort | head -100
+Read($TMPDIR/ticket-eval-repo-Rxdl9H/README.md)
+Read($TMPDIR/ticket-eval-repo-Rxdl9H/src/export.ts)
+
+== vague: commands the agent ran
+Skill(ticket)
+$ gh repo view --json nameWithOwner 2>&1
+$ gh issue list --state all --limit 5 --json title,body -R acme/demo 2>&1
+$ cat > /tmp/onboarding-issue-body.md << 'EOF'
+$ gh issue create --title "Investigate onboarding drop-off: second screen may be confusing" --body-file /tmp/onboarding-issue-body.md -R acme/demo 2>&1
