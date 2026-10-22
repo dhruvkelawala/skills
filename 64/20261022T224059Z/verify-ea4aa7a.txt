@@ -1,0 +1,8 @@
+$ CI=1 node --test $(git ls-files '*.test.mjs')   # at ea4aa7a
+ℹ tests 171
+ℹ pass 171
+ℹ fail 0
+$ python3 skills/cleanup/scripts/test-artifact-audit.py
+PASS: artifacts, caches, sizes, holds, read-only; fixtures retained in a temp dir
+$ python3 skills/cleanup/scripts/test-worktree-audit.py
+PASS: 8 classifications, HEAD SHAs, offline safety, invalid markers, deduplication, whitespace paths, trunk, read-only; fixtures retained in a temp dir

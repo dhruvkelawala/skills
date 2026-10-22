@@ -1,0 +1,6 @@
+# at base cc079fd (main)
+$ ls skills/issue-to-pr skills/issue-to-pr/scripts
+SKILL.md
+agents
+references
+ls: skills/issue-to-pr/scripts: No such file or directory

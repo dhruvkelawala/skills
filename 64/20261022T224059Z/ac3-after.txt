@@ -1,0 +1,19 @@
+# at head ea4aa7a; copies of this repo's records 60 (feature), 59 (stacked layer), 56 (light lane), each with a brief and recap saved by the script
+$ sed -n '/^## Taste check/,/^## 1. Pin/p' skills/issue-to-pr/SKILL.md
+## Taste check
+
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+
+```bash
+node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html
+```
+
+Check it with `html_preview` at phone width, show it with `html_render`, and ask the user to mark each run good or bad.
+
+$ node skills/issue-to-pr/scripts/messages.mjs page <3 copies> > taste.html
+exit 0, 5658 bytes
+$ the page's runs, in order
+  1. #60, standalone, full lane
+  2. #59, standalone, full lane
+  3. #56, standalone, light lane
+$ messages on the page: 3 briefs, 3 recaps

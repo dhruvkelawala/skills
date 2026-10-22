@@ -1,0 +1,18 @@
+# at base cc079fd (main)
+$ each line of the issue's brief, recap and sign-off text, found in skills/issue-to-pr/SKILL.md?
+  MISSING: Once the contract is pinned, post the brief in the thread and keep going. Don't wait for a reply.
+  MISSING: Building #<n>: <issue title>
+  MISSING: What it's about: <one or two sentences on the problem, as a user sees it>
+  MISSING: Plan:
+  MISSING: 1. <criterion, in build order, test first>
+  found:   ...
+  MISSING: Stacked on: <PR | none> · Lane: <light | full>
+  MISSING: <sign-off>
+  MISSING: When the run stops, post the recap: the result first, then one line each for what was built, review, evidence, what couldn't be checked and what's next. Links open in T3, never local paths or localhost. End with a sign-off.
+  MISSING: One line, under 12 words, starting with an emoji: a playful nod to this issue or this moment in the run. Never instructions ("reply to redirect"). Never reuse one of the last 10 sign-offs in this repo's run records.
+
+$ grep -nE '^## (Brief|Recap|Sign-off|Shape check|Taste check)$' skills/issue-to-pr/SKILL.md
+(no matches)
+
+$ where the stages post them
+(no matches)

@@ -1,0 +1,65 @@
+# at head ea4aa7a
+$ node --test skills/issue-to-pr/scripts/messages.test.mjs
+✔ a brief that fits its record's contract is saved to the record (40.01425ms)
+✔ a brief with no plan is refused (38.686709ms)
+✔ a plan must list each criterion once, in any build order (73.370584ms)
+✔ a plan quotes a criterion word for word, even one that names a local path or localhost (34.703125ms)
+✔ a brief needs its heading, a short 'What it's about' and a Stacked on line that fits the record (104.005458ms)
+✔ a sign-off starts with an emoji, stays under 12 words and gives no instructions (147.474417ms)
+✔ a sign-off used in the last 10 messages of the repo's run records is refused, an older one is not (610.443041ms)
+✔ a recap leads with the result, has its five lines in order, and links nothing local (278.193166ms)
+✔ the taste-check page shows each record's latest brief and recap, in the order given (231.43425ms)
+ℹ tests 9
+ℹ pass 9
+ℹ fail 0
+
+$ messages.mjs brief <record>   # a brief with no plan
+brief not saved:
+- the brief has no plan: list each acceptance criterion under `Plan:` as a numbered step
+exit 1
+
+$ messages.mjs brief <record>   # a plan that doesn't match the criteria
+brief not saved:
+- missing criterion: A round with no score shows a dash.
+- not a criterion: Add a leaderboard.
+exit 1
+
+$ messages.mjs brief <record>   # a sign-off over 12 words
+brief not saved:
+- the sign-off has 13 words; keep it under 12
+exit 1
+
+(saved 11 earlier briefs in other records of this repo, sign-offs '🎲 Sign-off number 1' to '... 11', oldest first)
+
+$ messages.mjs brief <record>   # a sign-off repeated from the last 10
+brief not saved:
+- the sign-off repeats one of the last 10 in this repo's run records
+exit 1
+
+$ messages.mjs brief <record>   # a sign-off older than the last 10
+brief saved to 7.md
+exit 0
+
+$ messages.mjs brief <record>   # a brief that fits
+brief saved to 7.md
+exit 0
+
+$ tail -n 18 <record>
+🎲 Sign-off number 1
+````
+
+## Brief, 2026-10-22T22:40:40.393Z
+
+````text
+Building #7: Show the score on the results screen
+
+What it's about: Players finish a round and never see their score. The results screen should show it.
+
+Plan:
+  1. The results screen shows the round's score.
+  2. A round with no score shows a dash.
+
+Stacked on: none · Lane: light
+
+🎯 Scores, finally on screen
+````

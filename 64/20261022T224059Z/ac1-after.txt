@@ -1,0 +1,24 @@
+# at head ea4aa7a
+$ each line of the issue's brief, recap and sign-off text, found in skills/issue-to-pr/SKILL.md?
+  found:   Once the contract is pinned, post the brief in the thread and keep going. Don't wait for a reply.
+  found:   Building #<n>: <issue title>
+  found:   What it's about: <one or two sentences on the problem, as a user sees it>
+  found:   Plan:
+  found:   1. <criterion, in build order, test first>
+  found:   ...
+  found:   Stacked on: <PR | none> · Lane: <light | full>
+  found:   <sign-off>
+  found:   When the run stops, post the recap: the result first, then one line each for what was built, review, evidence, what couldn't be checked and what's next. Links open in T3, never local paths or localhost. End with a sign-off.
+  found:   One line, under 12 words, starting with an emoji: a playful nod to this issue or this moment in the run. Never instructions ("reply to redirect"). Never reuse one of the last 10 sign-offs in this repo's run records.
+
+$ grep -nE '^## (Brief|Recap|Sign-off|Shape check|Taste check)$' skills/issue-to-pr/SKILL.md
+29:## Brief
+45:## Recap
+61:## Sign-off
+65:## Shape check
+76:## Taste check
+
+$ where the stages post them
+100:8. Append the contract to the run record, post the [brief](#brief), and continue. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
+209:5. Write the report into the record, and post the [recap](#recap). Its `Next:` line offers `/pr-review <PR or stack>` to read the settled diff.
+215:The report goes in the run record whenever the run stops. The thread gets the recap instead.

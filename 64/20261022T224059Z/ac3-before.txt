@@ -1,0 +1,5 @@
+# at base cc079fd (main)
+$ sed -n '/^## Taste check/,/^## 1. Pin/p' skills/issue-to-pr/SKILL.md
+(no Taste check section)
+$ ls skills/issue-to-pr/scripts/messages.mjs
+ls: skills/issue-to-pr/scripts/messages.mjs: No such file or directory

@@ -1,0 +1,28 @@
+# This run's own brief, checked by messages.mjs at 357d872 (before the rebase; same patch as fd3a9a8 on main)
+
+$ messages.mjs brief 64.md < brief-as-posted.txt   # the brief first posted in the build thread
+brief not saved:
+- `What it's about:` has 3 sentences; keep it to one or two
+exit 1
+
+$ messages.mjs brief 64.md < brief.txt   # two sentences
+brief saved to 64.md
+exit 0
+
+$ the section it appended to the run record
+## Brief, 2026-10-22T22:19:13.582Z
+
+````text
+Building #64: issue-to-pr: a brief at the start, a recap at the end, and a sign-off
+
+What it's about: A build runs for an hour and says nothing you can read on a phone until a long report at the end. This adds a short brief once the plan is pinned and a short recap when the run stops, both checked by a script.
+
+Plan:
+  1. The shape-check script and its test exist and fail on a brief with no plan, a plan that doesn't match the criteria, a sign-off over 12 words, and a sign-off repeated from the last 10.
+  2. The SKILL.md carries the brief, recap and sign-off text above.
+  3. The skill names the command that renders the taste-check page.
+
+Stacked on: [#85](https://github.com/dhruvkelawala/skills/pull/85) · Lane: full
+
+🪞 A brief about briefs. Meta enough?
+````
