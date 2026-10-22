@@ -1,6 +1,6 @@
 ---
 name: eli25
-description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in terminal-browser inside Herdr, the user's browser elsewhere, or a tailnet URL over ssh.
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in the user's browser, or as a tailnet URL over ssh.
 ---
 
 # eli25
@@ -68,9 +68,8 @@ Before and after, from `support-report-pr-349-eli25.html`:
 ## 4. Deliver
 
 Show the page:
-- Inside Herdr (`HERDR_ENV=1`) with `terminal-browser` on PATH, run `terminal-browser new-tab <path>`. It reuses this tab's browser or opens one in a split.
 - Over ssh (`SSH_CONNECTION` set), a browser would open on the remote machine where nobody sees it. Unless the user named another target, serve the page on the tailnet and print its URL instead.
-- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux, even when terminal-browser is installed.
+- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux.
 
 Deploy when the user names a target in plain words, now or in a later message. The commands are in `references/deploy.md`.
 
