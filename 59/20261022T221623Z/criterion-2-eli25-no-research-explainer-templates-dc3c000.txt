@@ -1,0 +1,20 @@
+# Issue #59 criterion 2: eli25 no longer uses research-explainer's templates
+# Met at base by PR #86; this layer keeps it met.
+
+== criterion 2 check against origin/main (7766704), before PR #86
+origin/main:skills/eli25/SKILL.md:57:2. Start from `research-explainer/templates/explainer-template-arcade.html` in the sibling skill folder and replace its content. Keep its neo-brutalist look: thick dark borders, hard offset shadows, flat high-contrast colours, oversized heavy type, square corners, and figures on the fixed dark panel. Give each topic its own small palette by swapping the accent hexes. Drop template parts the shape does not use.
+origin/main:skills/eli25/references/theme.html:2:  Theme kit for an eli25 page built from research-explainer/templates/explainer-template-arcade.html.
+FAIL criterion 2: eli25 names research-explainer or its templates
+
+## base 8bcca3f (PR #86 head)
+== criterion 2: eli25 no longer uses research-explainer's templates
+eli25 builds from: templates/field-guide.html 
+PASS criterion 2
+
+## head dc3c000
+== criterion 2: eli25 no longer uses research-explainer's templates
+eli25 builds from: templates/field-guide.html 
+PASS criterion 2
+
+## eli25 build step at head dc3c000 (skills/eli25/SKILL.md:62)
+2. Build it in the Field Guide look, from the `visual-explainer` folder in your skills directory. Read its `references/field-guide.md`, then take the parts the page needs from its `templates/field-guide.html`: the tokens, fonts, plates, chips and cards, not the outline. A short page needs few of them.
