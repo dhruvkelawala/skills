@@ -1,11 +1,11 @@
 ---
 name: explain-diff
-description: Explain a diff, commit, branch, range or PR in plain words, covering the problem, the one key idea, and one real input traced through the changed code. Use when the user asks to explain a change, asks what a change does, or says they don't understand it, and when pr-review needs a deeper look at one PR.
+description: Explain a diff, commit, branch, range or PR in chat, opening with a before-and-after sketch, then in plain words the problem, the one key idea, and one real input traced through the changed code. Use when the user asks to explain a change, asks what a change does, or says they don't understand it, and when pr-review needs a deeper look at one PR.
 ---
 
 # Explain a diff
 
-Explain a change so it lands on the first read: plain words, one real example traced through the code. Group by idea, never by walking files from top to bottom.
+Explain a change so it lands on the first read: a sketch of what changed, then plain words and one real example traced through the code. Group by idea, never by walking files from top to bottom.
 
 ## 1. Get the change
 
@@ -27,12 +27,13 @@ Read the changed files themselves, their callers and their tests, not just the h
 
 ## 2. Explain
 
-Write it in this order, under about 400 words:
+Write it in this order, with about 400 words of prose after the sketch:
 
-1. **The problem.** One or two sentences, no code.
-2. **The key idea.** The one thing that makes the change click: a method, a flag, an inversion.
-3. **The trace.** One realistic input followed through the changed code. Write one line per step, each with `path:line`. Add one edge value when it changes the outcome.
-4. **Not in this change.** One line, when the change leaves something out on purpose.
+1. **The sketch.** A small drawing of the change, before and after, in a fenced `text` block, ahead of any prose: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines under 40 characters, so it reads on a phone.
+2. **The problem.** One or two sentences, no code.
+3. **The key idea.** The one thing that makes the change click: a method, a flag, an inversion.
+4. **The trace.** One realistic input followed through the changed code. Write one line per step, each with `path:line`. Add one edge value when it changes the outcome.
+5. **Not in this change.** One line, when the change leaves something out on purpose.
 
 Add a section only when the change has something for it:
 
@@ -52,6 +53,15 @@ Run `../unslop/SKILL.md` on the explanation last. Keep the order and length abov
 
 Example:
 
+> ```text
+> POST /intake {weirdField: 123}
+>   schema.ts
+> -   strict: drops weirdField
+> +   .passthrough(): keeps it
+>   store.ts: saves it
+>   load.ts: reads it back
+> ```
+>
 > **Problem:** Each source sends a different format, and we need one internal shape that never drops a field.
 > **Key idea:** `.passthrough()` keeps unknown fields instead of deleting them.
 > **Trace:** `POST /intake {..., weirdField: 123}` is checked by [schema.ts:14](/repo/src/intake/schema.ts:14), stored by [store.ts:31](/repo/src/intake/store.ts:31), and read back after a restart by [load.ts:9](/repo/src/intake/load.ts:9) with `weirdField` still present.
