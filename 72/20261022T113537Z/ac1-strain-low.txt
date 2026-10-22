@@ -1,0 +1,16 @@
+day #72, AC1 strain line under low disk and memory warning, with real du and ps.
+Only df and sysctl are replaced, by two tiny shell scripts on PATH. Captured at skills@241f1aa.
+
+$ git rev-parse --short HEAD
+241f1aa
+$ cat /tmp/day72-shim/df   # stands in for df: 38 GB free
+#!/bin/sh
+echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
+echo "/dev/disk3s5 971350180 751611340 37109375 96% /System/Volumes/Data"
+$ cat /tmp/day72-shim/sysctl   # stands in for sysctl: pressure level 2 (warning)
+#!/bin/sh
+echo 2
+$ time PATH=/tmp/day72-shim:$PATH node skills/day/scripts/strain.mjs   # du and ps are real
+Strain: 38 GB free on disk, biggest ~/Library (229 GB, of which ~/Library/Developer 114 GB); memory pressure at warning, biggest Helium (7.2 GB in 42 processes).
+PATH=/tmp/day72-shim:$PATH node skills/day/scripts/strain.mjs  3.67s user 128.44s system 45% cpu 4:49.56 total
+exit 0

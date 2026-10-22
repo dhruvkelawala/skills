@@ -1,0 +1,56 @@
+day #72, AC2: a stopped run is interrupted cleanly, unwatched, and recorded.
+Captured at skills@241f1aa on 2026-10-22, by following skills/day/SKILL.md "Stop a run" by hand
+against a disposable T3 child run (a subagent thread with its own worktree) that had written
+notes-draft.txt and was inside a 15 minute command: node -e "setTimeout(() => {}, 900000)".
+IDs shortened with … for reading. Full thread ID: thread:delegated-task:command%3Amcp%3Ad38cfa7d-443e-4c86-8c41-168412ac88ec%3Adelegate-task%3Aday72-evidence-sleeper-2
+Full run ID: run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Ad38cfa7d-443e-4c86-8c41-168412ac88ec%253Adelegate-task%253Aday72-evidence-sleeper-2:ordinal:1
+
+1. Read it again
+> t3_thread_read(threadId)
+  status: running · activeRunId: run:…:day72-evidence-sleeper-2:ordinal:1 · pullRequests: [] · branch: chore/test-run · worktreePath: <worktree>
+
+2. Unwatch (pullRequests is empty, so the skill makes no call; T3 does not let a subagent watch a PR)
+   Probe of the tool on this thread with a merged PR it never watched:
+> unwatch_pull_request(threadId, url: https://github.com/dhruvkelawala/skills/pull/48)
+  {"repository":"dhruvkelawala/skills","number":48,"watching":false,"wasWatching":false}
+
+3. Interrupt, pinned to the run from the fresh read
+> t3_thread_interrupt(threadId, runId: run:…:day72-evidence-sleeper-2:ordinal:1,
+    reason: 'Stopped by the goodnight check. Say "go on" to restart.',
+    clientRequestId: day-stop-run:…:day72-evidence-sleeper-2:ordinal:1)
+  {"status":"interrupt_requested"}
+> t3_thread_wait(threadId, runId: run:…:day72-evidence-sleeper-2:ordinal:1, timeoutMs: 60000)
+  {"status":"interrupted","timedOut":false}
+  Retry with the same clientRequestId:
+> t3_thread_interrupt(...same arguments...)
+  {"status":"interrupted"}          (no second interrupt: the thread's timeline below holds one request)
+$ pgrep -fl 'setTimeout\(\(\) => \{\}, 900000\)' || echo "no sleeper process left"
+  no sleeper process left
+
+4. Save where it stopped (files left as they are)
+$ git -C <worktree> rev-parse --short HEAD
+  241f1aa
+$ git -C <worktree> status
+  On branch chore/test-run
+  Untracked files:
+  	notes-draft.txt
+  uncommitted files: 1
+
+5. Record (written under a scratch HOME so tonight's real record stays clean)
+$ cat ~/.agent/day/night-2026-10-22-1230.md
+  # Night record, 2026-10-22 12:30
+  
+  ## Stopped
+  - 2026-10-22T11:30:19+00:00 · [day #72 evidence: disposable run to stop](t3-thread://v1/thread:delegated-task:command%3Amcp%3Ad38cfa7d-443e-4c86-8c41-168412ac88ec%3Adelegate-task%3Aday72-evidence-sleeper-2) · PRs none · chore/test-run at 241f1aa, 1 uncommitted file · stopped at: waiting on its 15 minute command, after writing notes-draft.txt
+  
+  ## Continued
+
+Afterwards, the stopped thread's own timeline (t3_thread_read, view: activity):
+  [command_execution] $ node -e "setTimeout(() => {}, 900000)"        status: interrupted
+  [run_interrupt_request] Interrupt requested: Stopped by the goodnight check. Say "go on" to restart.
+  [run_interrupt_result]  Interrupted: Run interrupted by user
+  [checkpoint] notes-draft.txt modified, +1
+  thread status: interrupted · activeRunId: null
+  recentRuns: [{ordinal 1, status: interrupted, requestedAt: 2026-10-22T11:29:46.575Z}]
+  No run was requested after the stop time 2026-10-22T11:30:19+00:00, so the morning report
+  lists this line under "stopped last night".

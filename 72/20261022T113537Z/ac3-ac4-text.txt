@@ -1,0 +1,17 @@
+day #72, AC3: recap's description no longer triggers on "wrapping up". AC4: the README lists day.
+
+Before, at base 4a345b2:
+$ git show 4a345b2:skills/recap/SKILL.md | grep -n -i "wrapping up"
+3:description: Write a brief of the current work session for the person who resumes it tomorrow — goal, what shipped, decisions and why, what is in flight, next action — and save it so the next session can read it. Use when the user invokes /recap, says they are wrapping up, or starts a session asking what we did last time.
+$ git show 4a345b2:README.md | grep -n "skills/day/"; echo "exit $?"
+exit 1
+
+After, at 241f1aa:
+$ grep -n -i "wrapping up" skills/recap/SKILL.md; echo "exit $?"
+exit 1
+$ sed -n 3p skills/recap/SKILL.md
+description: Write a brief of the current work session for the person who resumes it tomorrow — goal, what shipped, decisions and why, what is in flight, next action — and save it so the next session can read it. Use when the user invokes /recap or asks what we did last time.
+$ grep -n -i "wrapping up" skills/day/SKILL.md
+3:description: Use when the user says goodnight or that they are wrapping up for the day, invokes /day night, or replies to the goodnight list with "yes", a change to a line, or "go on". Lists every T3 thread waiting on the user or gone quiet, suggests continue or stop for each run, and after the reply stops the chosen runs cleanly and records them for the morning report.
+$ grep -n "skills/day/" README.md
+10:| [day](skills/day/SKILL.md) | The goodnight check: every thread waiting on you or gone quiet, continue or stop for each run, and a strain line when disk or memory runs low. Stops only what you confirm, and records it for the morning. |

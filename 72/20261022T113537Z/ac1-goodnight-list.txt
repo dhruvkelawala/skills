@@ -1,0 +1,46 @@
+day #72, AC1: the goodnight list, produced live on this machine at skills@241f1aa.
+
+How it ran: a fresh T3 child agent (no context from this build) got the message: the user just said
+"goodnight"; load skills/day/SKILL.md and follow night mode steps 1 to 4 exactly as written. As a
+safety rule for a machine where other agents were working, the prompt also forbade every
+thread-changing tool and every file write. The skill itself already says the list changes nothing.
+
+Its final message, verbatim, except that threads outside this repository's T3 project are replaced
+by "(thread in another project, withheld)" because this is a public repo:
+
+-----
+Goodnight. 12 runs: 12 continue, 0 stop. 3 wait on you, 0 went quiet.
+
+Runs
+1. continue · [Build #50: pin outside skills and install script](t3-thread://v1/mcp:d76b4011-e24a-4701-a561-c2060a2f1d69) · 2 of 4 criteria committed, 10 repairs left
+2. continue · [Build #52: models file](t3-thread://v1/mcp:e0deb41d-f00e-47c7-abe6-14d86efb66d8) · final review-ready gate, on repair 3 of 10
+3. continue · [Build #54: /cleanup](t3-thread://v1/mcp:fb5d3624-2b58-443b-8ae1-6bb5e9d93bec) · second review pass running, 7 repairs left
+4. continue · [Build #55: /codebase-dive](t3-thread://v1/mcp:2b94dafe-422b-4e9f-9f74-e704f87984dc) · PR #74 under a 30-minute watch, 10 repairs left
+5. continue · [Build #58: visual-explainer T3 pages and teaching shape](t3-thread://v1/mcp:bfd1e28d-f535-46f1-bb4b-0f3329cb37a0) · autoreview after the first review pass, 7 repairs left
+6. continue · [Build #60: ticket skill](t3-thread://v1/mcp:67a78491-744a-4204-bc3f-3e26a8ce103e) · building criterion 3, 10 repairs left
+7. continue · [Build #61: ship rule B and --force](t3-thread://v1/mcp:1a41b3a2-85bd-4669-86f5-6feab02e4101) · building criterion 6, 10 repairs left
+8. continue · [Build #62: pr-watch holds replies until post](t3-thread://v1/mcp:f5964046-8c20-41fb-876e-30ffba38b56b) · first review pass running, 10 repairs left
+9. continue · [Build #72: day goodnight check](t3-thread://v1/mcp:96b1c6ef-1cea-40ee-9e6b-58f1f6e71500) · capturing PR evidence, 7 repairs left
+10. continue · (thread in another project, withheld) · PR waiting on CI and a teammate's re-review, 6 repairs left
+11. continue · (thread in another project, withheld) · building criterion 2 of the fix, 10 repairs left
+12. continue · (thread in another project, withheld) · its review child task is running, then a final verify
+
+Waiting on you
+13. [Build #51: unslop into the repo](t3-thread://v1/mcp:f5e38f76-7eb6-45e4-9f97-846e06f75d6b) · PR #76 is ready; confirm the humanizer license credit, then merge
+14. [Build #53: remove Herdr and Hunk paths](t3-thread://v1/mcp:e6f48573-875d-4dd5-b03d-4c48c84124df) · PR #75 is clean and waits for your merge
+15. (thread in another project, withheld) · a teammate waits on your re-review of one PR and your review of another
+
+Done: 1 thread with nothing asked of you.
+
+Reply "yes", or change a line, such as "stop 1" or "continue 3".
+-----
+
+From the agent's note after the list (summarised):
+- Read 14 projects with t3_thread_list (settled: false), every nextCursor null: 129 active threads.
+  Left out 113 subagent threads, read the 16 top-level ones with t3_thread_read, and read the
+  /issue-to-pr run records for the builds.
+- Strain script: exit 0, printed nothing (about 189 GB free, memory pressure normal), so no strain line.
+- Called no interrupt, unwatch, send or cancel tool. No reply came, and nothing was stopped.
+- Gaps it hit: t3_thread_list returns subagent threads unless filtered; a finished turn waiting on its
+  own child task fits no group cleanly; reading the last messages needs paging with afterPosition;
+  the T3 host itself may be a machine that sleeps.

@@ -1,0 +1,23 @@
+day #72, AC1 strain line: tests and this machine's real reading. Captured at skills@241f1aa.
+
+$ node --test skills/day/scripts/strain.test.mjs
+✔ the strain line appears only under 50 GB free or at memory warning, naming the biggest cause (0.919208ms)
+✔ a folder scan that runs out of time still reports the low disk (0.107792ms)
+✔ on Linux, memory pressure comes from the share of memory still available (0.616917ms)
+✔ a platform with no memory pressure reading fails instead of reporting no strain (0.265792ms)
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+
+Red, before the code existed (strain() stubbed to return ""), at the same assertion:
+  AssertionError [ERR_ASSERTION]: low disk
+    actual: '',
+    expected: 'Strain: 38 GB free on disk, biggest ~/Library (300 GB, of which ~/Library/Developer 120 GB).'
+
+This machine, no shims (about 189 GB free, pressure level 1, normal), so the line stays out:
+$ df -kP ~ | tail -1
+/dev/disk3s5   971350180 752394028 184839688    81%    /System/Volumes/Data
+$ sysctl -n kern.memorystatus_vm_pressure_level
+1
+$ node skills/day/scripts/strain.mjs; echo "exit $?"
+exit 0
