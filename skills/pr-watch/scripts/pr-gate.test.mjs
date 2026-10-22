@@ -583,6 +583,66 @@ test("a thread longer than one page of comments counts as a person's, with its n
   assert.equal(thread.bot, false, "a person may have spoken past the first page");
 });
 
+// A head with no check runs or statuses, in a repository shaped like one with no CI: Actions has no
+// workflows, main requires nothing, nothing has posted results on main or on the last merged PR's
+// head, and five apps register empty check suites on every commit.
+function headWithoutChecks(overrides = {}) {
+  const emptySuite = (slug) => ({ app: { slug }, status: "queued", conclusion: null, latest_check_runs_count: 0 });
+  const answers = {
+    graphql: { data: { repository: { pullRequest: {
+      state: "OPEN", isDraft: false, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN", reviewDecision: null,
+      headRefOid: HEAD, baseRefName: "main", author: { login: PR_AUTHOR },
+      commits: { nodes: [{ commit: { oid: HEAD, committedDate: HEAD_COMMITTED_AT, statusCheckRollup: null } }] },
+    } } } },
+    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 0, check_runs: [] },
+    [`repos/o/r/commits/${HEAD}/status`]: { total_count: 0, statuses: [] },
+    [`repos/o/r/commits/${HEAD}/check-suites`]: { total_count: 5, check_suites: ["vercel", "pullfrog", "kody-ai", "kodiseus", "expo"].map(emptySuite) },
+    "repos/o/r/actions/workflows": { total_count: 0, workflows: [] },
+    "repos/o/r/branches/main": { name: "main", protection: { enabled: false, required_status_checks: { contexts: [], checks: [] } } },
+    "repos/o/r/rules/branches/main": [],
+    "repos/o/r/pulls": [{ number: 5, merged_at: null, head: { sha: "c".repeat(40) } }, { number: 6, merged_at: REVIEWED_AT, head: { sha: OTHER } }],
+    "repos/o/r/commits/main/check-runs": { total_count: 0, check_runs: [] },
+    "repos/o/r/commits/main/status": { total_count: 0, statuses: [] },
+    [`repos/o/r/commits/${OTHER}/check-runs`]: { total_count: 0, check_runs: [] },
+    [`repos/o/r/commits/${OTHER}/status`]: { total_count: 0, statuses: [] },
+    ...overrides,
+  };
+  const runGh = async (args) => {
+    const answer = answers[args[1] === "graphql" ? "graphql" : args[1].split("?")[0]];
+    if (answer === undefined || answer.httpError) {
+      throw Object.assign(new Error("gh failed"), { stderr: `gh: ${answer?.httpError ?? "Not Found (HTTP 404)"}` });
+    }
+    return answer;
+  };
+  return fetchSnapshot({ owner: "o", name: "r" }, 7, runGh)
+    .then((snapshot) => evaluateGate({ ...snapshot, pr: { ...snapshot.pr, expectedHead: HEAD } }));
+}
+
+for (const [name, overrides] of [
+  ["a repository with no CI", {}],
+  ["a repository whose only workflow is disabled", { "repos/o/r/actions/workflows": { total_count: 1, workflows: [{ name: "ci", state: "disabled_manually" }] } }],
+]) {
+  test(`ready: ${name} has no checks to wait on, though apps register empty check suites`, async () => {
+    const result = await headWithoutChecks(overrides);
+    assert.equal(result.state, "ready", result.reasons.join("; "));
+    assert.deepEqual(result.notes, ["No CI in this repository, so there are no checks to wait on"]);
+  });
+}
+
+for (const [name, overrides] of [
+  ["an active workflow", { "repos/o/r/actions/workflows": { total_count: 1, workflows: [{ name: "ci", state: "active" }] } }],
+  ["a check the base branch requires", { "repos/o/r/branches/main": { name: "main", protection: { required_status_checks: { contexts: ["ci"] } } } }],
+  ["results on the base branch's head", { "repos/o/r/commits/main/status": { total_count: 1, statuses: [{ context: "buildkite", state: "success" }] } }],
+  ["results on the last merged PR's head", { [`repos/o/r/commits/${OTHER}/check-runs`]: { total_count: 1, check_runs: [{ name: "ci", status: "completed" }] } }],
+  ["a failed read of the signs", { "repos/o/r/actions/workflows": { httpError: "Server Error (HTTP 502)" } }],
+]) {
+  test(`pending: CI that has not reported on the head still holds the gate, shown by ${name}`, async () => {
+    const result = await headWithoutChecks(overrides);
+    assert.equal(result.state, "pending");
+    assert.deepEqual(result.reasons, ["No check runs found on head commit"]);
+  });
+}
+
 test("fetchSnapshot flags truncation when REST totals exceed the page", async () => {
   const runGh = async (args) => {
     if (args[1] === "graphql") {

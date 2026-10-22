@@ -9,11 +9,11 @@
 //            reviews from people (marked kind: "review"). A thread's `bot` is true while no
 //            person has spoken in it.
 //   notes:   present only when non-empty; checks that are not required and did not
-//            pass. Informational: they never change the state.
+//            pass, and a repository with no CI. Informational: they never change the state.
 //
 // Snapshot shape (built by fetchSnapshot, or handed in by tests):
 //   pr:            { state, isDraft, mergeable, mergeStateStatus, reviewDecision,
-//                    headRefOid, expectedHead, headCommittedAt, author }
+//                    headRefOid, expectedHead, headCommittedAt, author, baseRefName }
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
@@ -21,18 +21,22 @@
 //                  // author, body and replyTo are the first comment's, lastCommentId and lastAuthor the newest's,
 //                  // and commenters lists the authors of the first 100 comments in order
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
+//   ci:            { workflows, requiredChecks, results }, only for a head with no check runs or
+//                  statuses: the repository's active workflows, the checks its base branch requires,
+//                  and the results posted on the base branch's head and the last merged PR's head
 //   reviews:       [{ id, author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
 //   reactions:     [{ author, content, createdAt }]   // PR-level reactions
 //
 // Checks: when any check on the HEAD is required by the base branch, only required
-// checks hold or block the gate. When none is marked required, every check counts.
+// checks hold or block the gate. When none is marked required, every check counts. A HEAD
+// with no checks waits for them, unless `ci` shows the repository has no CI at all.
 //
 // Options:
 //   reviewers:      logins (with or without "[bot]") that must review the exact HEAD
 //   requestComment: text the orchestrator posts to ask a reviewer for a pass;
 //                   reviewer evidence older than the newest such comment is stale
-//   allowNoChecks:  treat a HEAD with zero check/status contexts as clean
+//   allowNoChecks:  treat a HEAD with zero check/status contexts as clean, even where CI exists
 //   ignoreChecks:   check names (case-insensitive) left out of the gate entirely
 //   held:           items held.mjs keeps until the user says "post". They hold the gate at
 //                   pending, and the threads and written reviews they answer stop blocking.
@@ -136,7 +140,8 @@ export function evaluateGate(snapshot, options = {}) {
   const counted = checkRuns.filter((run) => !ignored.has(String(run.name).toLowerCase()));
   const requiredOnly = counted.some((run) => run.required === true);
   if (checkRuns.length === 0) {
-    if (!options.allowNoChecks) pending.push("No check runs found on head commit");
+    if (hasNoCi(snapshot?.ci)) notes.push("No CI in this repository, so there are no checks to wait on");
+    else if (!options.allowNoChecks) pending.push("No check runs found on head commit");
   } else if (counted.length === 0) {
     if (!options.allowNoChecks) pending.push("Every check on the head commit is ignored");
   } else {
@@ -219,6 +224,10 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
     return { pending: `${label} is reviewing the current HEAD` };
   }
   return { pending: `${label} has not reviewed the current HEAD` };
+}
+
+function hasNoCi(ci) {
+  return Boolean(ci) && ci.workflows === 0 && ci.requiredChecks === 0 && ci.results === 0;
 }
 
 function isBot(login, type) {
@@ -344,7 +353,7 @@ async function gh(args) {
 const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){
     pullRequest(number:$number){
-      state isDraft mergeable mergeStateStatus reviewDecision headRefOid
+      state isDraft mergeable mergeStateStatus reviewDecision headRefOid baseRefName
       author{ login }
       commits(last:1){ nodes{ commit{ oid committedDate
         statusCheckRollup{ contexts(first:100){
@@ -394,24 +403,23 @@ export async function fetchSnapshot(repo, prNumber, runGh = gh) {
   truncated ||= Number(statusesData?.total_count ?? 0) > (statusesData?.statuses ?? []).length;
   if (truncated) console.error("warning: paginated GitHub data truncated at 100 entries per collection");
 
-  return {
-    ...snapshot,
-    checkRuns: [
-      ...(checksData?.check_runs ?? []).map((c) => ({
-        name: c.name,
-        status: String(c.status ?? "").toUpperCase(),
-        conclusion: c.conclusion == null ? null : String(c.conclusion).toUpperCase(),
-        required: requiredNames.has(c.name),
-      })),
-      ...(statusesData?.statuses ?? []).map((s) => ({
-        name: s.context,
-        status: s.state === "pending" ? "IN_PROGRESS" : "COMPLETED",
-        conclusion: s.state === "success" ? "SUCCESS" : s.state === "pending" ? null : "FAILURE",
-        required: requiredNames.has(s.context),
-      })),
-    ],
-    truncated,
-  };
+  const checkRuns = [
+    ...(checksData?.check_runs ?? []).map((c) => ({
+      name: c.name,
+      status: String(c.status ?? "").toUpperCase(),
+      conclusion: c.conclusion == null ? null : String(c.conclusion).toUpperCase(),
+      required: requiredNames.has(c.name),
+    })),
+    ...(statusesData?.statuses ?? []).map((s) => ({
+      name: s.context,
+      status: s.state === "pending" ? "IN_PROGRESS" : "COMPLETED",
+      conclusion: s.state === "success" ? "SUCCESS" : s.state === "pending" ? null : "FAILURE",
+      required: requiredNames.has(s.context),
+    })),
+  ];
+  // A failed read leaves `ci` out, and the gate keeps waiting for checks.
+  const ci = checkRuns.length === 0 ? await ciSigns(repo, snapshot.pr.baseRefName, runGh).catch(() => null) : null;
+  return { ...snapshot, checkRuns, truncated, ...(ci ? { ci } : {}) };
 }
 
 async function readGraphql({ owner, name }, prNumber, runGh) {
@@ -438,6 +446,7 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
       headRefOid: head,
       headCommittedAt: headCommit?.committedDate ?? null,
       author: pr.author?.login ?? null,
+      baseRefName: pr.baseRefName ?? null,
     },
     requiredNames: new Set((contexts?.nodes ?? [])
       .filter((ctx) => ctx?.isRequired === true)
@@ -510,6 +519,7 @@ async function readRest({ owner, name }, prNumber, runGh) {
       headRefOid: head,
       headCommittedAt: commit?.committer?.date ?? null,
       author: pr.user?.login ?? null,
+      baseRefName: pr.base?.ref ?? null,
     },
     requiredNames: await requiredChecks(repo, pr.base?.ref, runGh),
     truncated: [reviews, comments, reactions].some((list) => list.length >= 100),
@@ -542,22 +552,48 @@ function standingChangeRequest(reviews) {
   return [...latest.values()].includes("CHANGES_REQUESTED");
 }
 
-// Branch protection and rulesets can each require checks. A repository whose plan lacks one of
-// them answers 403 or 404 there, which adds no names. Any other failure, a rate limit's 403
-// included, stops the gate, since missing names would let a failing required check pass as a note.
-async function requiredChecks(repo, base, runGh) {
-  const optional = (args) => runGh(args).catch((error) => {
+// A repository whose plan or settings lack a feature answers 403 or 404 for it, which reads as
+// nothing. Any other failure, a rate limit's 403 included, is thrown.
+function readOptional(runGh, args) {
+  return runGh(args).catch((error) => {
     if (!isRateLimited(error) && /HTTP 40[34]/.test(error?.stderr ?? "")) return null;
     throw error;
   });
-  const branch = await optional(["api", `${repo}/branches/${base}`]);
-  const rules = await optional(["api", `${repo}/rules/branches/${base}`]);
+}
+
+// Branch protection and rulesets can each require checks. A failure other than a missing feature
+// stops the gate, since missing names would let a failing required check pass as a note.
+async function requiredChecks(repo, base, runGh) {
+  const branch = await readOptional(runGh, ["api", `${repo}/branches/${base}`]);
+  const rules = await readOptional(runGh, ["api", `${repo}/rules/branches/${base}`]);
   return new Set([
     ...(branch?.protection?.required_status_checks?.contexts ?? []),
     ...(Array.isArray(rules) ? rules : [])
       .filter((rule) => rule.type === "required_status_checks")
       .flatMap((rule) => (rule.parameters?.required_status_checks ?? []).map((check) => check.context)),
   ]);
+}
+
+// Whether the repository runs CI at all, for a head that has no checks yet. Check suites are no sign,
+// because apps register empty ones on every commit and some never post a result.
+async function ciSigns({ owner, name }, base, runGh) {
+  if (!base) throw new Error("base branch unknown");
+  const repo = `repos/${owner}/${name}`;
+  const workflows = await readOptional(runGh, ["api", `${repo}/actions/workflows?per_page=100`]);
+  const required = await requiredChecks(repo, base, runGh);
+  const closed = await runGh(["api", `${repo}/pulls?state=closed&base=${base}&sort=updated&direction=desc&per_page=20`]);
+  const lastMerged = closed.find((pull) => pull.merged_at);
+  let results = 0;
+  for (const ref of [base, lastMerged?.head?.sha].filter(Boolean)) {
+    const runs = await runGh(["api", `${repo}/commits/${ref}/check-runs?status=completed&per_page=1`]);
+    const statuses = await runGh(["api", `${repo}/commits/${ref}/status?per_page=1`]);
+    results += Number(runs?.total_count ?? 0) + Number(statuses?.total_count ?? 0);
+  }
+  return {
+    workflows: (workflows?.workflows ?? []).filter((workflow) => workflow.state === "active").length,
+    requiredChecks: required.size,
+    results,
+  };
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

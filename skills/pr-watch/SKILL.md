@@ -26,7 +26,7 @@ Resolve reviewers, the request comment and the checks to ignore from the first s
    ```
 
 3. Reviewers only: the logins that reviewed recent merged PRs, from `gh pr list --state merged --limit 5` and `gh pr view <n> --json reviews,comments` (REST: `gh api "repos/{owner}/{repo}/pulls?state=closed&per_page=20"` keeping PRs with a `merged_at`, then `gh api repos/{owner}/{repo}/pulls/<n>/reviews` and `gh api repos/{owner}/{repo}/issues/<n>/comments`).
-4. Nothing. The gate then needs passing checks, no open threads, and no unanswered written review.
+4. Nothing. The gate then needs passing checks where the repository has CI, no open threads, and no unanswered written review.
 
 A reviewer is any account that reviews PRs in this repository: a bot such as Codex, CodeRabbit, Copilot or Claude, or a human the user names. The request comment is the exact text that asks a bot to review, such as `@codex review`. Post it at most once per HEAD, and only when the gate says the reviewer has not covered the current HEAD.
 
@@ -68,7 +68,7 @@ Then go back to step 1 of the watch loop.
 
 ## What the gate counts
 
-- **Checks.** When the base branch has required checks, only those block or hold the gate. Other checks appear in `notes` and never block. With no required checks, every check counts, so pass `--ignore-check <name>` for each optional check that should not hold the PR, such as a slow visual recap.
+- **Checks.** When the base branch has required checks, only those block or hold the gate. Other checks appear in `notes` and never block. With no required checks, every check counts, so pass `--ignore-check <name>` for each optional check that should not hold the PR, such as a slow visual recap. A HEAD with no checks yet waits for them while the repository shows any sign of CI: an active workflow, a check the base branch requires, or results on the base branch's head or the last merged PR's head. With none of those, the repository has no CI, and the gate notes that there are no checks to wait on. Check suites are no sign, because apps register empty ones on every commit.
 - **Merge state.** GitHub's UNSTABLE merge state does not block on its own. Conflicts, a draft or closed PR, and a HEAD mismatch still block.
 - **Threads.** `threads` lists unresolved review threads with path, line, author, body and `bot`. `bot` is true when a bot opened the thread and no person has spoken in it since. Replies from the PR author keep it a bot's thread. An outdated thread drops out, unless it is a person's and the PR author has not answered it yet.
 - **GraphQL quota.** When the gate's GraphQL query fails with a rate-limit error, it reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with `review threads unknown: GraphQL quota`, because REST cannot tell whether a thread is resolved. Each run tries GraphQL first, so the reason clears once the quota resets (`gh api rate_limit --jq .resources.graphql.reset`).
