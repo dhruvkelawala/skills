@@ -1,0 +1,31 @@
+# criterion 1 — BEFORE at f162b42 (main)
+
+$ for d in skills/*/; do ... name must equal directory ...; done
+(no MISMATCH lines = every name matches its directory)
+
+$ sed -n '1,6p' skills/code-walkthrough/SKILL.md
+---
+name: code-walkthrough
+description: Guide a paced, file-by-file review of an unfamiliar or agent-written codebase, fixing small things as you go, keeping a living checklist, and filing the rest as issues. Use when the user wants to inherit, audit, onboard to, or pre-release review a whole codebase at their own pace. For one PR or changeset use pr-review or explain-diff instead.
+---
+
+# Code walkthrough
+
+$ (echo '{"type":"get_commands"}'; sleep 4) | pi --mode rpc --no-session --no-skills --no-extensions --no-prompt-templates --no-context-files --skill skills/code-walkthrough | jq '<skill commands>'
+{"name":"skill:code-walkthrough","path":"skills/code-walkthrough/SKILL.md"}
+
+# criterion 1 — AFTER at 25341e6 (head)
+
+$ for d in skills/*/; do ... name must equal directory ...; done
+(no MISMATCH lines = every name matches its directory)
+
+$ sed -n '1,6p' skills/codebase-dive/SKILL.md
+---
+name: codebase-dive
+description: Use for /codebase-dive, or when the user wants to learn a whole unfamiliar or agent-written codebase at their own pace, to inherit, audit, onboard to or review it before a release. Guides a paced, file-by-file read, fixing small things as you go, keeping a living checklist, and filing the rest as issues. For one PR or changeset use pr-review or explain-diff instead.
+---
+
+# Codebase dive
+
+$ (echo '{"type":"get_commands"}'; sleep 4) | pi --mode rpc --no-session --no-skills --no-extensions --no-prompt-templates --no-context-files --skill skills/codebase-dive | jq '<skill commands>'
+{"name":"skill:codebase-dive","path":"skills/codebase-dive/SKILL.md"}

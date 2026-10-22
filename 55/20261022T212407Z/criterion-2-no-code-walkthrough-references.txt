@@ -1,0 +1,17 @@
+# criterion 2 — BEFORE at f162b42 (main)
+
+$ grep -rnI code-walkthrough README.md skills
+README.md:10:| [code-walkthrough](skills/code-walkthrough/SKILL.md) | Paced, file-by-file review of an unfamiliar or agent-written codebase, fixing as you go with a living checklist. |
+skills/code-walkthrough/SKILL.md:2:name: code-walkthrough
+exit=0 (1 = no matches)
+
+$ every README link under skills/ resolves
+ok skills/code-walkthrough/SKILL.md
+
+# criterion 2 — AFTER at 25341e6 (head)
+
+$ grep -rnI code-walkthrough README.md skills
+exit=1 (1 = no matches)
+
+$ every README link under skills/ resolves
+ok skills/codebase-dive/SKILL.md
