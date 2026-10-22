@@ -278,20 +278,18 @@ function repository(repo) {
   return repoView;
 }
 
-// The PR's patch at each of `commits` as GitHub defines it: merge-base(base tip, commit) to commit.
-// Both refs are fetched into private names so FETCH_HEAD ordering and remote-tracking updates cannot
-// change which is which. An older commit, such as one an approval was given on before a force-push,
-// is fetched by its id when it is missing; a commit that can't be fetched has no patch.
-function patchesAt(pr, commits) {
-  const baseRef = `refs/ship/base/${pr.number}`;
-  const headRef = `refs/ship/pull/${pr.number}`;
-  const patchAt = (commit) => {
-    const base = sh("git", ["merge-base", baseRef, commit]);
-    // Trimming the last added line would make blank and space-only lines share a fingerprint.
-    const diff = sh("git", ["-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, base, commit], { maxBuffer: 1 << 28, trimOutput: false });
-    return { head: commit, base, patchId: patchFingerprint(diff) };
-  };
-  const present = (commit) => [["cat-file", "-e", `${commit}^{commit}`], ["fetch", "--quiet", "--no-tags", "origin", commit]].some((args) => {
+// The patch `commit` made since it left `base`: merge-base(base, commit) to commit.
+function patchFrom(base, commit) {
+  const from = sh("git", ["merge-base", base, commit]);
+  // Trimming the last added line would make blank and space-only lines share a fingerprint.
+  const diff = sh("git", ["-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, from, commit], { maxBuffer: 1 << 28, trimOutput: false });
+  return { head: commit, base: from, patchId: patchFingerprint(diff) };
+}
+
+// Whether `commit` is here, fetching it by its id when it is missing, as an older commit such as one
+// an approval was given on before a force-push can be.
+function present(commit) {
+  return [["cat-file", "-e", `${commit}^{commit}`], ["fetch", "--quiet", "--no-tags", "origin", commit]].some((args) => {
     try {
       sh("git", args);
       return true;
@@ -299,9 +297,17 @@ function patchesAt(pr, commits) {
       return false;
     }
   });
+}
+
+// The PR's patch at each of `commits` as GitHub defines it: merge-base(base tip, commit) to commit.
+// Both refs are fetched into private names so FETCH_HEAD ordering and remote-tracking updates cannot
+// change which is which. A commit that can't be fetched has no patch.
+function patchesAt(pr, commits) {
+  const baseRef = `refs/ship/base/${pr.number}`;
+  const headRef = `refs/ship/pull/${pr.number}`;
   try {
     sh("git", ["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${pr.number}/head:${headRef}`]);
-    return new Map(commits.map((commit) => [commit, commit === pr.headRefOid || present(commit) ? patchAt(commit) : null]));
+    return new Map(commits.map((commit) => [commit, commit === pr.headRefOid || present(commit) ? patchFrom(baseRef, commit) : null]));
   } finally {
     for (const ref of [baseRef, headRef]) try { sh("git", ["update-ref", "-d", ref]); } catch {}
   }
@@ -426,16 +432,41 @@ function statusFor(pr, repo, trusted, me, patch = currentPatch(pr)) {
   return verdictStatus(latestVerdict(prComments(pr.number, repo), { prAuthor: pr.author?.login, trusted, me }), patch);
 }
 
+// The final heads of the merged PRs this PR was once stacked on, read from its base changes. Without
+// GraphQL there are none, which only costs an approval its restack.
+function landedParents(pr, repo) {
+  const [owner, name] = nameWithOwner(repo).split("/");
+  const q = "query($o:String!,$n:String!,$pr:Int!){repository(owner:$o,name:$n){pullRequest(number:$pr){timelineItems(itemTypes:[BASE_REF_CHANGED_EVENT],first:100){nodes{... on BaseRefChangedEvent{previousRefName}}}}}}";
+  return graphqlOrRest(
+    () => {
+      const r = JSON.parse(sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-F", `pr=${pr.number}`])).data.repository;
+      const bases = new Set((r.pullRequest?.timelineItems.nodes ?? []).map((e) => e.previousRefName));
+      return [...bases].flatMap((base) => JSON.parse(gh(["pr", "list", "--state", "merged", "--head", base, "--limit", "1", "--json", "headRefOid"], repo)).map((p) => p.headRefOid));
+    },
+    () => [],
+  );
+}
+
 // A stack PR's verdict and human approvals, each measured against the PR's current patch. An
-// approval counts only when the patch at the commit it was given on is that same patch.
+// approval counts only when the patch at the commit it was given on is that same patch. That patch
+// is measured against the PR's base, or, for an approval given while the PR sat on a parent that has
+// since squash-merged, against the parent's final head: the base no longer holds the parent's
+// commits, and a restack keeps the patch.
 function landingState(pr, repo, trusted, me) {
   const reviews = prReviews(pr.number, repo);
   const approvedAt = [...new Set(reviews.filter((r) => r.state === "APPROVED" && r.commit_id).map((r) => r.commit_id))];
   const patches = patchesAt(pr, [pr.headRefOid, ...approvedAt]);
   const current = patches.get(pr.headRefOid);
+  let parents;
+  const givenOn = (commit) => {
+    const onBase = patches.get(commit)?.patchId;
+    if (!onBase || onBase === current.patchId || pr.reviewDecision !== "APPROVED") return onBase;
+    parents ??= landedParents(pr, repo);
+    return parents.some((parent) => present(parent) && patchFrom(parent, commit).patchId === current.patchId) ? current.patchId : onBase;
+  };
   return {
     status: statusFor(pr, repo, trusted, me, current),
-    approvers: humanApprovers(reviews.map((r) => ({ ...r, patchId: patches.get(r.commit_id)?.patchId })), { prAuthor: pr.author?.login, reviewDecision: pr.reviewDecision, patchId: current.patchId }),
+    approvers: humanApprovers(reviews.map((r) => ({ ...r, patchId: givenOn(r.commit_id) })), { prAuthor: pr.author?.login, reviewDecision: pr.reviewDecision, patchId: current.patchId }),
   };
 }
 

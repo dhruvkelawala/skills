@@ -99,7 +99,7 @@ function fixtureGitHub(t, changes = {}) {
   const statePath = join(dir, "state.json");
   writeFileSync(statePath, JSON.stringify({
     login: "dhruv", graphql: false, pr, reviewDecision: "", comments: [], reviews: [], protected: false, rulesets: [],
-    branch: { mergeQueue: null, ref: { refUpdateRule: null, rules: { nodes: [] } } }, mergedAs: null, calls: [], ...changes,
+    branch: { mergeQueue: null, ref: { refUpdateRule: null, rules: { nodes: [] } } }, merged: [], mergedAs: null, calls: [], ...changes,
   }));
   mkdirSync(join(dir, "bin"));
   writeFileSync(join(dir, "bin", "gh"), `#!/usr/bin/env node
@@ -120,6 +120,9 @@ if (!state.graphql && args[0] === "api" && args[1] === "graphql") {
 }
 if (args[0] === "repo" && args[1] === "view") answer({ defaultBranchRef: { name: "main" }, isArchived: Boolean(state.archived) });
 if (args[0] === "api" && args[1] === "graphql") answer({ data: { repository: state.branch } });
+if (args[0] === "pr" && args[1] === "list" && flag("--state") === "merged") {
+  answer(state.merged.filter((p) => p.headRefName === flag("--head")).map((p) => ({ headRefOid: p.headRefOid })));
+}
 if (args[0] === "pr" && args[1] === "list") {
   answer(state.mergedAs ? [] : [{
     number: pr.number, title: pr.title, author: { login: pr.user.login }, body: pr.body, baseRefName: pr.base.ref,
@@ -188,7 +191,7 @@ fail("", "gh: Not Found (HTTP 404)");
   };
   const state = () => JSON.parse(readFileSync(statePath, "utf8"));
   const setState = (changes) => writeFileSync(statePath, JSON.stringify({ ...state(), ...changes }));
-  return { git, head, ship, cli, state, setState };
+  return { dir, git, head, ship, cli, state, setState };
 }
 
 test("GraphQL quota spent: queue, verdict and run read and post through REST", (t) => {
@@ -303,7 +306,7 @@ test("--force lands a PR waiting only on a required approval, once ship has seen
 });
 
 test("run: an approval counts for the patch it was given on, through a rebase that keeps it, and not after a real change", (t) => {
-  const { git, head, cli, state, setState } = fixtureGitHub(t, { graphql: true, reviewDecision: "APPROVED", branch: rules({ requiredApprovingReviewCount: 1, pattern: "main" }) });
+  const { dir, git, head, cli, state, setState } = fixtureGitHub(t, { graphql: true, reviewDecision: "APPROVED", branch: rules({ requiredApprovingReviewCount: 1, pattern: "main" }) });
   setState({ reviews: [{ user: { login: "vlad", type: "User" }, state: "APPROVED", submitted_at: "2026-10-22T10:00:00Z", commit_id: head }] });
   const publish = (sha) => {
     git("update-ref", "refs/pull/7/head", sha);
@@ -312,7 +315,7 @@ test("run: an approval counts for the patch it was given on, through a rebase th
   assert.deepEqual(cli("run", "7").run.map((r) => [r.number, r.approvedBy]), [[7, ["vlad"]]]);
 
   git("checkout", "--quiet", "main");
-  writeFileSync(join(git("rev-parse", "--show-toplevel"), "other.txt"), "unrelated\n");
+  writeFileSync(join(dir, "other.txt"), "unrelated\n");
   git("add", "other.txt");
   git("commit", "--quiet", "-m", "main moves on");
   git("checkout", "--quiet", "feature");
@@ -322,7 +325,7 @@ test("run: an approval counts for the patch it was given on, through a rebase th
   publish(rebased);
   assert.deepEqual(cli("run", "7").run.map((r) => [r.number, r.approvedBy]), [[7, ["vlad"]]], "a rebase that keeps the patch keeps the approval");
 
-  writeFileSync(join(git("rev-parse", "--show-toplevel"), "sample.txt"), "first\nsecond\nthird\n");
+  writeFileSync(join(dir, "sample.txt"), "first\nsecond\nthird\n");
   git("commit", "--quiet", "-am", "a real change");
   publish(git("rev-parse", "HEAD"));
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "the approval was given on an earlier patch");
@@ -339,4 +342,34 @@ test("an archived repository's PRs never appear in ship output: every command re
   assert.deepEqual(state().calls.filter((c) => c[0] !== "repo"), [], "nothing past the repository was read or written");
   setState({ graphql: false });
   assert.match(ship("queue").stderr, /fixture\/repo is archived/, "the REST fallback reads the archive flag too");
+});
+
+test("run: an approval given while the PR sat on its parent survives the restack after the parent squash-merges", (t) => {
+  // The fixture's feature branch plays the parent PR; PR 7 is a child stacked on it.
+  const { dir, git, head: parentHead, cli, state, setState } = fixtureGitHub(t, { graphql: true, reviewDecision: "APPROVED", branch: rules({ requiredApprovingReviewCount: 1, pattern: "main" }) });
+  git("checkout", "--quiet", "-b", "child");
+  writeFileSync(join(dir, "child.txt"), "child\n");
+  git("add", "child.txt");
+  git("commit", "--quiet", "-m", "child");
+  const approved = git("rev-parse", "HEAD");
+  git("checkout", "--quiet", "main");
+  writeFileSync(join(dir, "sample.txt"), "first\nsecond\n");
+  git("commit", "--quiet", "-am", "parent, squash-merged");
+  git("rebase", "--quiet", "--onto", "main", "feature", "child");
+  const restacked = git("rev-parse", "HEAD");
+  git("update-ref", "refs/pull/7/head", restacked);
+  setState({
+    pr: { ...state().pr, head: { ...state().pr.head, ref: "child", sha: restacked } },
+    reviews: [{ user: { login: "vlad", type: "User" }, state: "APPROVED", submitted_at: "2026-10-22T10:00:00Z", commit_id: approved }],
+    branch: { ...state().branch, pullRequest: { timelineItems: { nodes: [{ previousRefName: "feature" }] } } },
+    merged: [{ headRefName: "feature", headRefOid: parentHead }],
+  });
+  assert.deepEqual(cli("run", "7").run.map((r) => [r.number, r.approvedBy]), [[7, ["vlad"]]]);
+
+  writeFileSync(join(dir, "child.txt"), "child, changed\n");
+  git("commit", "--quiet", "-am", "a real change");
+  const changed = git("rev-parse", "HEAD");
+  git("update-ref", "refs/pull/7/head", changed);
+  setState({ pr: { ...state().pr, head: { ...state().pr.head, sha: changed } } });
+  assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "the parent's head is a base for the approved commit, not a pass for any patch");
 });
