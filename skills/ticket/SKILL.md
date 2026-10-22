@@ -16,6 +16,8 @@ The issue goes where the idea's work is tracked.
 - **Linear**, through the `linear` CLI, when the repo's `AGENTS.md` or `CLAUDE.md` says its work lives in Linear, or the thread's work item is a Linear ticket. File it in that team.
 - **GitHub** otherwise, in the repo the idea is about: the current checkout's (`gh repo view --json nameWithOwner`, REST: `gh api repos/{owner}/{repo} --jq .full_name`), or the one the thread names, passed as `-R <owner/repo>`.
 
+`gh issue` and `gh repo view` spend GitHub's GraphQL quota. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it. `gh api` fills `{owner}/{repo}` from the current checkout, so for a repo the thread names, write its owner and name in their place.
+
 ## 2. Write the issue
 
 Read the repo's latest issues and copy their headings and tone: `gh issue list --state all --limit 5 --json title,body` (REST: `gh api 'repos/{owner}/{repo}/issues?state=all&per_page=5'`). When there are none, use this shape:
