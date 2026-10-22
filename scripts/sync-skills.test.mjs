@@ -82,6 +82,40 @@ function linkTarget(path) {
   }
 }
 
+test("a dry run prints every link, install, update and removal, and changes nothing", (t) => {
+  const m = machine(t);
+  write(join(m.folders.agents, "pr/SKILL.md"), "another author's pr\n");
+  write(join(m.folders.codex, "stray/SKILL.md"), "stray\n");
+  const folders = Object.values(m.folders);
+  const before = snapshot(folders);
+
+  const result = m.run(["--dry-run", "--remove-unlisted"]);
+  const own = (name) => `${m.checkout}/skills/${name}`;
+  assert.equal(result.stdout, [
+    "~/.agents/skills",
+    `  link     apr -> ${own("apr")}`,
+    `  update   pr -> ${own("pr")} (was a folder)`,
+    `  install  grilling from fixture/upstream@${m.pin.slice(0, 7)}`,
+    "~/.claude/skills",
+    `  link     apr -> ${own("apr")}`,
+    `  link     pr -> ${own("pr")}`,
+    "  link     grilling -> ~/.agents/skills/grilling",
+    "~/.codex/skills",
+    `  link     apr -> ${own("apr")}`,
+    `  link     pr -> ${own("pr")}`,
+    "  link     grilling -> ~/.agents/skills/grilling",
+    "  remove   stray",
+    "~/.pi/agent/skills",
+    `  link     apr -> ${own("apr")}`,
+    `  link     pr -> ${own("pr")}`,
+    "  link     grilling -> ~/.agents/skills/grilling",
+    "dry run: 13 changes, none made",
+    "",
+  ].join("\n"));
+  assert.deepEqual(snapshot(folders), before);
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("after a run every agent folder links this repo's skills into the checkout and holds the outside skill at its pinned commit", (t) => {
   const m = machine(t);
   // What a stray `npx skills add` left: another author's pr in the shared folder, linked from Claude's.
@@ -114,6 +148,7 @@ test("a second run changes nothing", (t) => {
   const second = m.run();
   assert.equal(second.status, 0, second.stderr);
   assert.deepEqual(snapshot(Object.values(m.folders)), before);
+  assert.equal(second.stdout, "nothing to change\n");
 });
 
 test("a skill that is not on the list is reported, and removed only with --remove-unlisted", (t) => {

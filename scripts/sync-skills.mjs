@@ -2,12 +2,13 @@
 // sync-skills: give each agent's skill folder this checkout's skills and the outside skills that
 // outside-skills.json pins, and report anything else it finds there.
 //
-//   node scripts/sync-skills.mjs [--remove-unlisted]
+//   node scripts/sync-skills.mjs [--dry-run] [--remove-unlisted]
 //
 // This repo's skills are linked from the checkout the script runs in. Each outside skill is
 // unpacked once into ~/.agents/skills at its pinned commit, and the other agent folders link to
 // that copy, so an agent that reads several folders finds one skill. A skill that is neither is
-// reported as unlisted, and removed only with --remove-unlisted.
+// reported as unlisted, and removed only with --remove-unlisted. Every change prints before any is
+// made, and --dry-run stops there.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -16,7 +17,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const USAGE = "usage: node scripts/sync-skills.mjs [--remove-unlisted]";
+const USAGE = "usage: node scripts/sync-skills.mjs [--dry-run] [--remove-unlisted]";
 
 try {
   main(process.argv.slice(2));
@@ -48,6 +49,8 @@ function main(argv) {
   }
   if (!changes) {
     console.log("nothing to change");
+  } else if (flags.dryRun) {
+    console.log(`dry run: ${count(changes, "change")}, none made`);
   } else {
     for (const { folder, steps } of plans) {
       if (steps.some((step) => step.apply)) mkdirSync(folder.path, { recursive: true });
@@ -59,9 +62,10 @@ function main(argv) {
 }
 
 function parseFlags(argv) {
-  const flags = { removeUnlisted: false };
+  const flags = { dryRun: false, removeUnlisted: false };
   for (const arg of argv) {
-    if (arg === "--remove-unlisted") flags.removeUnlisted = true;
+    if (arg === "--dry-run") flags.dryRun = true;
+    else if (arg === "--remove-unlisted") flags.removeUnlisted = true;
     else throw Object.assign(new Error(`unknown argument ${arg}`), { usage: true });
   }
   return flags;
