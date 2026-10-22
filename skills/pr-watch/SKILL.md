@@ -49,15 +49,20 @@ node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --rerequest <login>
 
 Holding again for the same thread, review or person replaces the earlier draft. Show the user each draft when you hold it. With `--held-file "$HELD"`, the gate stops counting a thread or written review as a repair once its reply is held, and waits at pending with `<n> item(s) to people held until "post"`. A newer comment in a held thread brings the thread back, so read it and hold a new draft.
 
-## "post"
+## When the user says "post"
 
-When the user says "post", send everything held for this PR:
+Send everything held for this PR:
 
 ```bash
 node "$SKILL_DIR/scripts/held.mjs" post --file "$HELD" --repo "$OWNER/$REPO" --pr "$PR_NUMBER" --record "$RECORD"
 ```
 
-It sends the items in the order they were held: each reply and then the resolve of its thread, each comment, and each re-request. It removes an item from the held file once GitHub accepts it, and appends one line per send, with its link, to the run record. On a failure it stops with exit `2`, names the item, and keeps it and the rest held. A resolve needs the GraphQL quota, so after `API rate limit exceeded` run `post` again once the quota resets. A second run never sends anything twice. Then go back to step 1 of the watch loop.
+It sends the items in the order they were held: each reply and then the resolve of its thread, each comment, and each re-request. It removes an item from the held file once GitHub accepts it, and appends one line per send, with its link, to the run record. On a failure it stops with exit `2`, names the item, and keeps it and the rest held. A second run never sends anything twice.
+
+- When someone has commented in a thread since its reply was drafted, `post` sends nothing to that thread and stops. Read the new comment, hold a new draft, and show it to the user.
+- Reading a thread and resolving it need the GraphQL quota, so after `API rate limit exceeded` run `post` again once the quota resets.
+
+Then go back to step 1 of the watch loop.
 
 `$RECORD` is the `--run-record` the caller passed, such as `/issue-to-pr`'s record, and otherwise `~/.agent/pr-watch/<owner>/<repo>/<pr>.md`.
 
@@ -85,9 +90,9 @@ It sends the items in the order they were held: each reply and then the resolve 
 4. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
    - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
-   - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request, then hold a reply that names the fix commit. For a question, or a request that is unclear or that you would decline, hold a reply that answers or asks, and change no code. Leave the thread unresolved.
-   - **Written review** (`kind: "review"`). Read it, fix each clear point, then hold one PR comment that answers it point by point.
-   - **Changes requested by a person.** Fix their points as above, then hold a re-request. Leave their review in place. The gate shows CHANGES_REQUESTED until they review again, so it is no longer a repair once the re-request is held or sent.
+   - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request. Once `/apr` has pushed the fix (step 5), hold a reply that names the fix commit before you run the gate again, because the fix can mark the thread outdated and the gate then stops listing it. For a request you would decline, hold a reply that gives your reason, and change no code. `post` resolves the thread after the reply, so when you need the person's answer before you can act, ask the user instead of holding a question. Leave resolving to `post`.
+   - **Written review** (`kind: "review"`). Read it and fix each clear point. After the push, hold one PR comment that answers it point by point.
+   - **Changes requested by a person.** Fix the points in their threads as above. Answer the points in the review's own text in one held comment, where `--review` takes the review's `node_id` from `gh api repos/{owner}/{repo}/pulls/<n>/reviews`. Then hold a re-request, and leave their review in place. The gate shows CHANGES_REQUESTED until they review again. It is not a repair while the re-request is held, and once they appear in `gh pr view --json reviewRequests` (REST: `.requested_reviewers` from `gh api repos/{owner}/{repo}/pulls/<n>`), the PR waits on them.
    - **Merge conflict or wrong base.** Rebase onto the live base, rerun the project's tests, and push with `--force-with-lease`.
    - **Draft, closed, or mismatched HEAD.** Stop and report, because these are not repairs.
 5. A repair that changes code counts one against the budget. Hand the repaired tree to `/apr --no-watch`, which runs the focused tests, autoreview, commit and push once, with no nested watch. Return to step 1 with the new HEAD.
@@ -101,10 +106,10 @@ It sends the items in the order they were held: each reply and then the resolve 
 
 ## Report
 
+- Who the PR waits on, and whether T3 watches it
+- Held for "post": each item with its draft, or what the last "post" sent
 - PR URL and final HEAD SHA
 - Gate result, the reviewers it required, the checks ignored, and any checks left in `notes`
 - Repairs made: the count, and one line per finding with its source thread or check link, the HEAD it was reviewed at, and the repair commit, so that `/promote` can use them
 - Findings rejected, with the reply posted or held
-- Held for "post": each item with its draft, or what the last "post" sent
-- Who the PR waits on, and whether T3 watches it
 - Reasons still open
