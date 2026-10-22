@@ -67,7 +67,7 @@ A `--one-pr` build's body covers every ticket in the spec:
 - Evidence groups the criteria under one bold `**#<n> <title>**` line per ticket, in the `Tickets:` order.
 - The criteria table keeps each criterion's `#<n>:` prefix.
 
-`spec.mjs body <record> < <body file>` checks the first two before the PR is published.
+`spec.mjs body <record> < <body file>` checks the first two before stage 5 publishes the PR.
 
 ## Picking the door
 

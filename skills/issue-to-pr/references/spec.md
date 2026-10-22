@@ -23,7 +23,7 @@ Run this step after the brief, and again each time the thread wakes:
 2. For each `#<n> starts on <branch>` line, start the ticket's build with `t3_thread_launch`. Set `message` to `/issue-to-pr <n> --spec <spec>`, adding `stack <PR>` when the line ends `stacked on <PR>`, and this run's `--merge` and `--max-repairs`. Set `workspaceStrategy` to `{"type": "worktree", "baseRef": "<branch>", "branch": "<type>/<n>-<short-description>", "startFromOrigin": true}`. Then run `spec.mjs started <record> <n> <threadId>` straight away, so that a later wake never starts the ticket twice.
 3. Leave a `waits for` line alone. When a ticket's run ends blocked, only the tickets above it wait, with `waits for #<n>, which is blocked`, and the rest keep building. A ticket whose two open blockers sit in different stacks waits until one of them merges.
 4. On `running`, record `stage: watching` and end the turn. Each ticket's thread wakes this one when its PR is published and when its run stops. `/issue-to-pr <spec> resume` runs this step by hand.
-5. On `done`, nothing can move without the user: every ticket is waiting on them, blocked, merged, or waits for one of those. Record `stage: ready` when no ticket is blocked or waiting, otherwise `blocked: <each blocked or waiting ticket and why>`, then post the [spec's recap](#recap) and stop.
+5. On `done`, nothing can move without the user, because every ticket is waiting on them, blocked, merged, or waits for one of those. Record `stage: ready` when no ticket is blocked or waiting, otherwise `blocked: <each blocked or waiting ticket and why>`, then post the [spec's recap](#recap) and stop.
 
 **Complete when:** `spec.mjs next` prints `done`, the record shows a thread for every ticket that started, and the recap is posted.
 
@@ -37,7 +37,7 @@ The spec thread posts one brief for the whole spec, in [the brief](../SKILL.md#b
 
 ## Recap
 
-When the spec stops, it posts one recap that covers every PR. Under the result, list every ticket on a line of its own, as `spec.mjs next` last printed it, so each PR shows with its state. Then come the five lines: `Review:` and `Evidence:` sum up what the PRs carry, and `Next:` offers `/pr-review <the stack>`, because the stack is reviewed from this thread.
+When the spec stops, it posts one recap that covers every PR. Under the result, list every ticket on a line of its own, as `spec.mjs next` last printed it, so each PR shows with its state. Then come the five lines. `Review:` and `Evidence:` sum up what the PRs carry, and `Next:` offers `/pr-review <the stack>`, because the user reviews the stack from this thread.
 
 `messages.mjs recap` refuses a spec's recap that leaves out a ticket, its state or its PR.
 
