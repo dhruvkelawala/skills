@@ -182,6 +182,14 @@ const namesFile = (line, file) => line.includes(`${basename(file)}:`);
 const fileLinks = (v) => [...v.reply.matchAll(/\]\(([^)\s]+)\)/g)].map(([, target]) => target).filter((t) => !/^https?:\/\//.test(t) || /\/(?:blob|tree)\//.test(t));
 const guideWrites = (v) => v.t3.filter((e) => e.tool === "write_pull_request_guides" && e.number === PR && e.head === v.head);
 const guideWritten = (v) => v.t3.filter((e) => e.tool === "read_pull_request_guide" && e.state === "written" && e.guideHead === v.head);
+function assertGuideReady(v) {
+  const writes = guideWrites(v);
+  assert.ok(writes.length, `${v.name}: no write_pull_request_guides for #${PR} at ${v.head}`);
+  const written = guideWritten(v);
+  assert.ok(written.length, `${v.name}: no read_pull_request_guide found the guide written for ${v.head}`);
+  assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
+  assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the intro came before the guide was started and read back written`);
+}
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
@@ -200,14 +208,7 @@ describe("pr-review", { concurrency: true }, () => {
   });
 
   test("starts the PR's guide in prep and reads it written for the head before the intro", async (t) => {
-    for (const v of await firstVisits(t)) {
-      const writes = guideWrites(v);
-      assert.ok(writes.length, `${v.name}: no write_pull_request_guides for #${PR} at ${v.head}`);
-      const written = guideWritten(v);
-      assert.ok(written.length, `${v.name}: no read_pull_request_guide found the guide written for ${v.head}`);
-      assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
-      assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the intro came before the guide was started and read back written`);
-    }
+    for (const v of await firstVisits(t)) assertGuideReady(v);
   });
 
   test("with a guide, the intro points at the Guide tab and chat has no tour stops or file links, but names each P1", async (t) => {
@@ -263,12 +264,7 @@ describe("pr-review", { concurrency: true }, () => {
       const v = await chain(kind).back();
       describeVisit(t, v);
       assert.notEqual(v.head, first.head, `${v.name}: the head did not move`);
-      const writes = guideWrites(v);
-      assert.ok(writes.length, `${v.name}: no write_pull_request_guides for #${PR} at ${v.head}`);
-      const written = guideWritten(v);
-      assert.ok(written.length, `${v.name}: no read_pull_request_guide found the guide written for ${v.head}`);
-      assert.ok(v.introAt, `${v.name}: no review opening with ${PR_URL}`);
-      assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the review came before the guide was rewritten and read back`);
+      assertGuideReady(v);
     }
   });
 

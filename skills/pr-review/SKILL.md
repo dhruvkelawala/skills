@@ -6,7 +6,7 @@ compatibility: Requires git and gh.
 
 # PR review
 
-The reviewers find the problems, and you explain them. On every PR, `/code-review` and a second opinion from the other model family read the change before you write about it. You read everything too, implementation included, and sort what they found. T3 writes the tour as the PR's review guide, which the user reads in the PR panel's Guide tab, and your message in chat is the intro and the wrap-up. The user decides, and nothing reaches GitHub until they say so.
+The reviewers find the problems, and you explain them. On every PR, `/code-review` and a second opinion from the other model family read the change before you write about it. You read everything too, implementation included, and sort what they found. T3 writes the tour as the PR's review guide, which the user reads in the PR panel's Guide tab with each stop's lines in place, and your message in chat is the intro and the wrap-up. The user decides, and nothing reaches GitHub until they say so.
 
 Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue]`.
 
@@ -46,7 +46,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 Prep comes before anything you write about the PR, on every PR.
 
-1. **Start the guide.** T3 writes the PR's review guide, the tour the user reads in the PR panel's Guide tab with each stop's lines in place. It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a queue, name every PR in scope that needs a guide in one call, so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
+1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a queue, name every PR in scope that needs a guide in one call, so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
    - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
    - **The second opinion,** on the `second-opinion` job, from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
@@ -55,7 +55,7 @@ Prep comes before anything you write about the PR, on every PR.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
 4. Once both reviewers have reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
-6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, it is still running after about ten minutes, or this host has no T3 guide tools. Then step 3 writes the tour in chat.
+6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
 7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
 
 For a stack or a queue, start with one table: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. Order a stack from the bottom. Order a queue so the PR that unblocks the most other PRs comes first, then the smallest. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
@@ -74,7 +74,7 @@ Send each PR's review as one message: the intro, then the wrap-up. The tour is t
 
 When the change can't be followed from the intro and the diff, such as a new subsystem, a flow across several parts or a PR over about 2,000 changed lines, follow the message with an `/eli25` page.
 
-**The guide.** The user reads the tour there, marks files viewed, and sends you an excerpt with "Ask agent". Viewed marks are the user's, so never set them.
+**The guide.** The user reads the tour there, marks files viewed, and sends you an excerpt with "Ask agent". Leave viewed marks to the user.
 
 **Chat tour, when there is no guide.** The whole route, in the order to read it: design changes first, most important first, then the rest of the route. A **design change** changes how the parts of the system fit together or what the system promises. Look for these, roughly in this order of importance:
 
@@ -137,7 +137,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 ## 4. Return visits
 
-When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Its guide is for the old head, so start it again and check it before you write, as prep does, after a pure rebase too.
+When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Then start and check its guide as prep's items 1 and 6 do. A pure rebase needs a new guide too.
 
 1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
 2. **A pure rebase.** Compute the patch ID as prep does. When it matches the record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour.
