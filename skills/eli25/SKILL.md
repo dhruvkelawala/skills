@@ -49,8 +49,6 @@ Before and after, from `support-report-pr-349-eli25.html`:
 >
 > After. **The model reads the messages, and the app decides what gets posted.** The report reads two things: Jira tickets, and last week's messages from the QA and release Slack channels. Before it reads anything, it checks that every channel exists and that the bot can open it. Then it strips anything that looks like a password or token, keeps only Monday to Sunday, and cuts the pile to a fixed size.
 
-Run `../unslop/SKILL.md` on the page's prose last, and leave quotes and code as they are.
-
 **Done when** the page has its opener, every section of the shape sits under a claim title, and a plan or spike ends on one next action.
 
 ## 3. Build and check
@@ -62,8 +60,9 @@ Run `../unslop/SKILL.md` on the page's prose last, and leave quotes and code as 
    - A small fixed `#theme-toggle` button in a corner, in the same brutalist style, cycles from system to light to dark and back to system, and shows the current state as a word.
    - Store the pick in `localStorage` under `eli25-theme` inside try and catch, and apply it from an inline script at the top of `<head>`, before any stylesheet, so the page never flashes. Missing or unreadable storage means system.
    - `references/theme.html` has the code for all three.
-4. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
-5. Look at the light and dark screenshots at 1280 pixels.
+4. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
+5. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
+6. Look at the light and dark screenshots at 1280 pixels.
 
 **Done when** the render check passes, the prose word count is within the budget, every printed heading reads as a claim, and both screenshots look right to you.
 
