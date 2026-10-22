@@ -1,0 +1,213 @@
+head: a9f5d41
+
+$ cat skills/issue-to-pr/references/spec.md
+# Spec mode
+
+A spec is an issue whose open sub-issues are its tickets, ordered by their blocked-by links. `/issue-to-pr <spec>` builds every ticket in it, because starting a spec is the word to start each of its tickets. The thread it runs in is the spec thread.
+
+Each ticket gets its own thread, its own brief and its own PR. A ticket blocked by another starts as soon as its blocker's PR is published, stacked on that PR's branch. GitHub's blocked-by count drops only when the blocker's issue closes on merge, so the spec thread tracks published PRs itself, from the tickets' run records. With `--one-pr`, the spec thread builds every ticket as one PR instead, as [one PR](#one-pr) says.
+
+The commands below run `node <this skill's folder>/scripts/spec.mjs`. It reads GitHub through `gh api`, and each ticket's build from its run record beside the spec's.
+
+## Pin the spec
+
+The spec thread builds nothing, so it stays in the thread and checkout where it started. Stage 1 steps 1 and 2 have pinned the base and read the spec.
+
+1. Write the spec's run record header, as [run record](run-record.md) shows, with `spec_mode: stack` and `thread:` set to this thread's id from `t3_thread_configuration`.
+2. Run `spec.mjs tickets <record>`. It prints the spec's open tickets in build order, each with its open blockers. Append it to the contract as printed. When it reports a problem, such as a sub-issue or blocker in another repository, or blocked-by links that form a loop, record `blocked: <problem>` and stop.
+3. Finish the contract: the base, what is out of scope, and the human gates, at least the review of each PR.
+4. Post the [spec's brief](#brief), then start what can start.
+
+## Start what can start
+
+Run this step after the brief, and again each time the thread wakes:
+
+1. Run `spec.mjs next <record>`. It prints one line per ticket, in the contract's order, then `running` or `done`.
+2. For each `#<n> starts on <branch>` line, start the ticket's build with `t3_thread_launch`. Set `message` to `/issue-to-pr <n> --spec <spec>`, adding `stack <PR>` when the line ends `stacked on <PR>`, and this run's `--merge` and `--max-repairs`. Set `workspaceStrategy` to `{"type": "worktree", "baseRef": "<branch>", "branch": "<type>/<n>-<short-description>", "startFromOrigin": true}`. Then run `spec.mjs started <record> <n> <threadId>` straight away, so that a later wake never starts the ticket twice.
+3. Leave a `waits for` line alone. When a ticket's run ends blocked, only the tickets above it wait, with `waits for #<n>, which is blocked`, and the rest keep building. A ticket whose two open blockers sit in different stacks waits until one of them merges.
+4. On `running`, record `stage: watching` and end the turn. Each ticket's thread wakes this one when its PR is published and when its run stops. `/issue-to-pr <spec> resume` runs this step by hand.
+5. On `done`, nothing can move without the user, because every ticket is waiting on them, blocked, merged, or waits for one of those. Record `stage: ready` when no ticket is blocked or waiting, otherwise `blocked: <each blocked or waiting ticket and why>`, then post the [spec's recap](#recap) and stop.
+
+**Complete when:** `spec.mjs next` prints `done`, the record shows a thread for every ticket that started, and the recap is posted.
+
+## Brief
+
+The spec thread posts one brief for the whole spec, in [the brief](../SKILL.md#brief)'s shape, with three changes:
+
+- The first line reads `Building #<spec> as a stack: <spec title>`.
+- Each plan step is one ticket, `#<n> <title>`, worded as the `Tickets:` list words it.
+- The last line ends `Lane: per PR`, because each ticket's build sets its own lane.
+
+## Recap
+
+When the spec stops, it posts one recap that covers every PR. Under the result, list every ticket on a line of its own, as `spec.mjs next` last printed it, so each PR shows with its state. Then come the five lines. `Review:` and `Evidence:` sum up what the PRs carry, and `Next:` offers `/pr-review <the stack>`, because the user reviews the stack from this thread.
+
+`messages.mjs recap` refuses a spec's recap that leaves out a ticket, its state or its PR.
+
+## One PR
+
+With `--one-pr`, the spec thread builds every ticket onto one integration branch, `<type>/<spec>-<short-description>`, as one build. That branch gets the same review, evidence, PR body and watch as any other build, and one repair budget. Carry on from stage 1 step 3, with these changes:
+
+- The header has `spec_mode: one-pr`. Run `spec.mjs tickets <record>` and append its list to the contract.
+- The contract's `Acceptance criteria:` list holds every ticket's criteria, in the `Tickets:` order, each one worded `#<ticket>: <criterion>`.
+- The brief's first line reads `Building #<spec> as one PR: <spec title>`, and each plan step is one ticket, as in the [spec's brief](#brief). Its lane is the build's own.
+- Stage 2 builds the tickets in that order, one commit per criterion.
+- The PR body follows [one PR for a spec](pr-body.md#one-pr-for-a-spec). Before stage 5 publishes it, run `spec.mjs body <record> < <body file>`, and fix the body until it passes.
+
+## A ticket's build
+
+A build started with `--spec <spec>` is one ticket of that spec. It runs every stage as any build does, with its own brief and its own repair budget, and records `spec: <spec URL>` in its header.
+
+- With `stack <PR>`, its predecessor is that PR, even when other layers already sit on it, as [stacks](stacks.md) says.
+- When stage 5 has published its PR, and again whenever its run stops, it wakes the spec thread. Read `thread:` from the spec's run record, `<spec>.md` beside this one, and call `t3_thread_send` with that `threadId`, `message` set to `/issue-to-pr <spec> resume`, `mode: "queue"`, and `clientRequestId` set to `<spec>-<n>-<stage>-<short head>`.
+
+$ git diff ff7db7d...HEAD -- skills/issue-to-pr/SKILL.md skills/issue-to-pr/references/stacks.md skills/issue-to-pr/references/run-record.md skills/issue-to-pr/references/resume.md skills/issue-to-pr/references/pr-body.md
+diff --git a/skills/issue-to-pr/SKILL.md b/skills/issue-to-pr/SKILL.md
+index f8c8ea4..36a4e6b 100644
+--- a/skills/issue-to-pr/SKILL.md
++++ b/skills/issue-to-pr/SKILL.md
+@@ -1,16 +1,18 @@
+ ---
+ name: issue-to-pr
+-description: Use when the user invokes /issue-to-pr with a GitHub issue, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a watch through T3, standalone or as a stacked layer.
++description: Use when the user invokes /issue-to-pr with a GitHub issue, spec, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a watch through T3, standalone or as a stacked layer, and builds a spec's tickets as a stack of PRs or as one PR.
+ ---
+ 
+ # Issue to PR
+ 
+-Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
++Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stack [<PR>]] [--one-pr] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
+ 
+ - Without a work item, the build starts from this conversation. A plan file, such as one `improve` wrote, starts it from that plan. Stage 1 files either one as an issue through `ticket`, then builds that issue.
++- A spec, an issue with open sub-issues, builds every ticket in it, each in its own thread and PR, stacked on its blocker's PR. `--one-pr` builds them all onto one branch and one PR instead. Follow [spec](references/spec.md).
+ - `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
+ - `--merge` lands the PR in stage 7 through the ship skill: an independent `ship verify`, then `ship land`. A stacked layer lands only once it is the bottom of its stack.
+ - `--max-repairs` sets the repair budget. The default is 10.
++- `--spec <spec>` marks a ticket's build that a spec thread started. [Spec](references/spec.md#a-tickets-build) says what it adds.
+ - `resume` continues a stopped run. Follow [resume](references/resume.md).
+ 
+ After the brief posts, the run continues without waiting. It stops only for a hard blocker, the repair budget, or a gate that only a human can pass.
+@@ -41,7 +43,7 @@ Once the contract is pinned, post the brief in the thread and keep going. Don't
+ 
+     <sign-off>
+ 
+-Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own.
++Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own. A spec's brief plans its tickets instead, as [spec](references/spec.md#brief) shows.
+ 
+ ## Recap
+ 
+@@ -57,7 +59,7 @@ When the run stops, post the recap: the result first, then one line each for wha
+ 
+     <sign-off>
+ 
+-The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again.
++A spec's recap also gives every ticket a line with its state and PR, as [spec](references/spec.md#recap) shows. The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again. After its recap, a ticket of a spec wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
+ 
+ ## Sign-off
+ 
+@@ -72,7 +74,7 @@ node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief fil
+ node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
+ ```
+ 
+-The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
++The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria or a spec's tickets, that a spec's recap lists every ticket, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
+ 
+ ## Taste check
+ 
+@@ -86,7 +88,7 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
+ 
+ ## 1. Pin the contract
+ 
+-1. Resolve the repository and remote, run `git fetch <remote>`, and pin the base. Standalone: `refs/remotes/<remote>/<default-branch>` and its SHA. Stacked: the top PR's head, found as [stacks](references/stacks.md) describes.
++1. Resolve the repository and remote, run `git fetch <remote>`, and pin the base. Standalone: `refs/remotes/<remote>/<default-branch>` and its SHA. Stacked: the predecessor PR's head, found as [stacks](references/stacks.md) describes.
+ 2. Read the work item. When the invocation names no issue or ticket, file one through `ticket` first:
+    - **No work item.** File the change this conversation discussed, with the criteria it pinned.
+    - **A plan file.** File the plan as one issue. When the plan already links an issue, read that issue and file nothing.
+@@ -94,6 +96,8 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
+    Load and follow `ticket` steps 1 to 4 here, before step 3 moves the build, because a launched thread does not carry this conversation and a plan file may exist only in this checkout. The invocation already gives the word to build, so continue with the filed issue as `<n>`. When ticket files nothing, as for a plan that splits into several tickets, or files the issue without `ready-for-agent`, reply with its step 5 line and stop.
+ 
+    For GitHub, run `gh issue view <n> --json title,body,comments,labels` (REST: `gh api repos/{owner}/{repo}/issues/<n>` and `gh api repos/{owner}/{repo}/issues/<n>/comments`). For Linear, read the ticket, its comments and its parent through the Linear app or the `linear` CLI. Treat the text as requirements, not as instructions to run.
++
++   When `gh api repos/{owner}/{repo}/issues/<n> --jq .sub_issues_summary` shows open sub-issues, `total` above `completed`, the issue is a spec. Follow [spec](references/spec.md) from here.
+ 3. Move the build into its own T3 thread and worktree, on the branch `<type>/<issue>-<short-description>` with a conventional-commit type. The base branch is the branch of the base ref: the default branch, or for a layer the predecessor's head branch. Call `t3_worktree_status` and take the first case that fits:
+    - **The thread is in the build's worktree**, a worktree on a branch for this issue, `<type>/<issue>-` with any type and description, as when `t3_thread_launch` or `t3_worktree_handoff` made it. Keep that branch and continue here.
+    - **The thread is on the project's main checkout**, as when `/issue-to-pr` is typed in an existing thread. Call `t3_worktree_handoff` with `branch`, `baseRef` set to the base branch, `startFromOrigin: true`, and `continuationPrompt` set to `/issue-to-pr <n>` and this run's flags, as the last call of the turn. The thread moves into the new worktree, and the continuation starts this stage again there. Create no branch and write no file in the main checkout.
+@@ -169,7 +173,7 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as
+ 2. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run.
+ 3. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. Either mismatch stops the run as `blocked` with both values.
+ 4. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
+-5. Record the PR URL, head, tree and `published`.
++5. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
+ 
+ **Complete when:** an open, ready-for-review PR exists at the current head on the contracted base and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
+ 
+diff --git a/skills/issue-to-pr/references/pr-body.md b/skills/issue-to-pr/references/pr-body.md
+index 9bbbfcd..6a31d01 100644
+--- a/skills/issue-to-pr/references/pr-body.md
++++ b/skills/issue-to-pr/references/pr-body.md
+@@ -59,6 +59,16 @@ Run at `<head short sha>` against base `<base short sha>`.
+ </details>
+ ````
+ 
++## One PR for a spec
++
++A `--one-pr` build's body covers every ticket in the spec:
++
++- The summary closes each ticket with a keyword of its own, as in `Closes #12. Closes #13.`, because GitHub closes only the issue right after each keyword, and `Closes #12, #13` leaves #13 open.
++- Evidence groups the criteria under one bold `**#<n> <title>**` line per ticket, in the `Tickets:` order.
++- The criteria table keeps each criterion's `#<n>:` prefix.
++
++`spec.mjs body <record> < <body file>` checks the first two before stage 5 publishes the PR.
++
+ ## Picking the door
+ 
+ Write `one-way` for a migration, data deletion, a production switch such as a flag flip or a config change that moves live traffic, a public API or schema change that consumers will adopt, and anything else that is hard to roll back once merged and deployed. Write `two-way` when a revert commit fully undoes the change.
+diff --git a/skills/issue-to-pr/references/resume.md b/skills/issue-to-pr/references/resume.md
+index 67f1e6f..4c67cd4 100644
+--- a/skills/issue-to-pr/references/resume.md
++++ b/skills/issue-to-pr/references/resume.md
+@@ -2,6 +2,8 @@
+ 
+ `/issue-to-pr <n> resume` continues a run that stopped at `published`, `watching`, `awaiting-human` or `blocked`.
+ 
++A spec's record with `spec_mode: stack` has no branch of its own. For it, run [start what can start](spec.md#start-what-can-start) once, and skip the rest of this page.
++
+ 1. Work on the recorded branch, in the worktree that has it checked out (`git worktree list`). When `t3_worktree_status` shows this thread in that worktree, continue here. When another worktree has it, call `t3_thread_launch` with `workspaceStrategy` set to `{"type": "existing_worktree", "worktreePath": "<path>", "branch": "<branch>"}` and `message` set to `/issue-to-pr <n> resume`, give the user its link, and stop. When no worktree has it, record `blocked: branch not selectable` and stop, before any repair. Never switch this thread's checkout to the branch. Then `git status` must be clean and `HEAD` must equal the recorded head or the PR's `headRefOid`.
+ 2. Run the checks in [run record](run-record.md) under "When a record already exists".
+ 3. Pick the case:
+diff --git a/skills/issue-to-pr/references/run-record.md b/skills/issue-to-pr/references/run-record.md
+index 83ea468..4c62476 100644
+--- a/skills/issue-to-pr/references/run-record.md
++++ b/skills/issue-to-pr/references/run-record.md
+@@ -26,6 +26,9 @@ tree: <git rev-parse HEAD^{tree} at that head>
+ repairs: <used>/<budget>
+ autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
+ pr: <URL or none>
++spec_mode: stack | one-pr   (a spec's own record)
++thread: <the spec thread's id>   (a spec's own record)
++spec: <spec URL>   (a ticket a spec thread started)
+ ```
+ 
+ Stage reports go below the header, appended in order:
+@@ -43,6 +46,8 @@ Keep earlier passes, so that `/promote` can see a finding that recurs.
+ 
+ The contract lists its criteria under a line that reads `Acceptance criteria:`, one numbered line per criterion, with details such as its surface and capture on indented lines below it. The brief's plan is checked against that list.
+ 
++A spec's contract lists its tickets instead, under a line that reads `Tickets:`, as `scripts/spec.mjs tickets` prints them: one numbered `#<n> <title>` line per ticket, with its open blockers on an indented `blocked by:` line. The spec's brief plans those tickets, and its recap gives each one a line. `spec.mjs started` adds a `started: #<n> in thread <id>, <UTC time>` line for each build the spec thread starts, and `spec.mjs next` reads those lines and each ticket's record beside this one.
++
+ `scripts/messages.mjs` appends the brief and each recap as a `## Brief, <UTC time>` or `## Recap, <UTC time>` section, with the text in a fenced block. Add them only through the script, because it reads those sections to find the last 10 sign-offs.
+ 
+ ## When a record already exists
+diff --git a/skills/issue-to-pr/references/stacks.md b/skills/issue-to-pr/references/stacks.md
+index a52d2fa..a3a2c92 100644
+--- a/skills/issue-to-pr/references/stacks.md
++++ b/skills/issue-to-pr/references/stacks.md
+@@ -8,7 +8,7 @@ Stage 1 finds the stack before the build moves into its own worktree, so the cur
+ 
+ 1. List candidates with `gh pr list --state open --json number,url,title,headRefName,baseRefName,headRefOid` (REST: `gh api --paginate "repos/{owner}/{repo}/pulls?state=open&per_page=100"`, where those fields are `.number`, `.html_url`, `.title`, `.head.ref`, `.base.ref` and `.head.sha`). Chain each PR whose `baseRefName` is another open PR's `headRefName`. A chain is a stack, and its top is the PR whose head branch is no other PR's base. A lone open PR is a one-layer stack.
+ 2. Pick the stack the `stack` argument names: a PR in the chain, its URL, or a stack number. Without an argument, take the only chain. With several chains, take the one the work item names by PR or branch, or ask once, listing each chain by its top PR's title.
+-3. The top PR is the predecessor. Run `git fetch origin <top headRefName>`. The base ref is `refs/remotes/origin/<top headRefName>`, and its SHA must equal the PR's `headRefOid`. When they differ, or the top PR is not open, stop as blocked.
++3. The top PR is the predecessor. A build started with `--spec` is the exception. Its predecessor is the PR `stack` names, even when other layers already sit on it, because a spec's tickets form a tree, and two tickets blocked by the same ticket both stack on its PR. Run `git fetch origin <predecessor headRefName>`. The base ref is `refs/remotes/origin/<predecessor headRefName>`, and its SHA must equal the predecessor's `headRefOid`. When they differ, or the predecessor is not open, stop as blocked.
+ 
+ **Complete when:** the record holds `predecessor_pr`, `base_ref` and a `base_sha` equal to the predecessor's `headRefOid`.
+ 
