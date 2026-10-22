@@ -1,11 +1,11 @@
 ---
-name: worktree-cleanup
-description: Use when the user invokes /worktree-cleanup or asks to reclaim space from Git worktrees or iOS simulators. Audits everything read-only, sorts it into buckets the user approves by name, and keeps anything that could lose work on a hold list. Branch deletion is a separate approval.
+name: cleanup
+description: Use when the user invokes /cleanup or /worktree-cleanup, says the disk is low or full, asks to clean up or free space on the machine, or asks to reclaim space from Git worktrees or iOS simulators. Audits everything read-only, sorts it into buckets the user approves by name, and keeps anything that could lose work on a hold list. Branch deletion is a separate approval.
 ---
 
-# Worktree cleanup
+# Cleanup
 
-The user approves buckets, not single worktrees, for example "remove merged and pr-merged". Anything that could lose work goes on a hold list, and a held item is removed only when the user names it.
+The user approves buckets, not single items, for example "remove merged and pr-merged". Anything that could lose work goes on a hold list, and a held item is removed only when the user names it.
 
 ## 1. Audit worktrees
 

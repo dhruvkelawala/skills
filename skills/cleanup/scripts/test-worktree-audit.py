@@ -2,7 +2,7 @@
 """Exercise the audit CLI and prove it leaves fixture content unchanged.
 
 Fixtures are intentionally retained: this check performs no deletions.
-Run: python3 skills/worktree-cleanup/scripts/test-worktree-audit.py
+Run: python3 skills/cleanup/scripts/test-worktree-audit.py
 """
 import hashlib
 import os
