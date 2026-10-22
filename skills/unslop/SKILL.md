@@ -1,6 +1,6 @@
 ---
 name: unslop
-description: Cut AI tells from prose a person will read. Use as the last edit on writing that goes into a file or gets posted, such as docs, PR or issue text, review comments and messages, and when the user asks to cut AI tells. Not for chat replies, code or commit messages.
+description: Cut AI tells from prose a person will read. Use when you write or edit docs, READMEs, PR or issue text, review comments or messages to people, and apply it before you save or post them. Also use when the user asks to cut AI tells. Not for chat replies, code or commit messages.
 ---
 
 # Unslop

@@ -36,7 +36,7 @@ A part is a skill that other skills run as one of their steps. They load it from
 
 | Part | Description |
 |-------|-------------|
-| [unslop](skills/unslop/SKILL.md) | Cut AI tells from prose. eli25, how, explain-diff and why run it last on what they write, and the agent runs it on its own as the last edit to docs, PR and issue text, and messages, but not chat replies. |
+| [unslop](skills/unslop/SKILL.md) | Cut AI tells from prose. eli25, how, explain-diff and why run it last on what they write, and the agent runs it on its own when it writes docs, PR and issue text, or messages to people, but not on chat replies. |
 
 ## Installation
 
