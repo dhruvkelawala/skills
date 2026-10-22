@@ -12,7 +12,7 @@ Pick the mode from what the question is about:
 
 A bare `/why` asks about your last action if you just acted, and otherwise about the code discussed last. Say which in your first line.
 
-In every mode, run `../unslop/SKILL.md` on your answer last, and leave quotes and code as they are.
+In every mode, run `../unslop/SKILL.md` on your answer last. Keep the mode's answer shape and sentence limit, and leave quoted text and code as they are.
 
 ## Why did you do that
 

@@ -42,7 +42,7 @@ Add a section only when the change has something for it:
 
 End with two or three labelled zoom-in choices, and ask which part is still unclear.
 
-Run `../unslop/SKILL.md` on the explanation last, and leave quotes and code as they are.
+Run `../unslop/SKILL.md` on the explanation last. Keep the order and length above, and leave quoted text and code as they are.
 
 ## Style
 
