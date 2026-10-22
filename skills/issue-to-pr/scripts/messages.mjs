@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // The two messages a build posts in its thread, the brief and the recap, checked for shape and kept
-// in the run record.
+// in the run record, and the page that shows them for a taste check.
 //
-//   messages.mjs brief <record>    check the brief on stdin, then append it to the run record
-//   messages.mjs recap <record>    the same for a recap
+//   messages.mjs brief <record>     check the brief on stdin, then append it to the run record
+//   messages.mjs recap <record>     the same for a recap
+//   messages.mjs page <record>...   print the taste-check page: each record's latest brief and recap
 //
 // A message with problems is not saved: each problem prints on its own line and the exit code is 1.
 // The brief's plan is checked against the record's `Acceptance criteria:` list. Sign-offs must not
@@ -13,7 +14,11 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, realpathSync } f
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const USAGE = "usage: messages.mjs brief <record> < brief.txt\n       messages.mjs recap <record> < recap.txt";
+const USAGE = [
+  "usage: messages.mjs brief <record> < brief.txt",
+  "       messages.mjs recap <record> < recap.txt",
+  "       messages.mjs page <record>... > taste.html",
+].join("\n");
 const KINDS = { brief: "Brief", recap: "Recap" };
 const RECAP_LINES = ["Built:", "Review:", "Evidence:", "Couldn't check:", "Next:"];
 const RECENT_SIGN_OFFS = 10;
@@ -149,16 +154,60 @@ function recentSignOffs(record) {
 const normalize = (text) => text.toLowerCase().replace(/\s+/g, " ").replace(/[\s.!?…]+$/u, "").trim();
 const sameSignOff = (a, b) => normalize(a) === normalize(b);
 
-function main(argv) {
-  const [kind, record, ...rest] = argv;
-  if (!KINDS[kind] || !record || rest.length) {
-    console.error(USAGE);
-    return 2;
-  }
-  if (!existsSync(record)) {
-    console.error(`messages: no run record at ${record}`);
-    return 2;
-  }
+function page(records) {
+  const runs = records.map((record, i) => {
+    const text = readFileSync(record, "utf8");
+    const header = (key) => text.match(new RegExp(`^${key}: (.+)$`, "m"))?.[1] ?? "";
+    const latest = (kind) => savedMessages(text).filter((saved) => saved.kind === kind).at(-1)?.message;
+    const issue = header("issue");
+    const meta = [header("mode").match(/^(?:stacked|standalone)/)?.[0], header("lane").match(/^(?:light|full)/)?.[0]?.concat(" lane")];
+    return `<section class="run">
+  <h2>${i + 1}. ${issueLink(issue)}<span class="meta">${meta.filter(Boolean).map((part) => `, ${part}`).join("")}</span></h2>
+  ${bubble("Brief", latest("Brief"))}
+  ${bubble("Recap", latest("Recap"))}
+</section>`;
+  });
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  .runs { display: grid; gap: 24px; font-family: var(--font-sans); color: var(--foreground); }
+  .intro { margin: 0; color: var(--muted-foreground); font-size: 14px; }
+  .run { display: grid; gap: 10px; }
+  .run h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .meta { color: var(--muted-foreground); font-weight: 400; }
+  .msg { max-width: 36rem; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--card-foreground); }
+  .kind { margin-bottom: 6px; color: var(--muted-foreground); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; }
+  .missing .text { color: var(--muted-foreground); font-style: italic; }
+  a { color: var(--accent); }
+  code { padding: 0 4px; border-radius: 4px; background: var(--code-background); color: var(--code-foreground); font-family: var(--font-mono); font-size: 0.9em; }
+</style></head><body><main class="runs">
+<p class="intro">Taste check: ${runs.length} run${runs.length === 1 ? "" : "s"}. Mark each one good or bad.</p>
+${runs.join("\n")}
+</main></body></html>
+`;
+}
+
+function issueLink(issue) {
+  const number = issue.match(/\/issues\/(\d+)/)?.[1];
+  return number ? `<a href="${escape(issue)}">#${number}</a>` : escape(issue);
+}
+
+function bubble(kind, message) {
+  if (!message) return `<div class="msg missing"><div class="kind">${kind}</div><div class="text">no ${kind.toLowerCase()} yet</div></div>`;
+  return `<div class="msg"><div class="kind">${kind}</div><div class="text">${inline(message)}</div></div>`;
+}
+
+// The thread renders markdown; the page keeps the text as written and makes its links and code live.
+function inline(message) {
+  return escape(message)
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/gm, '$1<a href="$2">$2</a>')
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>");
+}
+
+const escape = (text) => text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
+function save(kind, record) {
   const text = readFileSync(0, "utf8").replace(/\s+$/, "");
   const lines = text.split("\n");
   const problems = [
@@ -167,11 +216,27 @@ function main(argv) {
     ...(lines.some((line) => LOCAL.test(line)) ? ["links must open in T3: no local paths, file:// or localhost"] : []),
   ];
   if (problems.length) {
-    console.error(`${KINDS[kind].toLowerCase()} not saved:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
+    console.error(`${kind} not saved:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
     return 1;
   }
   appendFileSync(record, `\n## ${KINDS[kind]}, ${new Date().toISOString()}\n\n\`\`\`\`text\n${text}\n\`\`\`\`\n`);
-  console.log(`${KINDS[kind].toLowerCase()} saved to ${record}`);
+  console.log(`${kind} saved to ${record}`);
+  return 0;
+}
+
+function main(argv) {
+  const [command, ...records] = argv;
+  if (command === "page" ? !records.length : !KINDS[command] || records.length !== 1) {
+    console.error(USAGE);
+    return 2;
+  }
+  const missing = records.find((path) => !existsSync(path));
+  if (missing) {
+    console.error(`messages: no run record at ${missing}`);
+    return 2;
+  }
+  if (command !== "page") return save(command, records[0]);
+  process.stdout.write(page(records));
   return 0;
 }
 

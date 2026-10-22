@@ -141,3 +141,21 @@ test("a recap leads with the result, has its five lines in order, and links noth
   }
   saved("recap", path, recap());
 });
+
+test("the taste-check page shows each record's latest brief and recap, in the order given", (t) => {
+  const { record, run, saved } = runRecords(t);
+  const [first, second] = [record(1), record(2)];
+  saved("brief", first, brief({ signOff: "🥚 The first draft of the brief" }));
+  saved("brief", first, brief({ building: "Building #1: Show the <score> on screen", signOff: "🐣 The brief that replaced it" }));
+  saved("recap", first, recap({ signOff: "🐥 Hatched and shipped" }));
+  saved("brief", second, brief({ signOff: "🚧 Still building this one" }));
+
+  const page = run(["page", second, first]);
+  assert.equal(page.status, 0, page.stderr);
+  const html = page.stdout;
+  assert.match(html, /^<!doctype html>/i);
+  assert.ok(!html.includes("The first draft of the brief"), "an earlier brief gives way to the latest");
+  const order = ["Still building this one", "no recap yet", "The brief that replaced it", "Hatched and shipped"].map((text) => html.indexOf(text));
+  assert.ok(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])), `each message, in order: ${order}`);
+  assert.ok(html.includes("Show the &lt;score&gt; on screen"), "message text is escaped");
+});

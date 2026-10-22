@@ -73,6 +73,16 @@ node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap fil
 
 The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
+## Taste check
+
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory, write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+
+```bash
+node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html
+```
+
+Check it with `html_preview` at phone width, show it with `html_render`, and ask the user to mark each run good or bad.
+
 ## 1. Pin the contract
 
 1. Resolve the repository and remote, run `git fetch <remote>`, and pin the base. Standalone: `refs/remotes/<remote>/<default-branch>` and its SHA. Stacked: the top PR's head, found as [stacks](references/stacks.md) describes.
