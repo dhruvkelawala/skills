@@ -1,0 +1,18 @@
+== before (4a345b2) ==
+
+-- criterion 2: the same three threads
+$ pr-gate.mjs ... --json | jq '.threads[] | {author, bot}'
+"blocked"
+{"author":"teammate","bot":null}
+{"author":"chatgpt-codex-connector","bot":null}
+{"author":"coderabbitai","bot":null}
+
+-- criterion 1: the teammate's thread after its fix is pushed (outdated)
+$ pr-gate.mjs ... --json
+{"state":"ready","reasons":[],"threads":[]}
+exit 0
+$ pr-gate.mjs ... --held-file held.json --json
+error: unknown argument: --held-file
+exit 2
+
+-- criterion 3: held.mjs does not exist at the base
