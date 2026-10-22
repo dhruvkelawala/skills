@@ -1,0 +1,71 @@
+# issue 51: unslop as a part. Checks run from the repo root.
+# <links> is a temp folder of per-skill links into this checkout, the layout the agent skill folders use.
+
+## Before, at base 4a345b2
+$ git ls-tree --name-only 4a345b2 skills/unslop/ | grep . || echo "no skills/unslop at base"
+no skills/unslop at base
+
+$ git grep -c "unslop" 4a345b2 -- skills README.md || echo "no skill or README mentions unslop at base"
+no skill or README mentions unslop at base
+
+## After, at head 4ecb7b7
+### AC1: skills/unslop/SKILL.md has the installed text and no personal names or paths
+$ cmp skills/unslop/SKILL.md ~/.agents/skills/unslop/SKILL.md && echo "byte-identical to the installed copy"
+byte-identical to the installed copy
+
+$ grep -nE "/Users/|/home/|~/|\\\$HOME" skills/unslop/SKILL.md || echo "no home paths"
+no home paths
+
+$ grep -niF -e "$(git config user.name | cut -d" " -f1)" -e "$(git config user.name | cut -d" " -f2)" skills/unslop/SKILL.md || echo "no owner names"
+no owner names
+
+$ ls skills/unslop && head -3 skills/unslop/LICENSE
+LICENSE
+SKILL.md
+MIT License
+
+Copyright (c) 2025 Siqi Chen
+
+### AC2: eli25, how, explain-diff and why run ../unslop/SKILL.md on their prose last
+$ grep -n "\.\./unslop/SKILL\.md" skills/eli25/SKILL.md skills/how/SKILL.md skills/explain-diff/SKILL.md skills/why/SKILL.md
+skills/eli25/SKILL.md:63:4. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
+skills/how/SKILL.md:61:Run `../unslop/SKILL.md` on the answer last. Keep the shape and length above, and leave quoted text and code as they are.
+skills/explain-diff/SKILL.md:45:Run `../unslop/SKILL.md` on the explanation last. Keep the order and length above, and leave quoted text and code as they are.
+skills/why/SKILL.md:15:In every mode, run `../unslop/SKILL.md` on your answer last. Keep the mode's answer shape and sentence limit, and leave quoted text and code as they are.
+
+$ for s in eli25 how explain-diff why; do test -f skills/$s/../unslop/SKILL.md && echo "$s: resolves in the checkout"; test -f <links>/skills/$s/../unslop/SKILL.md && echo "$s: resolves through <links> (physical)"; test -f "$(python3 -c "import os,sys;print(os.path.normpath(sys.argv[1]))" <links>/skills/$s/../unslop/SKILL.md)" && echo "$s: resolves through <links> (lexical)"; done
+eli25: resolves in the checkout
+eli25: resolves through <links> (physical)
+eli25: resolves through <links> (lexical)
+how: resolves in the checkout
+how: resolves through <links> (physical)
+how: resolves through <links> (lexical)
+explain-diff: resolves in the checkout
+explain-diff: resolves through <links> (physical)
+explain-diff: resolves through <links> (lexical)
+why: resolves in the checkout
+why: resolves through <links> (physical)
+why: resolves through <links> (lexical)
+
+$ sed -n "/^## 3\./,/^\*\*Done when/p" skills/eli25/SKILL.md | grep -nE "^[0-9]+\. " | cut -c1-90
+3:1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, d
+4:2. Start from `research-explainer/templates/explainer-template-arcade.html` in the sibli
+5:3. Give the page three theme states: system by default, then light, then dark.
+10:4. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word bu
+11:5. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>
+12:6. Look at the light and dark screenshots at 1280 pixels.
+
+### AC3: the README lists unslop as a part
+$ sed -n "/^## Parts/,/^## Installation/p" README.md | sed "\$d"
+## Parts
+
+A part is a skill that other skills run as one of their steps. They load it from its sibling folder, such as `../unslop/SKILL.md`, so the path works wherever the repo's skills are linked.
+
+| Part | Description |
+|-------|-------------|
+| [unslop](skills/unslop/SKILL.md) | Cut AI tells from prose. eli25, how, explain-diff and why run it last on what they write. |
+
+
+$ grep -o "\`unslop\` adapts.*directory\." README.md
+`unslop` adapts Siqi Chen's `humanizer`, MIT licensed, at `blader/humanizer@d8085c7`, with the license in its directory.
+

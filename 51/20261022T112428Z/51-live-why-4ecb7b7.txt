@@ -1,0 +1,24 @@
+# issue 51: a live headless agent run of the why skill at head 4ecb7b7
+# <links> is a temp folder of per-skill links into this checkout, the layout the agent skill folders use.
+# Skills and slash commands were off (--disable-slash-commands), so the agent saw only the files it read.
+#
+# $ claude -p "Answer this question by following the skill file at <links>/skills/why/SKILL.md exactly. ...
+#   Question: why does skills/eli25/SKILL.md run unslop in step 3 instead of at the end of step 2?" \
+#   --model sonnet --disable-slash-commands --no-session-persistence --add-dir <links> \
+#   --allowedTools Read Grep Glob "Bash(git log:*)" "Bash(git blame:*)" "Bash(git show:*)" --output-format stream-json --verbose
+
+model: claude-sonnet-5-5
+
+Tool calls, in order:
+1. Read: <links>/skills/why/SKILL.md
+2. Bash: grep -n -i 'unslop' skills/eli25/SKILL.md; git log --format='%h %s%n%b' -n 3 -- skills/eli25/SKILL.md; git show 4ecb7b7 --stat --format='%H%n%B'; git show 4ecb7b7 -- skills/eli25/SKILL.md; git show 22e24cb -- skills/eli25/SKILL.md
+3. Read: <links>/skills/unslop/SKILL.md
+
+Final answer:
+
+Step 2 is skipped when an existing page is updated, because an update starts at step 3.1, so an unslop line there would never run for updates. Step 3 runs for new pages and updates alike, and unslop sits just before the render check (step 3.4, with the check at 3.5). The render check rejects dashes and curly quotes in the prose, so unslop has to run before it, or the check could fail on text unslop would have fixed.
+
+Evidence: commit 4ecb7b7, "An update to a page starts at step 3.1 and skipped the unslop line in step 2. Running it just before the render check covers new pages and updates alike." The commit also moved the line out of step 2, where 22e24cb had first put it. The pull request doesn't exist yet, so I used git only. `skills/eli25/SKILL.md:63` has the current line.
+Confidence: Direct
+
+turns: 4
