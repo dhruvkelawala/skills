@@ -1,12 +1,23 @@
 ---
 name: unslop
-description: Cut AI tells from any writing. Must always apply.
-disable-model-invocation: true
+description: Cut AI tells from prose a person will read. Use as the last edit on writing that goes into a file or gets posted, such as docs, PR or issue text, review comments and messages, and when the user asks to cut AI tells. Not for chat replies, code or commit messages.
 ---
 
 # Unslop
 
 Edit text to remove AI patterns.
+
+## What it runs on and what it leaves alone
+
+On your own, run unslop only on writing that goes into a file or gets posted for people to read. Skip chat replies, code, commit messages and logs. A skill that tells you to run unslop, such as how or why, runs it on its chat answer too.
+
+While editing, leave these as they are:
+
+- Quoted text, code, identifiers, paths, commands and error strings.
+- A shape the calling skill or the user requires, such as fixed headings, `Label:` lines, and word or sentence limits. Rewrite inside that shape.
+- Text the user wrote, unless they asked you to edit it.
+
+A calling skill's own instructions win where they differ from this file.
 
 ## Process
 
