@@ -114,8 +114,10 @@ function next(path) {
 
   const lines = tickets.map(({ number: n, blockedBy }) => {
     const state = stateOf(n);
-    if (state) return { state, text: `#${n} ${state}${builds.get(n)?.pr ? `: ${builds.get(n).pr}` : ""}` };
+    if (state) return { state, text: ticketLine(n, state, builds.get(n)) };
     const open = blockedBy.filter((b) => stateOf(b) !== "merged");
+    const blocked = open.find((b) => stateOf(b) === "blocked");
+    if (blocked) return { state: "waits", text: `#${n} waits for #${blocked}, which is blocked` };
     const unpublished = open.find((b) => !builds.get(b)?.pr);
     if (unpublished) return { state: "waits", text: `#${n} waits for #${unpublished}, which has no PR yet` };
     if (!open.length) return { state: "starts", text: `#${n} starts on ${base.branch}${base.pr ? `, stacked on ${base.pr}` : ""}` };
@@ -127,6 +129,11 @@ function next(path) {
   return [...lines.map(({ text }) => text), running ? "running" : "done", ""].join("\n");
 }
 
+function ticketLine(n, state, build) {
+  const reason = state === "blocked" && build?.reason ? ` (${build.reason})` : "";
+  return `#${n} ${state}${reason}${build?.pr ? `: ${build.pr}` : ""}`;
+}
+
 // Every run record in the folder, by issue number: the build's stage word, PR, branch and predecessor.
 function buildsBeside(path) {
   const dir = dirname(path);
@@ -136,8 +143,10 @@ function buildsBeside(path) {
     const issue = field(text, "issue")?.match(/\/issues\/(\d+)$/)?.[1];
     if (!issue) continue;
     const link = (key) => (/^https?:\/\//.test(field(text, key) ?? "") ? field(text, key) : null);
+    const stage = text.match(/^stage: ([^\s:]+):? *(.*)$/m);
     builds.set(Number(issue), {
-      stage: field(text, "stage")?.replace(/:$/, ""),
+      stage: stage?.[1],
+      reason: stage?.[2],
       pr: link("pr"),
       branch: field(text, "branch"),
       predecessor: link("predecessor_pr"),

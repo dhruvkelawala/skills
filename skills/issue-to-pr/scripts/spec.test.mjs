@@ -144,3 +144,30 @@ test("a ticket starts on the default branch once its blocker merges, and with tw
     "running",
   ]);
 });
+
+test("a ticket that ends blocked holds back only the tickets stacked above it, and the spec is done once the rest wait on you", (t) => {
+  const { ok, spec, pin, ticket, next } = specRun(t, {
+    10: { title: "Scores", tickets: [1, 2, 3, 4, 5] },
+    1: { title: "Show the score" },
+    2: { title: "Store the score" },
+    3: { title: "Share the score", blockedBy: [1] },
+    4: { title: "Sync the score", blockedBy: [2] },
+    5: { title: "Score history", blockedBy: [3] },
+  });
+  pin();
+  ticket(1, { stage: "blocked: repair budget", pr: 21 });
+  ticket(2, { stage: "published", pr: 22 });
+  assert.deepEqual(next(), [
+    "#1 blocked (repair budget): https://github.com/o/r/pull/21",
+    "#2 published: https://github.com/o/r/pull/22",
+    "#3 waits for #1, which is blocked",
+    "#4 starts on feat/2-work, stacked on https://github.com/o/r/pull/22",
+    "#5 waits for #3, which has no PR yet",
+    "running",
+  ]);
+
+  ok(["started", spec, "4", "thread-4"]);
+  ticket(2, { stage: "ready", pr: 22 });
+  ticket(4, { stage: "awaiting-human", pr: 24, predecessor: 22 });
+  assert.deepEqual(next().slice(-3), ["#4 awaiting-human: https://github.com/o/r/pull/24", "#5 waits for #3, which has no PR yet", "done"]);
+});
