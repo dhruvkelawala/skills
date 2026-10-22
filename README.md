@@ -8,6 +8,7 @@
 | [bro](skills/bro/SKILL.md) | Restate the last message in plain human language, with no jargon. |
 | [cleanup](skills/cleanup/SKILL.md) | Free disk space: a read-only audit of Git worktrees, iOS simulators, build artifacts and package-manager caches, then removal by approved bucket, with a hold list for anything that could lose work. `audit` stops after the proposal and can run as a Saturday scheduled task. (pstack) |
 | [code-walkthrough](skills/code-walkthrough/SKILL.md) | Paced, file-by-file review of an unfamiliar or agent-written codebase, fixing as you go with a living checklist. |
+| [day](skills/day/SKILL.md) | The goodnight check: every thread waiting on you or gone quiet, continue or stop for each run, and a strain line when disk or memory runs low. Stops only what you confirm, and records it for the morning. |
 | [eli25](skills/eli25/SKILL.md) | Explain a PR, stack, plan, spike, system or incident as a short visual page shaped by its topic, optionally hosted on Vercel. |
 | [evidence](skills/evidence/SKILL.md) | Write a repo's EVIDENCE.md: how to launch each surface, drive a feature, capture screenshots, recordings, or transcripts, and publish them so PRs can prove changes work. |
 | [explain-diff](skills/explain-diff/SKILL.md) | Explain a diff, commit, branch, or PR in plain words: the problem, the key idea, and one real input traced through the changed code. |
