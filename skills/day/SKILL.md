@@ -21,7 +21,7 @@ The user often reads the list on a phone. Put the answer first, and link each th
    - **Gone quiet** threads stopped without finishing and without asking. The status is `failed` or `interrupted`, or the last message ends partway through the work.
    - **Done** threads finished with nothing asked of the user, such as an answer given or a PR merged.
 
-   A snoozed thread is listed only as a run, since the user put its questions off. A turn that has run for over an hour with no update has also gone quiet. Keep it under runs, and say so in its reason. A thread that watches a PR is idle between PR events by design, so judge it by its PR's state.
+   A snoozed thread is listed only as a run, since the user put its questions off. A turn that has run for over an hour with no update has also gone quiet. Keep it under runs, and say so in its reason. A thread that watches an open PR is idle between PR events by design, and stays a run.
 
 **Complete when:** every active thread on the server, apart from this one, is in exactly one group.
 
@@ -85,14 +85,15 @@ Stop each run marked stop, as [Stop a run](#stop-a-run) says, and write the [nig
 
 ## Stop a run
 
-Stop each thread marked stop in four moves, in this order:
+Stop each thread marked stop in these moves, in this order:
 
-1. **Unwatch.** Call `unwatch_pull_request` with the `threadId` and the `url` of each PR in its `pullRequests`, so no PR event wakes the thread again. The PR stays linked to the thread.
-2. **Interrupt.** Read the thread again with `t3_thread_read`, since the reply can come long after the list and a new run may have started. When it has an `activeRunId`, call `t3_thread_interrupt` with the `threadId`, that `runId`, `reason: "Stopped by the goodnight check. Say \"go on\" to restart."` and `clientRequestId: "day-stop-<runId>"`. The pinned run and the request ID make a retry interrupt that run once.
+1. **Read it again.** Call `t3_thread_read`, since the reply can come long after the list. Its `pullRequests` and `activeRunId` may have changed, and the next moves use this read.
+2. **Unwatch.** Call `unwatch_pull_request` with the `threadId` and the `url` of each PR in its `pullRequests`, so no PR event wakes the thread again. The PR stays linked to the thread.
+3. **Interrupt.** When the thread has an `activeRunId`, call `t3_thread_interrupt` with the `threadId`, that `runId`, `reason: "Stopped by the goodnight check. Say \"go on\" to restart."` and `clientRequestId: "day-stop-<runId>"`. With the run and the request ID fixed, a retried call interrupts that run once.
 
-   Then call `t3_thread_wait` with the same `runId` and a 60 second timeout, and check that the run ended as `interrupted`, `completed`, `failed` or `cancelled`. When the wait times out and one more read shows the run still going, mark the thread "still stopping" in the record and in the reply.
-3. **Save where it stopped.** Read its checkout with `git -C <worktreePath> rev-parse --short HEAD` and `git -C <worktreePath> status`, keeping the head, the count of uncommitted files, and any rebase, merge or cherry-pick that `git status` names as in progress. The worktree keeps the files as they are, and the thread picks them up when it restarts. A thread with no `worktreePath` has no checkout to read. Take where it stopped from its last message, or from its run record's `stage`, in one line.
-4. **Record** it in the night record.
+   Then call `t3_thread_wait` with the same `runId` and a 60 second timeout, and check that the run ended as `interrupted`, `completed`, `failed` or `cancelled`. When the wait times out and one more read shows that run still going, mark the thread "still stopping" in the record and in the reply.
+4. **Save where it stopped.** Read its checkout, which is its `worktreePath`, or its project's `workspaceRoot` from `t3_project_list` when it has none. Run `git -C <checkout> rev-parse --short HEAD` and `git -C <checkout> status`, keeping the head, the count of uncommitted files, and any rebase, merge or cherry-pick that `git status` names as in progress. When the checkout is not a git repository, its record line says "no git checkout" in place of the branch and head. The checkout keeps the files as they are, and the thread picks them up when it restarts. Take where it stopped from its last message, or from its run record's `stage`, in one line.
+5. **Record** it in the night record.
 
 **Complete when:** each stopped thread's run has ended or is recorded as still stopping, each of its PRs got an unwatch call, and the night record has its line.
 
