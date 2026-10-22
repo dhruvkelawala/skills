@@ -1,0 +1,7 @@
+$ stage 1's branch and worktree steps in skills/issue-to-pr/SKILL.md
+3:1. Resolve the repository and remote, run `git fetch <remote>`, and pin the base. Standalone: `refs/remotes/<remote>/<default-branch>` and its SHA. Stacked: the top PR's head, found as [stacks](references/stacks.md) describes.
+5:3. Read `EVIDENCE.md` from the checkout. When the base predates it, read `git show origin/<default-branch>:EVIDENCE.md`. When neither exists, run `/evidence plan` for the touched surface, and say in the report that the repo should adopt `EVIDENCE.md`.
+10:8. Create the branch `<type>/<issue>-<short-description>` from `base_sha`, with a conventional-commit type. For a layer, [stacks](references/stacks.md) says when to use `gh stack add` instead.
+12:**Complete when:** the run record holds the work item, mode, base ref and SHA, branch and contract, and the branch is checked out at `base_sha`.
+$ resume step 1 in skills/issue-to-pr/references/resume.md
+5:1. Work on the recorded branch. When another worktree has it checked out (`git worktree list`), continue in that worktree. Otherwise run `git switch <branch>` here. Then `git status` must be clean and `HEAD` must equal the recorded head or the PR's `headRefOid`. When the branch cannot be selected this way, record `blocked: branch not selectable` and stop, before any repair.

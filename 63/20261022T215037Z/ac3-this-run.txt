@@ -1,0 +1,16 @@
+This build ran under the new stage 1 step 3. Its thread was launched by
+t3_thread_launch for issue 63, so t3_worktree_status found it already in
+the build's worktree (case 1), and the run continued there. It made no
+handoff or launch, and it wrote nothing in the project's main checkout.
+
+$ t3_worktree_status   (local paths replaced with placeholders)
+{"attached":true,"worktreePath":"<T3 worktrees>/skills/feat-63-issue-to-pr-t3-threads",
+ "branch":"feat/63-issue-to-pr-t3-threads","projectWorkspaceRoot":"<main checkout>",
+ "defaultStartFromOrigin":true}
+
+case 1 test: the branch matches "<type>/<issue>-" for issue 63
+$ echo feat/63-issue-to-pr-t3-threads | grep -E '^[a-z]+/63-'
+feat/63-issue-to-pr-t3-threads
+
+step 9: `git log --oneline refs/remotes/origin/main..HEAD` printed nothing and
+HEAD equalled base_sha f162b42, so no reset was needed.

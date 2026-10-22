@@ -1,0 +1,13 @@
+$ ls skills/issue-to-pr/references
+pr-body.md
+resume.md
+run-record.md
+stacks.md
+watcher-prompt.md
+$ grep -rniE 'watcher-hosts|implement-cheap|sumocode|pi worker|in claude code|in codex|native subagent|watcher helper|watcher prompt|watcher-prompt|time-boxed' skills/issue-to-pr
+skills/issue-to-pr/references/watcher-prompt.md:1:# Watcher prompt
+skills/issue-to-pr/agents/openai.yaml:4:  default_prompt: "Use $issue-to-pr to take this issue through a test-first build, review, captured evidence, a PR and a time-boxed watch."
+skills/issue-to-pr/SKILL.md:3:description: Use when the user invokes /issue-to-pr with a GitHub issue or Linear ticket, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a time-boxed watch, standalone or as a stacked layer.
+skills/issue-to-pr/SKILL.md:27:`/code-review` runs its two axes as helper agents, and stage 6 runs a watcher helper. If this host cannot start helper agents, as in a subagent with no tool to start one, stop after stage 2. Record `implemented`, return the build report and the run record path, and let the parent session run `/issue-to-pr <n>`, which continues at stage 3. A review the implementing agent runs on its own code is a self-review, and the record and the PR call it that.
+skills/issue-to-pr/SKILL.md:109:## 6. Watch, time-boxed
+skills/issue-to-pr/SKILL.md:111:1. Hand the watch to a native subagent on the thread's model. Start it without a worktree of its own, because its pushes must land on the branch the run record names. With no subagent available, run the watcher loop yourself and say so. Record `watcher: subagent` or `watcher: this session`. Its whole prompt is [the watcher prompt](references/watcher-prompt.md), with every slot filled and a 30 minute time box.

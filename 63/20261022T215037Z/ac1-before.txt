@@ -1,0 +1,11 @@
+$ which stage and step of skills/issue-to-pr/SKILL.md names each T3 tool
+t3_thread_launch:
+    (not named)
+t3_worktree_handoff:
+    (not named)
+delegate_task:
+    (not named)
+watch_pull_request:
+    (not named)
+link_pull_request:
+    (not named)

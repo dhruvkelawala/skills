@@ -1,0 +1,7 @@
+$ ls skills/issue-to-pr/references
+pr-body.md
+resume.md
+run-record.md
+stacks.md
+$ grep -rniE 'watcher-hosts|implement-cheap|sumocode|pi worker|in claude code|in codex|native subagent|watcher helper|watcher prompt|watcher-prompt|time-boxed' skills/issue-to-pr
+(no matches)
