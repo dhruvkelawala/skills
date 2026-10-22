@@ -1,0 +1,7 @@
+Rebased onto origin/main 7766704 (was f162b42). Pure rebase: README conflict on adjacent rows only (codebase-dive, day).
+$ diff <(git diff f162b42...dd1eaf4 -- skills) <(git diff 7766704...8bcca3f -- skills) && echo identical
+identical
+$ CI=1 node --test $(git ls-files '*.test.mjs')
+ℹ tests 162
+ℹ pass 162
+ℹ fail 0

@@ -1,0 +1,8 @@
+$ git rev-parse --short HEAD
+8bcca3f
+$ git ls-files skills/eli25
+skills/eli25/SKILL.md
+skills/eli25/agents/openai.yaml
+skills/eli25/references/deploy.md
+$ grep -rniE 'render-check|theme\.html|arcade|research-explainer|tailscale|tailnet' skills/eli25
+exit=1
