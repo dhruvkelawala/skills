@@ -226,6 +226,12 @@ test("pending: a person's thread whose reply is held waits on post instead of bl
   assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
 });
 
+test("pending: after a post that sent the reply but not the resolve, the thread still waits on post", () => {
+  const thread = personThread({ lastCommentId: 301, lastAuthor: "dhruv" });
+  const result = evaluateGate(baseSnapshot({ reviewThreads: [thread] }), { held: [{ kind: "resolve", thread: "PRRT_p", to: "teammate" }] });
+  assert.deepEqual(result, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
+});
+
 test("blocked: a held reply stops covering the thread once the person comments again", () => {
   const result = evaluateGate(baseSnapshot({ reviewThreads: [personThread({ lastCommentId: 202 })] }), { held: [heldReply] });
   assert.equal(result.state, "blocked");

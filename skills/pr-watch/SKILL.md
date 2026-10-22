@@ -5,7 +5,7 @@ description: Use when the user invokes /pr-watch, asks to wait for a PR's checks
 
 # PR watch
 
-Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N]`. With no PR argument, use the current branch's PR from `gh pr view` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`). The default repair budget is 10.
+Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-comment "<text>"] [--ignore-check <name>]... [--max-repairs N] [--run-record <path>]`. With no PR argument, use the current branch's PR from `gh pr view` (REST: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all"`). The default repair budget is 10.
 
 The loop observes the PR with the gate script, repairs what it reports, republishes, and observes again. The gate only reads GitHub, so every push and comment comes from you.
 
@@ -48,6 +48,18 @@ node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --rerequest <login>
 ```
 
 Holding again for the same thread, review or person replaces the earlier draft. Show the user each draft when you hold it. With `--held-file "$HELD"`, the gate stops counting a thread or written review as a repair once its reply is held, and waits at pending with `<n> item(s) to people held until "post"`. A newer comment in a held thread brings the thread back, so read it and hold a new draft.
+
+## "post"
+
+When the user says "post", send everything held for this PR:
+
+```bash
+node "$SKILL_DIR/scripts/held.mjs" post --file "$HELD" --repo "$OWNER/$REPO" --pr "$PR_NUMBER" --record "$RECORD"
+```
+
+It sends the items in the order they were held: each reply and then the resolve of its thread, each comment, and each re-request. It removes an item from the held file once GitHub accepts it, and appends one line per send, with its link, to the run record. On a failure it stops with exit `2`, names the item, and keeps it and the rest held. A resolve needs the GraphQL quota, so after `API rate limit exceeded` run `post` again once the quota resets. A second run never sends anything twice. Then go back to step 1 of the watch loop.
+
+`$RECORD` is the `--run-record` the caller passed, such as `/issue-to-pr`'s record, and otherwise `~/.agent/pr-watch/<owner>/<repo>/<pr>.md`.
 
 ## What the gate counts
 

@@ -219,8 +219,10 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
 }
 
 // A held reply covers its thread until someone comments after the draft, which the reply has not seen.
+// A resolve left by a post that sent the reply covers it until the resolve is sent.
 function heldThread(held, thread) {
-  return held.some((item) => item.kind === "reply" && item.thread === thread.id && item.seen === thread.lastCommentId);
+  return held.some((item) => item.thread === thread.id
+    && (item.kind === "resolve" || (item.kind === "reply" && item.seen === thread.lastCommentId)));
 }
 
 function isBot(login, type) {

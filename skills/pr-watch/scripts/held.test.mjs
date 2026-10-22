@@ -50,7 +50,10 @@ process.stdout.write(JSON.stringify(answer));
     if (text !== undefined) writeFileSync(path, text);
     return path;
   };
-  return { run, calls, file };
+  const answer = (key, value) => {
+    writeFileSync(join(dir, "answers.json"), JSON.stringify({ ...answers, [key]: value }));
+  };
+  return { run, calls, file, answer };
 }
 
 function openPr(threads) {
@@ -99,4 +102,84 @@ test("a person's thread: hold keeps the drafted reply off GitHub, and the gate t
   const after = gh.run(GATE, [...GATE_ARGS, "--held-file", held]);
   assert.equal(after.status, 1, after.stderr);
   assert.deepEqual(after.json, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
+});
+
+// --- post ---------------------------------------------------------------------
+
+const REPLY_URL = "https://github.com/o/r/pull/7#discussion_r301";
+const COMMENT_URL = "https://github.com/o/r/pull/7#issuecomment-401";
+const SENDS = {
+  "POST repos/o/r/pulls/7/comments/201/replies": { id: 301, html_url: REPLY_URL },
+  mutation: { data: { resolveReviewThread: { thread: { isResolved: true } } } },
+  "POST repos/o/r/issues/7/comments": { id: 401, html_url: COMMENT_URL },
+  "POST repos/o/r/pulls/7/requested_reviewers": { number: 7 },
+};
+
+function holdEach(gh, held) {
+  const holds = [
+    ["--thread", "PRRT_p", "--reply-to", "201", "--seen", "201", "--to", "teammate", "--body-file", gh.file("reply.md", "Renamed to joinAll in 1a2b3c4.")],
+    ["--review", "PRR_h", "--to", "reviewer", "--body-file", gh.file("answer.md", "1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed.")],
+    ["--rerequest", "reviewer"],
+  ];
+  for (const flags of holds) {
+    const hold = gh.run(HELD, ["hold", "--file", held, ...flags]);
+    assert.equal(hold.status, 0, hold.stderr);
+  }
+}
+
+// What a call sends: its method, endpoint, and the -f fields after it, with the GraphQL query cut to its first word.
+function sent(args) {
+  const method = args.includes("-X") ? args[args.indexOf("-X") + 1] : "GET";
+  const endpoint = args.find((a) => a === "graphql" || a.startsWith("repos/"));
+  const fields = args.filter((_, i) => args[i - 1] === "-f").map((f) => (f.startsWith("query=") ? f.split(/[\s(]/)[0] : f));
+  return [method, endpoint, ...fields];
+}
+
+test("post sends every held reply, resolution, comment and re-request in order, and the run record lists them", (t) => {
+  const gh = stubGh(t, SENDS);
+  const held = gh.file("held.json");
+  const record = gh.file("run-record.md", "stage: watching\n");
+  holdEach(gh, held);
+
+  const post = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  assert.equal(post.status, 0, post.stderr);
+  assert.deepEqual(gh.calls().map(sent), [
+    ["POST", "repos/o/r/pulls/7/comments/201/replies", "body=Renamed to joinAll in 1a2b3c4."],
+    ["POST", "graphql", "query=mutation", "id=PRRT_p"],
+    ["POST", "repos/o/r/issues/7/comments", "body=1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed."],
+    ["POST", "repos/o/r/pulls/7/requested_reviewers", "reviewers[]=reviewer"],
+  ]);
+  const lines = readFileSync(record, "utf8").split("\n");
+  assert.equal(lines[0], "stage: watching", "post appends and keeps what the record held");
+  assert.ok(lines.some((l) => /^sent on "post" at \d{4}-\d\d-\d\dT/.test(l)), lines.join("\n"));
+  assert.deepEqual(lines.filter((l) => l.startsWith("- ")), [
+    `- reply to teammate: ${REPLY_URL}`,
+    "- resolved teammate's thread PRRT_p",
+    `- comment to reviewer: ${COMMENT_URL}`,
+    "- review re-requested from reviewer",
+  ]);
+
+  const again = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(gh.calls().length, 4, "a second post has nothing left to send");
+});
+
+test("post stops at a failed send, keeps the rest held, and a later post sends only what is left", (t) => {
+  const gh = stubGh(t, { ...SENDS, mutation: { fail: "API rate limit already exceeded for user ID 1." } });
+  const held = gh.file("held.json");
+  const record = gh.file("run-record.md", "");
+  holdEach(gh, held);
+
+  const first = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  assert.equal(first.status, 2);
+  assert.match(first.stderr, /rate limit/);
+  assert.deepEqual(gh.calls().map((c) => sent(c)[1]), ["repos/o/r/pulls/7/comments/201/replies", "graphql"]);
+  assert.deepEqual(readFileSync(record, "utf8").split("\n").filter((l) => l.startsWith("- ")), [`- reply to teammate: ${REPLY_URL}`]);
+
+  gh.answer("mutation", SENDS.mutation);
+  const second = gh.run(HELD, ["post", "--file", held, "--repo", "o/r", "--pr", "7", "--record", record]);
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(gh.calls().slice(2).map((c) => sent(c)[1]), [
+    "graphql", "repos/o/r/issues/7/comments", "repos/o/r/pulls/7/requested_reviewers",
+  ], "the reply already sent is not sent twice");
 });
