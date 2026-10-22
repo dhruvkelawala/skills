@@ -4,7 +4,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -72,29 +72,20 @@ function fakeGhOnPath(dir) {
   return bin;
 }
 
-function agentEnv(bin, ghLog) {
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_GH_LOG: ghLog, GH_TOKEN: "eval-invalid", GITHUB_TOKEN: "eval-invalid", GH_PROMPT_DISABLED: "1" };
+function agentEnv(bin, ghDir) {
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_GH_DIR: ghDir, GH_TOKEN: "eval-invalid", GITHUB_TOKEN: "eval-invalid", GH_PROMPT_DISABLED: "1" };
   // Drop the markers of an enclosing Claude Code session so the run starts as its own session.
   for (const key of Object.keys(env)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_")) delete env[key];
   return env;
 }
 
-function readJsonLines(file) {
-  try {
-    return readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  } catch {
-    return [];
-  }
-}
-
 async function runThread(name) {
   const repo = scratchRepo();
   const out = mkdtempSync(join(tmpdir(), `ticket-eval-${name}-`));
-  const ghLog = join(out, "gh.jsonl");
   const transcript = join(out, "transcript.jsonl");
   const args = ["-p", THREADS[name], "--output-format", "stream-json", "--verbose", "--allowedTools", "Bash,Read,Write,Edit,Glob,Grep,Skill"];
   const { stdout, code } = await new Promise((resolve, reject) => {
-    const child = spawn("claude", args, { cwd: repo, env: agentEnv(fakeGhOnPath(out), ghLog), stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn("claude", args, { cwd: repo, env: agentEnv(fakeGhOnPath(out), out), stdio: ["ignore", "pipe", "inherit"] });
     let text = "";
     child.stdout.on("data", (chunk) => (text += chunk));
     child.on("error", reject);
@@ -110,7 +101,8 @@ async function runThread(name) {
     .filter((c) => c.type === "tool_use" && c.name === "Skill")
     .map((c) => c.input.skill);
   const reply = result.result ?? "";
-  const created = readJsonLines(ghLog).flatMap((e) => (e.created ? [e.created] : []));
+  const issuesFile = join(out, "issues.json");
+  const created = existsSync(issuesFile) ? JSON.parse(readFileSync(issuesFile, "utf8")) : [];
   return { name, skills, reply, created, transcript };
 }
 
