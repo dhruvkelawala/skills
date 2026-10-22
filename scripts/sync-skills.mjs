@@ -28,7 +28,7 @@ try {
 
 function main(argv) {
   const flags = parseFlags(argv);
-  const checkout = realpathSync(fileURLToPath(new URL("..", import.meta.url)));
+  const checkout = realpathSync.native(fileURLToPath(new URL("..", import.meta.url)));
   const home = homedir();
   const show = (path) => (path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path);
   const own = ownSkills(checkout);
@@ -129,13 +129,15 @@ function agentFolders(home, env, checkout, show) {
 }
 
 // Follows links whose target does not exist yet, so on a fresh machine a folder that links to the
-// shared folder is still known as the shared folder.
+// shared folder is still known as the shared folder. A relative link resolves from its real parent,
+// and the native call returns the disk's own capitals, as the OS would see the path.
 function realPath(path, hops = 0) {
-  if (existsSync(path)) return realpathSync(path);
-  const have = inspect(path);
-  if (have.kind === "link" && hops < 40) return realPath(have.target, hops + 1);
+  if (existsSync(path)) return realpathSync.native(path);
   const parent = dirname(path);
-  return parent === path ? path : join(realPath(parent, hops), basename(path));
+  if (parent === path) return path;
+  const at = join(realPath(parent, hops), basename(path));
+  const have = inspect(at);
+  return have.kind === "link" && hops < 40 ? realPath(have.target, hops + 1) : at;
 }
 
 // Each wanted entry is a link, or in the shared folder an outside skill's files. An entry that

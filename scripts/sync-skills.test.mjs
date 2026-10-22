@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const script = fileURLToPath(new URL("./sync-skills.mjs", import.meta.url));
+const caseInsensitiveDisk = existsSync(script.toUpperCase());
 
 // A machine with Claude, Codex and Pi installed, a checkout of this repo that holds `apr` and `pr`,
 // and an upstream repo whose `grilling` changed after the commit the list pins.
@@ -172,13 +173,17 @@ test("a list or folder the script cannot honour stops it before anything changes
   const cases = [
     ["names one of this repo's skills", list((m) => ({ pr: m.entry("pr") })), /pr is one of this repo's skills/],
     ["pins a branch instead of a commit", list((m) => ({ grilling: { ...m.entry("grilling"), ref: "main" } })), /grilling: ref must be a full commit SHA/],
-    ["names this repo's skill in capitals, which a case-insensitive disk takes for the same folder", list((m) => ({ PR: m.entry("pr") })), /"PR" is not a skill name/],
+    ["names this repo's skill in capitals", list((m) => ({ PR: m.entry("pr") })), /"PR" is not a skill name/],
     ["uses a path as a name", list((m) => ({ "../escape": m.entry("grilling") })), /"\.\.\/escape" is not a skill name/],
     ["pins a commit the source does not have", list((m) => ({ grilling: m.entry("grilling", "0".repeat(40)) })), /grilling: cannot fetch 0{40} from file:\/\//],
     ["points at a folder with no SKILL.md", list((m) => ({ grilling: { ...m.entry("grilling"), skillPath: "skills/grilling/scripts/SKILL.md" } })), /grilling: fixture\/upstream@[0-9a-f]{7} has no skills\/grilling\/scripts\/SKILL\.md/],
     ["finds an agent folder that links into this checkout", (m) => symlinkSync(join(m.checkout, "skills"), m.folders.claude), /~\/\.claude\/skills resolves into this checkout/],
+    ["finds an agent folder that is this checkout", (m) => symlinkSync(m.checkout, m.folders.claude), /~\/\.claude\/skills resolves into this checkout/],
     ["finds an agent folder that holds this checkout", (m) => symlinkSync(m.root, m.folders.claude), /~\/\.claude\/skills holds this checkout/],
   ];
+  if (caseInsensitiveDisk) {
+    cases.push(["finds an agent folder that links into this checkout in other capitals", (m) => symlinkSync(join(m.root, "CHECKOUT", "skills"), m.folders.claude), /~\/\.claude\/skills resolves into this checkout/]);
+  }
   for (const [label, arrange, message] of cases) {
     const m = machine(t);
     arrange(m);
@@ -193,7 +198,7 @@ test("a list or folder the script cannot honour stops it before anything changes
 
 test("an agent folder that is the shared folder under another name is synced once", (t) => {
   for (const [label, sharedExists] of [["the shared folder exists", true], ["the shared folder is not made yet", false]]) {
-    const m = machine(t, { agents: [".claude", ".codex", ".pi/agent"] });
+    const m = machine(t);
     if (sharedExists) mkdirSync(m.folders.agents, { recursive: true });
     symlinkSync("../.agents/skills", m.folders.codex);
 
@@ -205,6 +210,22 @@ test("an agent folder that is the shared folder under another name is synced onc
     assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), "grilling at the pin\n", label);
     assert.equal(m.run().stdout, "nothing to change\n", label);
   }
+});
+
+test("an agent folder whose relative link only looks like the shared folder is synced on its own", (t) => {
+  const m = machine(t, { agents: [".claude", ".pi/agent"] });
+  // ~/.codex is a link, so its skills link resolves from the real folder, not from ~/.codex.
+  const dotfiles = join(m.root, "dotfiles", "codex");
+  mkdirSync(dotfiles, { recursive: true });
+  symlinkSync(dotfiles, join(m.home, ".codex"));
+  symlinkSync("../.agents/skills", join(dotfiles, "skills"));
+
+  const result = m.run();
+  assert.equal(result.status, 0, result.stderr);
+
+  assert.equal(linkTarget(join(m.root, "dotfiles", ".agents", "skills", "pr")), join(m.checkout, "skills/pr"));
+  assert.equal(readFileSync(join(m.folders.codex, "pr/SKILL.md"), "utf8"), "this repo's pr\n");
+  assert.equal(kind(join(m.folders.agents, "grilling")), "folder");
 });
 
 test("each agent's folder follows its config variable, and an agent that is not installed is skipped", (t) => {
