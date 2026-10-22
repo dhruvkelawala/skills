@@ -22,10 +22,6 @@ The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the reposito
 
 A repair is one commit that changes code to fix a review finding, a failed check, a red `/verify` or a review-ready violation, in stage 3, 4 or 6, including commits the watcher makes. Count every repair in `repairs: <used>/<budget>`. When `used` reaches the budget, stop, record `blocked: repair budget`, and ask the user whether to raise it.
 
-## Helper agents
-
-`/code-review` runs its two axes as helper agents, and stage 6 runs a watcher helper. If this host cannot start helper agents, as in a subagent with no tool to start one, stop after stage 2. Record `implemented`, return the build report and the run record path, and let the parent session run `/issue-to-pr <n>`, which continues at stage 3. A review the implementing agent runs on its own code is a self-review, and the record and the PR call it that.
-
 ## GitHub quota
 
 `gh pr`, `gh issue view`, `gh repo view` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota, and carry on. `gh api` fills `{owner}` and `{repo}` from the current checkout. The pr-watch gate and the ship script fall back on their own.
@@ -85,9 +81,9 @@ Rate each finding after checking it against the code. P0 breaks normal use, secu
 
 Before each pass, compare `git rev-parse HEAD^{tree}` with the tree the last pass reviewed. When they are the same, as after a pure rebase, skip the pass and record the skip.
 
-1. **Pass 1.** Run `/code-review <base_sha>` with the contract as the spec and `<skills-dir>/test-audit/SKILL.md` added to the standards sources, where `<skills-dir>` is the directory that holds this skill's folder. Record the tree it reviewed.
-2. **Autoreview, once.** Review `<base_sha>...HEAD` with the `second-opinion` job. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`. Record `autoreview: <engine> <model it ran>, tree <hash>, clean | <n> fixed`, with the model as `/apr` step 1 defines it. When its model still can't run after apr's retries, record `blocked: second opinion unavailable` and ask the user. Until the helper exits, keep scratch files outside the checkout, because the helper aborts when the worktree changes during a review.
-3. **Pass 2, full lane only.** Run `/code-review <pass 1 head>`, which covers only the repairs since pass 1. Fix its P0 and P1 findings with focused tests. There is no third pass.
+1. **Pass 1.** Run `/code-review <base_sha>` with the contract as the spec and `<skills-dir>/test-audit/SKILL.md` added to the standards sources, where `<skills-dir>` is the directory that holds this skill's folder. Start its two reviewers with `delegate_task`, on the `reviewers` job's entry in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`). Record the tree it reviewed and the model each reviewer ran on.
+2. **Autoreview, once.** Review `<base_sha>...HEAD` with the `second-opinion` job. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`. Record `autoreview: <engine> <model it ran>, tree <hash>, clean | <n> fixed`, with the model as `/apr` step 1 defines it. When its model still can't run after apr's retries, record `blocked: second opinion unavailable` and ask the user. This thread runs the script itself rather than through `delegate_task`, because the script already runs the other engine in a sandbox of its own. Until the helper exits, keep scratch files outside the checkout, because the helper aborts when the worktree changes during a review.
+3. **Pass 2, full lane only.** Run `/code-review <pass 1 head>` with its reviewers started the same way. It covers only the repairs since pass 1. Fix its P0 and P1 findings with focused tests. There is no third pass.
 
 Repairs made after the last pass, here or in a later stage, appear in the PR as not re-reviewed.
 
@@ -108,9 +104,10 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 1. Write the PR body from [the PR body template](references/pr-body.md) into a temp file.
 2. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run.
 3. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. Either mismatch stops the run as `blocked` with both values.
-4. Record the PR URL, head, tree and `published`.
+4. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
+5. Record the PR URL, head, tree and `published`.
 
-**Complete when:** an open, ready-for-review PR exists at the current head on the contracted base, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
+**Complete when:** an open, ready-for-review PR exists at the current head on the contracted base and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
 
 ## 6. Watch, time-boxed
 
