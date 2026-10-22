@@ -1,0 +1,18 @@
+$ git show 540dd05:skills/issue-to-pr/SKILL.md  (invocation line and its bullets)
+Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
+
+- Without a work item, the build starts from this conversation. A plan file, such as one `improve` wrote, starts it from that plan. Stage 1 files either one as an issue through `ticket`, then builds that issue.
+- `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
+- `--merge` lands the PR in stage 7 through the ship skill: an independent `ship verify`, then `ship land`. A stacked layer lands only once it is the bottom of its stack.
+- `--max-repairs` sets the repair budget. The default is 10.
+- `resume` continues a stopped run. Follow [resume](references/resume.md).
+
+
+$ grep -n 'no issue or ticket\|No work item\|A plan file' skills/issue-to-pr/SKILL.md
+10:- Without a work item, the build starts from this conversation. A plan file, such as one `improve` wrote, starts it from that plan. Stage 1 files either one as an issue through `ticket`, then builds that issue.
+33:2. Read the work item. When the invocation names no issue or ticket, file one through `ticket` first:
+34:   - **No work item.** File the change this conversation discussed, with the criteria it pinned.
+35:   - **A plan file.** File the plan as one issue. When the plan already links an issue, read that issue and file nothing.
+
+$ grep -n 'Closes #' skills/issue-to-pr/references/pr-body.md
+8:<One or two plain sentences on what this changes for the user or developer. Closes #<issue>.>

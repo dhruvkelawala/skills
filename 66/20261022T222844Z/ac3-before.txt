@@ -1,0 +1,14 @@
+$ git show cb14ee7:skills/issue-to-pr/SKILL.md  (invocation line and its bullets)
+Invoke as `/issue-to-pr <issue number | URL | Linear ticket> [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
+
+- `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
+- `--merge` lands the PR in stage 7 through the ship skill: an independent `ship verify`, then `ship land`. A stacked layer lands only once it is the bottom of its stack.
+- `--max-repairs` sets the repair budget. The default is 10.
+- `resume` continues a stopped run. Follow [resume](references/resume.md).
+
+
+$ grep -n 'no issue or ticket\|No work item\|A plan file' skills/issue-to-pr/SKILL.md
+(no matches)
+
+$ grep -n 'Closes #' skills/issue-to-pr/references/pr-body.md
+8:<One or two plain sentences on what this changes for the user or developer. Closes #<issue>.>
