@@ -1,0 +1,38 @@
+# Issue #59 criterion 1: skills/research-explainer/ is gone, and no skill or README row refers to it
+# Check: ~/.agent/issue-to-pr/skills/59-evidence/check.sh from the repo root (pi --mode rpc get_commands over every skills/*/SKILL.md, the folder, git grep over README.md skills scripts outside-skills.json, README skills/ links)
+
+## before: base cc079fd (main, after #86 merged)
+== criterion 1: skills/research-explainer/ is gone, and no skill or README row refers to it
+pi loads 28 skills from skills/*/SKILL.md
+skill:research-explainer
+FAIL: pi still loads skill:research-explainer
+FAIL: skills/research-explainer/ exists
+skills/research-explainer/references/structure.md
+skills/research-explainer/SKILL.md
+skills/research-explainer/templates/explainer-template.html
+skills/research-explainer/templates/explainer-template-arcade.html
+README.md:26:| [research-explainer](skills/research-explainer/SKILL.md) | Research a topic against primary sources via background agents, then generate a self-contained HTML field guide that teaches it from scratch. |
+skills/research-explainer/SKILL.md:2:name: research-explainer
+skills/research-explainer/SKILL.md:3:description: Use when the user wants a topic researched and explained as a learning doc, says "research and explain", "field guide", or "explain this research to me from scratch", or invokes /research-explainer. Researches a technical topic against primary sources via background agents, saves cited findings as Markdown in the repo, then generates a self-contained HTML "field guide" that teaches the concepts from scratch as building blocks.
+skills/research-explainer/references/structure.md:3:The document anatomy for research-explainer output. The template implements all CSS classes named here.
+skills/research-explainer/templates/explainer-template-arcade.html:8:  research-explainer TEMPLATE — "arcade" (game-manual poster) variant.
+skills/research-explainer/templates/explainer-template.html:8:  research-explainer TEMPLATE. Replace all {{...}} placeholders; repeat the Block section per concept.
+FAIL: references above
+
+## after: head 80c2b5c
+== criterion 1: skills/research-explainer/ is gone, and no skill or README row refers to it
+pi loads 27 skills from skills/*/SKILL.md
+PASS criterion 1
+
+## after: every skill pi loads at head 80c2b5c
+skill:apr skill:bro skill:cleanup skill:codebase-dive skill:day skill:eli25 skill:evidence skill:explain-diff skill:hillclimb skill:how skill:idea-foundry skill:issue-to-pr skill:perf skill:pr-review skill:pr-watch skill:pr skill:product-description skill:promote skill:recap skill:review-ready skill:ship skill:test-audit skill:ticket skill:unslop skill:verification-skill skill:verify skill:why
+
+## git show --stat 80c2b5c
+80c2b5c feat(skills): cut research-explainer
+
+ README.md                                          |    1 -
+ skills/research-explainer/SKILL.md                 |   55 -
+ skills/research-explainer/references/structure.md  |   65 -
+ .../templates/explainer-template-arcade.html       | 1060 ----------------
+ .../templates/explainer-template.html              | 1293 --------------------
+ 5 files changed, 2474 deletions(-)
