@@ -50,7 +50,7 @@ bash <skill-dir>/scripts/artifact-audit.sh <code-root>
 
 The script is read-only. It prints one tab-separated row per item, with its `KIND`, `NAME`, `SIZE_KIB`, a suggested `BUCKET`, a `CLEAN` command, the `WORKTREE` that holds it and its `PATH`.
 
-- Artifacts are the `node_modules`, `target`, `.next` and `.turbo` directories under the folder, outer ones only, and Xcode's DerivedData. An artifact in a Git work tree is a candidate only when Git ignores it. One that Git does not ignore, which includes one holding tracked files, and one outside Git are held.
+- Artifacts are the `node_modules`, `target`, `.next` and `.turbo` directories under the folder, outer ones only, and Xcode's DerivedData. An artifact in a Git work tree is a candidate only when Git ignores it and no Git checkout sits inside it. One that Git does not ignore, which includes one holding tracked files, one holding a checkout, and one outside Git are held.
 - Caches are the npm, pnpm, Yarn, Bun, Go, pip, uv, Homebrew, CocoaPods, Cargo and Gradle caches at their default places under `$HOME`. `CLEAN` is the tool's own command, or `delete` when the tool has none.
 
 Leave every other cache and app data alone, such as `~/Library/Caches/<App>` and `~/Library/Application Support`, because they hold logins and history.
@@ -69,7 +69,7 @@ Complete when every row is in a bucket or held.
 | `artifacts` | Artifact rows marked `CANDIDATE`, and rows marked `CANDIDATE-CHECK-USAGE` whose `WORKTREE` is not in use |
 | `caches` | Cache rows |
 
-Every other worktree or artifact goes on the hold list with one reason: primary, locked, in use, uncommitted changes, unpushed commits, unmerged with no PR evidence, not ignored by Git, outside Git, or unknown state.
+Every other worktree or artifact goes on the hold list with one reason: primary, locked, in use, uncommitted changes, unpushed commits, unmerged with no PR evidence, not ignored by Git, holds a Git checkout, outside Git, or unknown state.
 
 For each bucket, show the count and the total size where it can be measured. For the `artifacts` bucket, also say how much of it sits in worktrees in the `merged` and `pr-merged` buckets, which removing those worktrees frees too. For worktree buckets, also name the ignored files that removal would delete beyond dependencies and build output, such as `.env` files (`git -C <path> ls-files -o -i --exclude-standard --directory`). Show the hold list grouped by reason, with paths. Ask once which buckets to remove and whether any held paths should go too. For each held path the user names, show its diff, untracked files and unpushed commits, and wait for a yes on that path.
 
@@ -87,7 +87,7 @@ Take `<path>` from git's own worktree list. When git refuses, for example becaus
 
 Delete each approved simulator item by its own ID, so the deletion matches the list the user saw: `xcrun simctl [--set testing] delete <UDID>` or `xcrun simctl runtime delete <ID>`. Never use `delete all` or `delete unavailable`.
 
-Remove artifacts after worktrees, and skip an artifact whose path went with its worktree. Just before each removal, check that the path is still a directory and not a symlink. For a row marked `CANDIDATE-CHECK-USAGE`, also check that `git -C <worktree> check-ignore -q -- <path>` still succeeds and that the worktree is not in use. A failed check moves the item to the hold list. Then run `rm -rf -- <path>`, with `<path>` taken from the row.
+Remove artifacts after worktrees, and skip an artifact whose path went with its worktree. Just before each removal, check that the path is still a directory and not a symlink. For a row marked `CANDIDATE-CHECK-USAGE`, also check that `git -C <worktree> check-ignore -q -- <path>` still succeeds, that `find <path> -name .git -print -quit` prints nothing, and that the worktree is not in use. A failed check moves the item to the hold list. Then run `rm -rf -- <path>`, with `<path>` taken from the row.
 
 Clear each approved cache with its `CLEAN` command, or with `rm -rf -- <path>` when `CLEAN` is `delete`. Run the commands from `$HOME`, because inside a repo a tool can follow that project's settings and clear the project's own cache instead. When the tool is not installed, hold the cache with that reason.
 

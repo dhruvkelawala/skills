@@ -26,7 +26,9 @@ artifact_row() {
     local path=$1 worktree bucket
     if worktree=$(git -C "${path%/*}" rev-parse --show-toplevel 2>/dev/null); then
         # Git reports a directory as not ignored when it is not ignored or tracks files in it.
-        if git -C "$worktree" check-ignore -q -- "$path"; then bucket=CANDIDATE-CHECK-USAGE
+        # The outer repo's ignore rules say nothing about a checkout nested inside the directory.
+        if [ -n "$(find "$path" -name .git -print -quit 2>/dev/null)" ]; then bucket=HOLD-GIT-CHECKOUT
+        elif git -C "$worktree" check-ignore -q -- "$path"; then bucket=CANDIDATE-CHECK-USAGE
         else bucket=HOLD-NOT-IGNORED; fi
     else
         worktree=- bucket=HOLD-OUTSIDE-GIT

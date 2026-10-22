@@ -53,13 +53,17 @@ for cache in [".npm/_cacache/index-v5/aa", "Library/Caches/Homebrew/downloads/pk
     write(HOME / cache)
 
 app = CODE / "app with spaces"
-repo(app, "node_modules/\n.next/\ntarget/\n", ["index.js"])
+repo(app, "node_modules/\n.next/\ntarget/\n.worktrees/\n", ["index.js"])
 write(app / "node_modules" / "left-pad" / "index.js", 64 * 1024)
 write(app / "node_modules" / "left-pad" / "node_modules" / "inner" / "index.js")
 write(app / ".next" / "cache" / "page.js")
 feature = CODE / "app with spaces.worktrees" / "feature"
 git(app, "worktree", "add", "-b", "feature", str(feature))
 write(feature / "node_modules" / "dep" / "index.js")
+# A checkout that happens to have an artifact's name holds work, even inside an ignored folder.
+nested = app / ".worktrees" / "target"
+git(app, "worktree", "add", "-b", "nested", str(nested))
+write(nested / "uncommitted.txt")
 # A tracked target directory is source, and so is a force-added file under an ignored one.
 repo(CODE / "tracked", "", ["target/keep.txt"])
 repo(CODE / "forced", "target/\n", ["target/vendored.txt"])
@@ -97,6 +101,7 @@ expect(feature / "node_modules", "artifact", "node_modules", "CANDIDATE-CHECK-US
 expect(CODE / "tracked" / "target", "artifact", "target", "HOLD-NOT-IGNORED", "delete", CODE / "tracked")
 expect(CODE / "forced" / "target", "artifact", "target", "HOLD-NOT-IGNORED", "delete", CODE / "forced")
 expect(CODE / "loose" / "node_modules", "artifact", "node_modules", "HOLD-OUTSIDE-GIT", "delete")
+expect(nested, "artifact", "target", "HOLD-GIT-CHECKOUT", "delete", app)
 expect(HOME / "Library/Developer/Xcode/DerivedData", "artifact", "DerivedData", "CANDIDATE", "delete")
 expect(HOME / ".npm/_cacache", "cache", "npm", "CANDIDATE", "npm cache clean --force")
 expect(HOME / "Library/Caches/Homebrew", "cache", "homebrew", "CANDIDATE", "brew cleanup --prune=all")
@@ -104,8 +109,8 @@ expect(HOME / "go/pkg/mod", "cache", "go-mod", "CANDIDATE", "go clean -modcache"
 expect(HOME / ".cargo/registry", "cache", "cargo", "CANDIDATE", "delete")
 # Nested artifacts belong to the outer row, and other app caches are never listed.
 assert not any("left-pad" in path or "SomeApp" in path for path in by_path), result.stdout
-assert len(rows) == 11, result.stdout
-assert "artifacts=7 caches=4" in result.stderr, result.stderr
+assert len(rows) == 12, result.stdout
+assert "artifacts=8 caches=4" in result.stderr, result.stderr
 # A code root that holds $HOME still lists Xcode's DerivedData once.
 home_run = subprocess.run(["/bin/bash", str(SCRIPT), str(HOME)], env=ENV,
                           capture_output=True, text=True, check=True)
