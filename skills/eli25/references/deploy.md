@@ -1,18 +1,6 @@
 # Deploy an eli25 page
 
-Run the block for the target, then print the URL on its own line. A deploy never repeats the render check and never fetches the URL to test it.
-
-## Tailscale
-
-Only devices on the tailnet can open the URL.
-
-```bash
-tailscale serve status | grep -q '/eli25' || tailscale serve --bg --set-path /eli25 ~/.agent/diagrams
-host=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
-echo "https://$host/eli25/<slug>-eli25.html"
-```
-
-Tailscale serves the whole diagrams folder, so a page is live as soon as it is written. An updated page or a second page needs no new serve.
+Run the block for the target, then print the URL on its own line. A deploy never fetches the URL to test it.
 
 ## Vercel
 

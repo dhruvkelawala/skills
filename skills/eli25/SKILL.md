@@ -1,6 +1,6 @@
 ---
 name: eli25
-description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to host one on Tailscale or Vercel. Writes a neo-brutalist HTML page shaped by its topic and shows it in the user's browser, or as a tailnet URL over ssh.
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to deploy one to Vercel. Writes a page in the Field Guide look shaped by its topic and shows it in the thread as a T3 visual page.
 ---
 
 # eli25
@@ -51,38 +51,49 @@ Before and after, from `support-report-pr-349-eli25.html`:
 
 **Done when** the page has its opener, every section of the shape sits under a claim title, and a plan or spike ends on one next action.
 
-## 3. Build and check
+## 3. Build the page
 
-1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same file in place, so the open tab and any deployed URL show the new version.
-2. Start from `research-explainer/templates/explainer-template-arcade.html` in the sibling skill folder and replace its content. Keep its neo-brutalist look: thick dark borders, hard offset shadows, flat high-contrast colours, oversized heavy type, square corners, and figures on the fixed dark panel. Give each topic its own small palette by swapping the accent hexes. Drop template parts the shape does not use.
-3. Give the page three theme states: system by default, then light, then dark.
-   - Define every colour as a token on `:root` for light. Redefine only the tokens under `@media (prefers-color-scheme: dark)` guarded as `:root:not([data-theme="light"])`, and again under `:root[data-theme="dark"]`, so an explicit pick wins in both directions. The template's dark blocks are media-query only, so replace them.
-   - A small fixed `#theme-toggle` button in a corner, in the same brutalist style, cycles from system to light to dark and back to system, and shows the current state as a word.
-   - Store the pick in `localStorage` under `eli25-theme` inside try and catch, and apply it from an inline script at the top of `<head>`, before any stylesheet, so the page never flashes. Missing or unreadable storage means system.
-   - `references/theme.html` has the code for all three.
-4. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
-5. Run `node <this skill's folder>/references/render-check.mjs ~/.agent/diagrams/<slug>-eli25.html`. It loads the page in headless Chrome at 1280 and 390 pixels in system light, system dark, and each explicit pick. It fails on horizontal overflow, a broken toggle, an explicit pick that loses to the OS, a script error, or a dash, arrow or curly quote in the text. It prints the prose word count and headings and saves screenshots. Fix every failure and run it again.
-6. Look at the light and dark screenshots at 1280 pixels.
+1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same file in place and show it again.
+2. Build it in the Field Guide look. Read `../visual-explainer/references/field-guide.md`, then take the parts the page needs from `../visual-explainer/templates/field-guide.html`: its tokens, fonts, plates, chips and cards, not its outline. A short page needs few of them.
+3. Follow T3's light or dark mode. T3 gives a visual page its colours as CSS variables but leaves `prefers-color-scheme` unset, so Field Guide's switch cannot see the mode. Drop the Light and Dark switch and its stored choice, keep the dark token blocks, and put this script first in `<head>`:
 
-**Done when** the render check passes, the prose word count is within the budget, every printed heading reads as a claim, and both screenshots look right to you.
+   ```html
+   <script>
+     (() => {
+       const bg = getComputedStyle(document.documentElement).getPropertyValue("--background");
+       if (!bg) return;
+       const c = document.createElement("canvas").getContext("2d");
+       c.fillStyle = bg;
+       c.fillRect(0, 0, 1, 1);
+       const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
+       document.documentElement.dataset.theme = r * 299 + g * 587 + b * 114 < 128000 ? "dark" : "light";
+     })();
+   </script>
+   ```
 
-## 4. Deliver
+   The script picks dark when the thread's background is dark. Outside T3, as on a Vercel deploy, it does nothing and the page follows the system scheme. Paint the page ground with `var(--background, var(--bg))`, so it matches the thread in T3 and stays bone elsewhere.
+4. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width, height and ground.
+5. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
 
-Show the page:
-- Over ssh (`SSH_CONNECTION` set), a browser would open on the remote machine where nobody sees it. Unless the user named another target, serve the page on the tailnet and print its URL instead.
-- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux.
+**Done when** the file holds a Field Guide page with the script first in `<head>` and no theme switch, and unslop has run on its prose.
 
-Deploy when the user names a target in plain words, now or in a later message. The commands are in `references/deploy.md`.
+## 4. Preview and show
+
+1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 390 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. Check that the prose fits the word budget and that each heading reads as a claim.
+2. Show it with `html_render`, at the `contentHeight` the 728-pixel preview reported. Open no local browser: the page lives in the thread, where the user reads it on any device. Your reply adds only what the page does not say.
+
+**Done when** `html_render` has shown the page in the thread.
+
+## 5. Deploy on request
+
+Deploy only when the user asks, for a page meant for a teammate. The user names the target in plain words, now or in a later message. The commands are in `references/deploy.md`.
 
 | The user says | Target |
 | --- | --- |
-| "tailscale", "my tailnet" | Tailscale serve, reachable only on the tailnet |
 | "argentlabs vercel", "work vercel", "company vercel" | Vercel, work scope |
 | "personal vercel", "my vercel" | Vercel, personal scope |
 | "vercel" alone | Work scope for an argentlabs repo, personal scope otherwise |
 
-A deploy of a page that already passed the render check skips the check, and the URL needs no test fetch.
+Report each URL as a plain URL on its own line.
 
-Report the local path and each URL as a plain URL on its own line, where the page opened, and the section titles.
-
-**Done when** the user has a path or URL they can open now.
+**Done when** the user has the URL.
