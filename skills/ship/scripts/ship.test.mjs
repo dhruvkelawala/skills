@@ -189,11 +189,31 @@ test("landableRun: where GitHub requires a review, even the caller's own PR wait
   assert.deepEqual([approved.ceiling, approved.run[0].approvedBy], [null, ["vlad"]]);
 });
 
+test("landableRun: a two-way PR outside rule B lands on its build's own checks, without a verdict", () => {
+  const r = landableRun([pr(1, "main", "a")], new Map(), { me: "dhruv" });
+  assert.equal(r.ceiling, null);
+  assert.equal(r.run[0].verdict, "not needed");
+});
+
+test("landableRun: rule B holds a PR without a current verdict when it is named, its door is one-way or missing, or a verdict is on record", () => {
+  const cases = [
+    [pr(1, "main", "a"), { status: "missing" }, [1], "verdict missing (rule B: named in --rule-b)"],
+    [pr(1, "main", "a", { body: ONE }), { status: "missing" }, [], "verdict missing (rule B: the door is one-way)"],
+    [pr(1, "main", "a", { body: "" }), { status: "missing" }, [], "verdict missing (rule B: no door line)"],
+    [pr(1, "main", "a"), { status: "stale", reason: "patch changed" }, [], "verdict stale: patch changed (rule B: a verdict is on record)"],
+    [pr(1, "main", "a"), { status: "failed", reason: "verdict is FAIL" }, [], "verdict failed: verdict is FAIL (rule B: a verdict is on record)"],
+  ];
+  for (const [p, status, ruleB, blocker] of cases) {
+    assert.deepEqual(landableRun([p], new Map([[1, status]]), { me: "dhruv", ruleB }).ceiling, { number: 1, blocker });
+    assert.equal(landableRun([p], new Map([[1, ok()]]), { me: "dhruv", ruleB }).ceiling, null, `${blocker}, once a verdict is current`);
+  }
+});
+
 test("landableRun: stops at the first gap, so a verified PR above an unverified one does not land", () => {
   const stack = [pr(1, "main", "a"), pr(2, "a", "b"), pr(3, "b", "c")];
   const r = landableRun(stack, new Map([[1, ok()], [2, { status: "stale", reason: "patch changed" }], [3, ok()]]), { me: "dhruv" });
   assert.deepEqual(r.run.map((x) => x.number), [1]);
-  assert.deepEqual(r.ceiling, { number: 2, blocker: "verdict stale: patch changed" });
+  assert.deepEqual(r.ceiling, { number: 2, blocker: "verdict stale: patch changed (rule B: a verdict is on record)" });
 });
 
 test("landableRun: a bot author's own verdict, recorded under its bare login, does not count", () => {

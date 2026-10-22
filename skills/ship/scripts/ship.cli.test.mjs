@@ -220,8 +220,7 @@ const REVIEW_WAIT = { number: 7, blocker: "GitHub requires a review: waiting for
 const rules = (refUpdateRule, nodes = []) => ({ mergeQueue: null, ref: { refUpdateRule, rules: { nodes } } });
 
 test("run: where the default branch asks for an approving review, the caller's own PR waits for a human approval", (t) => {
-  const { head, cli, setState } = fixtureGitHub(t, { graphql: true });
-  cli("verdict", "record", "7", "PASS", "--head", head, "--by", "verifier");
+  const { cli, setState } = fixtureGitHub(t, { graphql: true });
   assert.equal(cli("run", "7").ceiling, null, "an unprotected default branch lands on the request to land");
   setState({ branch: rules({ requiredApprovingReviewCount: 1, pattern: "main" }) });
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "classic branch protection");
@@ -232,8 +231,7 @@ test("run: where the default branch asks for an approving review, the caller's o
 });
 
 test("GraphQL quota spent: run holds the caller's own PR when the default branch is protected or a ruleset asks for a review", (t) => {
-  const { head, cli, setState } = fixtureGitHub(t);
-  cli("verdict", "record", "7", "PASS", "--head", head, "--by", "verifier");
+  const { cli, setState } = fixtureGitHub(t);
   setState({ protected: true });
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "REST shows classic protection's rules only to admins");
   setState({ protected: false, rulesets: [{ type: "pull_request", parameters: { required_approving_review_count: 1 } }] });
@@ -245,4 +243,10 @@ test("run refuses a flag it does not know, such as the removed --policy", (t) =>
   const run = ship("run", "7", "--policy", "approval");
   assert.equal(run.status, 2);
   assert.match(run.stderr, /unknown flag --policy/);
+});
+
+test("run: a PR outside rule B lands without a verdict, and --rule-b holds it for one", (t) => {
+  const { head, cli } = fixtureGitHub(t, { graphql: true });
+  assert.deepEqual(cli("run", "7").run, [{ number: 7, head, door: "two-way", verdict: "not needed", approvedBy: ["dhruv (land request)"] }]);
+  assert.deepEqual(cli("run", "7", "--rule-b", "7").ceiling, { number: 7, blocker: "verdict missing (rule B: named in --rule-b)" });
 });

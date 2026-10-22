@@ -4,7 +4,7 @@
 //   ship.mjs queue   [--repo o/r] [--me <login>] [--json]
 //   ship.mjs verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes <file>] [--repo o/r]
 //   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
-//   ship.mjs run     <bottom-pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
+//   ship.mjs run     <bottom-pr> [--rule-b <pr,pr>] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
 //   ship.mjs merge   <pr> --head <run[0].head> [--repo o/r] [--json]
 //
 // Nothing here rebases, retargets, or force-pushes, and `merge` lands only the head it is given. The
@@ -165,6 +165,18 @@ export function walkStack(prs, bottomNumber) {
   }
 }
 
+// Rule B: a PR needs an independent verdict only when its door is one-way or unstated, when the caller
+// names it in `ruleB` (it touches authority, stored data, money or a production switch that its proof
+// doesn't cover, or the user said verify), or when a verdict is already on record for it. Every other
+// PR lands on its build's own checks.
+function verdictReason(p, door, status, ruleB) {
+  if (door === "one-way") return "the door is one-way";
+  if (door !== "two-way") return "no door line";
+  if (ruleB.includes(p.number)) return "named in --rule-b";
+  if (status.status !== "missing") return "a verdict is on record";
+  return null;
+}
+
 // ship follows GitHub's review rule for the default branch, where every PR in a stack lands.
 // `reviewRequired` says whether that branch asks for an approving review; a PR GitHub already shows
 // as REVIEW_REQUIRED waits too. Where a review is required, the PR waits for a human approval
@@ -174,7 +186,7 @@ export function walkStack(prs, bottomNumber) {
 //
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned
 // head cannot be enforced. ship never lands onto a branch with a merge queue.
-export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), reviewRequired = false, mergeQueue = false, me } = {}) {
+export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), reviewRequired = false, ruleB = [], mergeQueue = false, me } = {}) {
   if (mergeQueue && stack.length) return { run: [], ceiling: { number: stack[0].number, blocker: "the target branch uses a merge queue, which merges later heads ship cannot pin" } };
   const run = [];
   for (const p of stack) {
@@ -183,12 +195,13 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
     const ownPr = Boolean(me) && actor(p.author?.login) === actor(me);
     const approvers = approversByNumber.get(p.number) ?? [];
     const needsReview = reviewRequired || p.reviewDecision === "REVIEW_REQUIRED";
+    const why = verdictReason(p, door, s, ruleB);
     let blocker = null;
-    if (s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""}`;
-    else if (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr)) blocker = "verdict was not recorded by someone other than the PR author";
+    if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
+    else if (why && (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr))) blocker = "verdict was not recorded by someone other than the PR author";
     else if (needsReview && approvers.length === 0) blocker = "GitHub requires a review: waiting for a human approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
-    run.push({ number: p.number, head: p.headRefOid, door, verdict: s.verdict, approvedBy: approvers.length > 0 ? approvers : [`${me} (land request)`] });
+    run.push({ number: p.number, head: p.headRefOid, door, verdict: why ? s.verdict : "not needed", approvedBy: approvers.length > 0 ? approvers : [`${me} (land request)`] });
   }
   return { run, ceiling: null };
 }
@@ -365,7 +378,7 @@ function textQueue(q) {
 }
 
 // A flag ship does not know, such as a misspelt or removed one, could loosen a rule if ignored.
-const FLAGS = ["json", "repo", "me", "trusted", "head", "by", "notes"];
+const FLAGS = ["json", "repo", "me", "trusted", "rule-b", "head", "by", "notes"];
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
@@ -374,6 +387,8 @@ async function main() {
   const [cmd, sub, ...rest] = a._;
   const repo = a.repo;
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const ruleB = a["rule-b"] ? a["rule-b"].split(",").map(Number) : [];
+  if (!ruleB.every(Number.isInteger)) throw new Error("usage: --rule-b <pr>[,<pr>...], the PRs rule B covers");
   const authenticated = () => sh("gh", ["api", "user", "--jq", ".login"]);
   // verdict check and run grant the own-PR rules to the caller, so the caller is always the
   // authenticated account; --me may only repeat it. queue uses --me just to sort the list.
@@ -409,7 +424,7 @@ async function main() {
     const statuses = new Map(stack.map((p) => [p.number, statusFor(p, repo, trusted, me)]));
     const approvers = new Map(stack.map((p) => [p.number, humanApprovers(prReviews(p.number, repo), { prAuthor: p.author?.login, reviewDecision: p.reviewDecision })]));
     const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(defaultBranch(repo), repo) : {};
-    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, mergeQueue, me }), stackStop: stop ?? null };
+    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, ruleB, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
       [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}`).join(" -> ") || "(none)"}`,
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",
