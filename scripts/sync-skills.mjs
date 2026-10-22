@@ -164,12 +164,23 @@ function planFolder(folder, store, checkout, own, outside, flags, show) {
     }
   }
 
+  // On a case-insensitive disk PR and pr are one entry, which the step for pr already replaces.
+  const wantedEntry = (name) => [...wanted.keys()].some((wantedName) => wantedName.toLowerCase() === name.toLowerCase() && sameEntry(join(folder, name), join(folder, wantedName)));
   const present = existsSync(folder) ? readdirSync(folder).sort() : [];
-  for (const name of present.filter((name) => !name.startsWith(".") && !wanted.has(name))) {
+  for (const name of present.filter((name) => !name.startsWith(".") && !wanted.has(name) && !wantedEntry(name))) {
     const path = join(folder, name);
     steps.push(flags.removeUnlisted ? { action: "remove", name, apply: () => rmSync(path, { recursive: true, force: true }) } : { action: "unlisted", name });
   }
   return steps;
+}
+
+function sameEntry(a, b) {
+  try {
+    const [x, y] = [lstatSync(a), lstatSync(b)];
+    return x.ino === y.ino && x.dev === y.dev;
+  } catch {
+    return false;
+  }
 }
 
 function describe(have, folderText, show) {

@@ -168,6 +168,16 @@ test("a skill that is not on the list is reported, and removed only with --remov
   assert.equal(kind(join(m.folders.codex, ".system")), "folder", "a hidden folder such as Codex's .system is not a skill");
 });
 
+test("--remove-unlisted keeps this repo's skill when the folder holds it in other capitals", (t) => {
+  const m = machine(t);
+  write(join(m.folders.claude, "PR/SKILL.md"), "a stray copy\n");
+
+  const result = m.run(["--remove-unlisted"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(linkTarget(join(m.folders.claude, "pr")), join(m.checkout, "skills/pr"));
+  assert.equal(m.run(["--remove-unlisted"]).stdout, "nothing to change\n");
+});
+
 test("a list or folder the script cannot honour stops it before anything changes", (t) => {
   const list = (skills) => (m) => m.list(skills(m));
   const cases = [
