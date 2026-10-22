@@ -154,23 +154,30 @@ test("walkStack follows a linear chain and stops at a fork", () => {
 });
 
 const ok = (recordedBy = "dhruv") => ({ status: "current", verdict: "PASS", by: "verifier", recordedBy });
-const review = (login, state, at, type = "User") => ({ user: { login, type }, state, submitted_at: at });
+const review = (login, state, at, type = "User", patchId = "p1") => ({ user: { login, type }, state, submitted_at: at, patchId });
 
 test("humanApprovers: a bot approval does not count, a human one does", () => {
   const reviews = [review("claude[bot]", "APPROVED", "2026-10-05T10:00:00Z", "Bot"), review("dhruv", "APPROVED", "2026-10-05T11:00:00Z")];
-  assert.deepEqual(humanApprovers(reviews.slice(0, 1), { prAuthor: "vlad", reviewDecision: "APPROVED" }), []);
-  assert.deepEqual(humanApprovers(reviews, { prAuthor: "vlad", reviewDecision: "APPROVED" }), ["dhruv"]);
+  assert.deepEqual(humanApprovers(reviews.slice(0, 1), { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p1" }), []);
+  assert.deepEqual(humanApprovers(reviews, { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p1" }), ["dhruv"]);
 });
 
 test("humanApprovers: a later change request or dismissal withdraws it; comments do not", () => {
   const base = [review("dhruv", "APPROVED", "2026-10-05T10:00:00Z")];
-  assert.deepEqual(humanApprovers([...base, review("dhruv", "COMMENTED", "2026-10-05T11:00:00Z")], { prAuthor: "vlad", reviewDecision: "APPROVED" }), ["dhruv"]);
-  assert.deepEqual(humanApprovers([...base, review("dhruv", "CHANGES_REQUESTED", "2026-10-05T11:00:00Z")], { prAuthor: "vlad", reviewDecision: "APPROVED" }), []);
-  assert.deepEqual(humanApprovers([...base, review("dhruv", "DISMISSED", "2026-10-05T11:00:00Z")], { prAuthor: "vlad", reviewDecision: "APPROVED" }), []);
+  assert.deepEqual(humanApprovers([...base, review("dhruv", "COMMENTED", "2026-10-05T11:00:00Z")], { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p1" }), ["dhruv"]);
+  assert.deepEqual(humanApprovers([...base, review("dhruv", "CHANGES_REQUESTED", "2026-10-05T11:00:00Z")], { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p1" }), []);
+  assert.deepEqual(humanApprovers([...base, review("dhruv", "DISMISSED", "2026-10-05T11:00:00Z")], { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p1" }), []);
+});
+
+test("humanApprovers: an approval counts only for the patch it was given on", () => {
+  const approval = (patchId) => [review("dhruv", "APPROVED", "2026-10-05T10:00:00Z", "User", patchId)];
+  assert.deepEqual(humanApprovers(approval("p1"), { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p1" }), ["dhruv"]);
+  assert.deepEqual(humanApprovers(approval("p1"), { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p2" }), []);
+  assert.deepEqual(humanApprovers(approval(undefined), { prAuthor: "vlad", reviewDecision: "APPROVED", patchId: "p2" }), [], "a commit ship could not read");
 });
 
 test("humanApprovers: nothing counts unless GitHub's overall decision is APPROVED", () => {
-  assert.deepEqual(humanApprovers([review("dhruv", "APPROVED", "2026-10-05T10:00:00Z")], { prAuthor: "vlad", reviewDecision: "REVIEW_REQUIRED" }), []);
+  assert.deepEqual(humanApprovers([review("dhruv", "APPROVED", "2026-10-05T10:00:00Z")], { prAuthor: "vlad", reviewDecision: "REVIEW_REQUIRED", patchId: "p1" }), []);
 });
 
 test("landableRun: a stack lands bottom first, each PR pinned to its head", () => {
@@ -182,7 +189,7 @@ test("landableRun: a stack lands bottom first, each PR pinned to its head", () =
 test("landableRun: where GitHub requires a review, even the caller's own PR waits for a human approval", () => {
   const own = pr(1, "main", "a", { author: { login: "dhruv" } });
   const waits = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", reviewRequired: true });
-  assert.deepEqual(waits.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval" });
+  assert.deepEqual(waits.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval of this patch" });
   const shown = landableRun([{ ...own, reviewDecision: "REVIEW_REQUIRED" }], new Map([[1, ok("dhruv")]]), { me: "dhruv" });
   assert.deepEqual(shown.ceiling, waits.ceiling, "GitHub's REVIEW_REQUIRED on the PR counts even when the branch rule reads as none");
   const approved = landableRun([own], new Map([[1, ok("dhruv")]]), { me: "dhruv", reviewRequired: true, approversByNumber: new Map([[1, ["vlad"]]]) });
@@ -272,7 +279,7 @@ test("landableRun: where GitHub requires no review, the caller's verdict counts 
 test("landableRun: someone else's PR needs a verdict from another account, and a human approval where GitHub requires a review", () => {
   const theirs = pr(1, "main", "a");
   const noApproval = landableRun([theirs], new Map([[1, ok("dhruv")]]), { me: "dhruv", reviewRequired: true });
-  assert.deepEqual(noApproval.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval" });
+  assert.deepEqual(noApproval.ceiling, { number: 1, blocker: "GitHub requires a review: waiting for a human approval of this patch" });
   const selfVerdict = landableRun([theirs], new Map([[1, ok("vlad")]]), { me: "dhruv" });
   assert.equal(selfVerdict.ceiling.blocker, "verdict was not recorded by someone other than the PR author");
 });

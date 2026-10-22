@@ -74,10 +74,11 @@ export function indexStacks(prs) {
 }
 
 // A human approval is an APPROVED review from a GitHub "User" account (not a Bot or app) that is not
-// the PR author, still standing as that reviewer's latest decisive review, on a PR whose overall review
-// decision is APPROVED. Takes REST reviews (`user.login`, `user.type`, `state`, `submitted_at`).
-export function humanApprovers(reviews, { prAuthor, reviewDecision }) {
-  if (reviewDecision !== "APPROVED") return [];
+// the PR author, still standing as that reviewer's latest decisive review, given on the PR's current
+// patch, on a PR whose overall review decision is APPROVED. Takes REST reviews (`user.login`,
+// `user.type`, `state`, `submitted_at`), each with the `patchId` of the commit it was given on.
+export function humanApprovers(reviews, { prAuthor, reviewDecision, patchId }) {
+  if (reviewDecision !== "APPROVED" || !patchId) return [];
   const last = new Map();
   const ordered = [...reviews].sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""));
   for (const r of ordered) {
@@ -85,7 +86,7 @@ export function humanApprovers(reviews, { prAuthor, reviewDecision }) {
     last.set(r.user?.login, r);
   }
   return [...last.values()]
-    .filter((r) => r.state === "APPROVED" && r.user?.type === "User" && actor(r.user.login) !== actor(prAuthor))
+    .filter((r) => r.state === "APPROVED" && r.patchId === patchId && r.user?.type === "User" && actor(r.user.login) !== actor(prAuthor))
     .map((r) => r.user.login);
 }
 
@@ -201,7 +202,7 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
     let blocker = null;
     if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
     else if (why && (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr))) blocker = "verdict was not recorded by someone other than the PR author";
-    else if (needsReview && approvers.length === 0 && !force) blocker = "GitHub requires a review: waiting for a human approval";
+    else if (needsReview && approvers.length === 0 && !force) blocker = "GitHub requires a review: waiting for a human approval of this patch";
     else if (needsReview && approvers.length === 0 && p.reviewDecision === "CHANGES_REQUESTED") blocker = "a reviewer requested changes, and --force skips only the wait for an approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
     const forced = needsReview && approvers.length === 0;
@@ -267,21 +268,40 @@ function defaultBranch(repo) {
   );
 }
 
-// The PR's patch as GitHub defines it: merge-base(base tip, PR head) to PR head. Both refs are fetched
-// into private names so FETCH_HEAD ordering and remote-tracking updates cannot change which is which.
-function currentPatch(pr) {
+// The PR's patch at each of `commits` as GitHub defines it: merge-base(base tip, commit) to commit.
+// Both refs are fetched into private names so FETCH_HEAD ordering and remote-tracking updates cannot
+// change which is which. An older commit, such as one an approval was given on before a force-push,
+// is fetched by its id when it is missing; a commit that can't be fetched has no patch.
+function patchesAt(pr, commits) {
   const baseRef = `refs/ship/base/${pr.number}`;
   const headRef = `refs/ship/pull/${pr.number}`;
+  const patchAt = (commit) => {
+    const base = sh("git", ["merge-base", baseRef, commit]);
+    // Trimming the last added line would make blank and space-only lines share a fingerprint.
+    const diff = sh("git", ["-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, base, commit], { maxBuffer: 1 << 28, trimOutput: false });
+    return { head: commit, base, patchId: patchFingerprint(diff) };
+  };
+  const fetched = (commit) => {
+    try {
+      sh("git", ["cat-file", "-e", `${commit}^{commit}`]);
+      return true;
+    } catch {}
+    try {
+      sh("git", ["fetch", "--quiet", "--no-tags", "origin", commit]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   try {
     sh("git", ["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${pr.number}/head:${headRef}`]);
-    const base = sh("git", ["merge-base", baseRef, pr.headRefOid]);
-    // Trimming the last added line would make blank and space-only lines share a fingerprint.
-    const diff = sh("git", ["-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, base, pr.headRefOid], { maxBuffer: 1 << 28, trimOutput: false });
-    return { head: pr.headRefOid, base, patchId: patchFingerprint(diff) };
+    return new Map(commits.map((commit) => [commit, commit === pr.headRefOid || fetched(commit) ? patchAt(commit) : null]));
   } finally {
     for (const ref of [baseRef, headRef]) try { sh("git", ["update-ref", "-d", ref]); } catch {}
   }
 }
+
+const currentPatch = (pr) => patchesAt(pr, [pr.headRefOid]).get(pr.headRefOid);
 
 function nameWithOwner(repo) {
   return repo ?? graphqlOrRest(
@@ -396,8 +416,21 @@ function mergeAt(n, head, repo, force) {
   throw new Error(`PR #${n} did not merge at once, so the merge was not pinned to ${head.slice(0, 12)}${pr.autoMerge ? "; its auto-merge request is now disabled" : ""}`);
 }
 
-function statusFor(pr, repo, trusted, me) {
-  return verdictStatus(latestVerdict(prComments(pr.number, repo), { prAuthor: pr.author?.login, trusted, me }), currentPatch(pr));
+function statusFor(pr, repo, trusted, me, patch = currentPatch(pr)) {
+  return verdictStatus(latestVerdict(prComments(pr.number, repo), { prAuthor: pr.author?.login, trusted, me }), patch);
+}
+
+// A stack PR's verdict and human approvals, each measured against the PR's current patch. An
+// approval counts only when the patch at the commit it was given on is that same patch.
+function landingState(pr, repo, trusted, me) {
+  const reviews = prReviews(pr.number, repo);
+  const approvedAt = [...new Set(reviews.filter((r) => r.state === "APPROVED" && r.commit_id).map((r) => r.commit_id))];
+  const patches = patchesAt(pr, [pr.headRefOid, ...approvedAt]);
+  const current = patches.get(pr.headRefOid);
+  return {
+    status: statusFor(pr, repo, trusted, me, current),
+    approvers: humanApprovers(reviews.map((r) => ({ ...r, patchId: patches.get(r.commit_id)?.patchId })), { prAuthor: pr.author?.login, reviewDecision: pr.reviewDecision, patchId: current.patchId }),
+  };
 }
 
 function print(obj, json, text) {
@@ -458,8 +491,9 @@ async function main() {
     const prs = openPrs(repo);
     const { stack, stop } = walkStack(prs, Number(sub));
     const me = caller();
-    const statuses = new Map(stack.map((p) => [p.number, statusFor(p, repo, trusted, me)]));
-    const approvers = new Map(stack.map((p) => [p.number, humanApprovers(prReviews(p.number, repo), { prAuthor: p.author?.login, reviewDecision: p.reviewDecision })]));
+    const states = new Map(stack.map((p) => [p.number, landingState(p, repo, trusted, me)]));
+    const statuses = new Map([...states].map(([n, s]) => [n, s.status]));
+    const approvers = new Map([...states].map(([n, s]) => [n, s.approvers]));
     const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(defaultBranch(repo), repo) : {};
     const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>

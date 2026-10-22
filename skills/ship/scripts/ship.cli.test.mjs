@@ -230,7 +230,7 @@ test("GraphQL quota spent: merge squashes through REST, pinned to the verified h
   assert.ok(state().calls.some((c) => c[0] === "pr" && c[1] === "merge"), "gh pr merge stays the first try");
 });
 
-const REVIEW_WAIT = { number: 7, blocker: "GitHub requires a review: waiting for a human approval" };
+const REVIEW_WAIT = { number: 7, blocker: "GitHub requires a review: waiting for a human approval of this patch" };
 const rules = (refUpdateRule, nodes = []) => ({ mergeQueue: null, ref: { refUpdateRule, rules: { nodes } } });
 
 test("run: where the default branch asks for an approving review, the caller's own PR waits for a human approval", (t) => {
@@ -291,4 +291,30 @@ test("--force lands a PR waiting only on a required approval, once ship has seen
   setState({ branch: branch(build, lint) });
   assert.deepEqual(cli("merge", "7", "--head", head, "--force"), { number: 7, head, mergeCommit: "c".repeat(40) });
   assert.deepEqual(state().calls.filter((c) => c[0] === "pr" && c[1] === "merge").map((c) => c.includes("--admin")), [false, true]);
+});
+
+test("run: an approval counts for the patch it was given on, through a rebase that keeps it, and not after a real change", (t) => {
+  const { git, head, cli, state, setState } = fixtureGitHub(t, { graphql: true, reviewDecision: "APPROVED", branch: rules({ requiredApprovingReviewCount: 1, pattern: "main" }) });
+  setState({ reviews: [{ user: { login: "vlad", type: "User" }, state: "APPROVED", submitted_at: "2026-10-22T10:00:00Z", commit_id: head }] });
+  const publish = (sha) => {
+    git("update-ref", "refs/pull/7/head", sha);
+    setState({ pr: { ...state().pr, head: { ...state().pr.head, sha } } });
+  };
+  assert.deepEqual(cli("run", "7").run.map((r) => [r.number, r.approvedBy]), [[7, ["vlad"]]]);
+
+  git("checkout", "--quiet", "main");
+  writeFileSync(join(git("rev-parse", "--show-toplevel"), "other.txt"), "unrelated\n");
+  git("add", "other.txt");
+  git("commit", "--quiet", "-m", "main moves on");
+  git("checkout", "--quiet", "feature");
+  git("rebase", "--quiet", "main");
+  const rebased = git("rev-parse", "HEAD");
+  assert.notEqual(rebased, head);
+  publish(rebased);
+  assert.deepEqual(cli("run", "7").run.map((r) => [r.number, r.approvedBy]), [[7, ["vlad"]]], "a rebase that keeps the patch keeps the approval");
+
+  writeFileSync(join(git("rev-parse", "--show-toplevel"), "sample.txt"), "first\nsecond\nthird\n");
+  git("commit", "--quiet", "-am", "a real change");
+  publish(git("rev-parse", "HEAD"));
+  assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "the approval was given on an earlier patch");
 });
