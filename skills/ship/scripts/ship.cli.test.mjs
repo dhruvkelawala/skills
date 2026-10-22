@@ -43,6 +43,8 @@ if (args[0] === "pr" && args[1] === "list") {
   console.log(JSON.stringify({ comments: JSON.parse(fs.readFileSync("comments.json", "utf8")) }));
 } else if (args[0] === "api" && args[1] === "user") {
   console.log("reviewer");
+} else if (args[0] === "repo" && args[1] === "view") {
+  console.log(JSON.stringify({ defaultBranchRef: { name: "main" }, isArchived: false }));
 } else if (args[0] === "pr" && args[1] === "comment") {
   fs.writeFileSync("comments.json", JSON.stringify([{ body: args[args.indexOf("--body") + 1], author: { login: "reviewer" }, createdAt: "2026-10-05T12:00:00Z" }]));
 } else {
@@ -116,7 +118,7 @@ if (!state.graphql && (args[0] === "pr" || args[0] === "repo")) fail("", "GraphQ
 if (!state.graphql && args[0] === "api" && args[1] === "graphql") {
   fail(JSON.stringify({ errors: [{ type: "RATE_LIMITED", code: "graphql_rate_limit", message: limit }] }), "gh: " + limit);
 }
-if (args[0] === "repo" && args[1] === "view") answer({ defaultBranchRef: { name: "main" } });
+if (args[0] === "repo" && args[1] === "view") answer({ defaultBranchRef: { name: "main" }, isArchived: Boolean(state.archived) });
 if (args[0] === "api" && args[1] === "graphql") answer({ data: { repository: state.branch } });
 if (args[0] === "pr" && args[1] === "list") {
   answer(state.mergedAs ? [] : [{
@@ -152,7 +154,7 @@ const field = (name) => args.find((a) => a.startsWith(name + "="))?.slice(name.l
 const pages = (list) => (args.includes("--slurp") ? [list] : list);
 switch (method + " " + endpoint) {
   case "GET user": answer(state.login + "\\n");
-  case "GET repos/fixture/repo": answer({ full_name: "fixture/repo", default_branch: "main" });
+  case "GET repos/fixture/repo": answer({ full_name: "fixture/repo", default_branch: "main", archived: Boolean(state.archived) });
   case "GET repos/fixture/repo/branches/main": answer({ name: "main", protected: state.protected });
   case "GET repos/fixture/repo/pulls": answer(pages(state.mergedAs ? [] : [pr]));
   case "GET repos/fixture/repo/pulls/7":
@@ -317,4 +319,17 @@ test("run: an approval counts for the patch it was given on, through a rebase th
   git("commit", "--quiet", "-am", "a real change");
   publish(git("rev-parse", "HEAD"));
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "the approval was given on an earlier patch");
+});
+
+test("an archived repository's PRs never appear in ship output: every command refuses it before reading them", (t) => {
+  const { head, ship, state, setState } = fixtureGitHub(t, { graphql: true, archived: true });
+  const commands = [["queue"], ["verdict", "record", "7", "PASS", "--head", head, "--by", "verifier"], ["verdict", "check", "7"], ["run", "7"], ["merge", "7", "--head", head]];
+  for (const args of commands) {
+    const out = ship(...args, "--json");
+    assert.deepEqual([out.status, out.stdout], [2, ""], args.join(" "));
+    assert.match(out.stderr, /fixture\/repo is archived/);
+  }
+  assert.deepEqual(state().calls.filter((c) => c[0] !== "repo"), [], "nothing past the repository was read or written");
+  setState({ graphql: false });
+  assert.match(ship("queue").stderr, /fixture\/repo is archived/, "the REST fallback reads the archive flag too");
 });

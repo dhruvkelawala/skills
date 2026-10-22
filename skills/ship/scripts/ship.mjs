@@ -261,11 +261,19 @@ function fromRestPr(p) {
   };
 }
 
-function defaultBranch(repo) {
-  return graphqlOrRest(
-    () => JSON.parse(sh("gh", ["repo", "view", ...(repo ? [repo] : []), "--json", "defaultBranchRef"])).defaultBranchRef.name,
-    () => restJson(`repos/${nameWithOwner(repo)}`).default_branch,
+let repoView;
+function repository(repo) {
+  repoView ??= graphqlOrRest(
+    () => {
+      const r = JSON.parse(sh("gh", ["repo", "view", ...(repo ? [repo] : []), "--json", "defaultBranchRef,isArchived"]));
+      return { defaultBranch: r.defaultBranchRef.name, archived: r.isArchived };
+    },
+    () => {
+      const r = restJson(`repos/${nameWithOwner(repo)}`);
+      return { defaultBranch: r.default_branch, archived: r.archived };
+    },
   );
+  return repoView;
 }
 
 // The PR's patch at each of `commits` as GitHub defines it: merge-base(base tip, commit) to commit.
@@ -447,6 +455,7 @@ function textQueue(q) {
   ].join("\n");
 }
 
+const USAGE = "usage: ship.mjs queue | verdict record|check | run <bottom-pr> | merge <pr> --head <sha>";
 // A flag ship does not know, such as a misspelt or removed one, could loosen a rule if ignored.
 const FLAGS = ["json", "repo", "me", "trusted", "rule-b", "force", "head", "by", "notes"];
 
@@ -456,6 +465,9 @@ async function main() {
   if (unknown) throw new Error(`unknown flag --${unknown}`);
   const [cmd, sub, ...rest] = a._;
   const repo = a.repo;
+  if (!["queue", "verdict", "run", "merge"].includes(cmd)) throw new Error(USAGE);
+  // An archived repository is a dropped project: none of its PRs reach ship's output.
+  if (repository(repo).archived) throw new Error(`${nameWithOwner(repo)} is archived, and ship skips archived repositories`);
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
   const ruleB = a["rule-b"] ? a["rule-b"].split(",").map(Number) : [];
   if (!ruleB.every(Number.isInteger)) throw new Error("usage: --rule-b <pr>[,<pr>...], the PRs rule B covers");
@@ -469,7 +481,7 @@ async function main() {
   };
   if (cmd === "queue") {
     const me = a.me ?? authenticated();
-    const q = planQueue(openPrs(repo), { me, defaultBranch: defaultBranch(repo) });
+    const q = planQueue(openPrs(repo), { me, defaultBranch: repository(repo).defaultBranch });
     return print(q, a.json, textQueue);
   }
   if (cmd === "verdict" && sub === "record") {
@@ -494,7 +506,7 @@ async function main() {
     const states = new Map(stack.map((p) => [p.number, landingState(p, repo, trusted, me)]));
     const statuses = new Map([...states].map(([n, s]) => [n, s.status]));
     const approvers = new Map([...states].map(([n, s]) => [n, s.approvers]));
-    const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(defaultBranch(repo), repo) : {};
+    const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(repository(repo).defaultBranch, repo) : {};
     const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
       [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}${x.forced ? " (approval skipped by --force)" : ""}`).join(" -> ") || "(none)"}`,
@@ -505,7 +517,7 @@ async function main() {
     if (!sub || !/^[0-9a-f]{40}$/.test(a.head ?? "")) throw new Error("usage: merge <pr> --head <the full head SHA from run>");
     return print(mergeAt(Number(sub), a.head, repo, a.force), a.json, (m) => `merged #${m.number} at ${m.head.slice(0, 12)} as ${m.mergeCommit?.slice(0, 12)}`);
   }
-  throw new Error("usage: ship.mjs queue | verdict record|check | run <bottom-pr> | merge <pr> --head <sha>");
+  throw new Error(USAGE);
 }
 
 // Skills are usually reached through a symlinked folder (~/.claude/skills), so compare real paths;
