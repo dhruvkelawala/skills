@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a pull request, a stack, or the PRs waiting on the user, one PR at a time. Each PR gets the few architecture and system-design changes worth judging, each with a before-and-after sketch and the question to answer, then findings, a suggested verdict and one batched set of comments. Implementation detail comes only on request, and `try` runs the PR for hands-on testing. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next.
+description: Review a pull request, a stack, or the PRs waiting on the user, one PR at a time. /code-review and a second opinion from the other model family find the problems first; the agent then explains the PR in an intro, a tour of the whole route and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next.
 compatibility: Requires git and gh.
 ---
 
