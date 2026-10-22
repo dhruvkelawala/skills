@@ -9,7 +9,7 @@ The day has two fixed anchors, a morning report and a goodnight check, and this 
 
 Invoke as `/day night`, or say "goodnight". The T3 tools see the threads of the T3 server this thread runs on, so start the check from a thread on the machine where T3 runs new threads.
 
-The user often reads the list on a phone. Put the answer first, and link each thread as `[title](t3-thread://v1/<threadId>)` with the `threadId` exactly as T3 returns it, so it opens in T3. Leave local paths out of every message.
+The user often reads the list on a phone. Put the answer first, and link each thread as `[title](t3-thread://v1/<threadId>)` with the `threadId` exactly as T3 returns it, so it opens in T3. Every link goes to a T3 thread or a web page, never to a local file or localhost.
 
 ## 1. Gather the threads
 
@@ -21,11 +21,17 @@ The user often reads the list on a phone. Put the answer first, and link each th
    - **Gone quiet** threads stopped without finishing and without asking. The status is `failed` or `interrupted`, or the last message ends partway through the work.
    - **Done** threads finished with nothing asked of the user, such as an answer given or a PR merged.
 
-   A snoozed thread is listed only as a run, since the user put its questions off. A run with no update for over an hour has also gone quiet. Keep it under runs, and say so in its reason.
+   A snoozed thread is listed only as a run, since the user put its questions off. A turn that has run for over an hour with no update has also gone quiet. Keep it under runs, and say so in its reason. A thread that watches a PR is idle between PR events by design, so judge it by its PR's state.
 
 **Complete when:** every active thread on the server, apart from this one, is in exactly one group.
 
-## 2. Suggest continue or stop
+## 2. Check the strain
+
+Run `node <skill-dir>/scripts/strain.mjs` with a command timeout of at least 6 minutes, where `<skill-dir>` is the folder holding this file. On a full disk, finding the biggest folder can take over 4 minutes. The script gives up on that search at 5 minutes and still reports the free space. It prints the strain line only when the volume holding the home folder has under 50 GB free or memory pressure is at warning or worse, naming the biggest cause of each, and prints nothing otherwise. When it exits with code 2, a reading failed, so add one line saying the strain check could not run, with its error.
+
+**Complete when:** the script has exited, and you hold its line, nothing, or the line saying it could not run.
+
+## 3. Suggest continue or stop
 
 Give each run a suggestion and a reason short enough to check at a glance:
 
@@ -36,10 +42,6 @@ Give each run a suggestion and a reason short enough to check at a glance:
 A run that continues keeps the day's rules and its remaining repairs. It gets no separate night budget.
 
 **Complete when:** every run has a suggestion and a reason.
-
-## 3. Check the strain
-
-Run `node <skill-dir>/scripts/strain.mjs`, where `<skill-dir>` is the folder holding this file. It prints the strain line only when the volume holding the home folder has under 50 GB free or memory pressure is at warning or worse, naming the biggest cause of each, and prints nothing otherwise. Finding the biggest folder can take a few minutes on a full disk. When it exits with code 2, a reading failed, so add one line saying the strain check could not run, with its error.
 
 ## 4. Post the list and wait
 
