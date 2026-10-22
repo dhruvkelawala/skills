@@ -1,0 +1,38 @@
+{
+  "how": [
+    "Each job below runs on a fixed model. A skill names the job, as in the `verifier` job, and never a model. A helper with no job runs on the thread's model.",
+    "Take the job's `use` entry. A job with no `use` entry has `onCodexThread` for a thread on a GPT model and `onClaudeThread` for any other thread. On a PR someone else wrote, `onTeammatePr` wins when the job has one.",
+    "An entry with `engine` runs through the autoreview script as `--engine <engine> --model <model>`, plus `--thinking <effort>`. Any other entry goes through `delegate_task`: `target.model` is `model`, `target.providerInstanceId` is a provider instance from `orchestrator_capabilities` whose `driverKind` is `driver` and that lists the model, and `effort` goes in `target.options` under that model's effort option.",
+    "`ifUnavailable` says what happens when the model can't run. `thread` runs the job on the thread's model, and the run record or the report says so. `wait` runs nothing in its place and tells the user."
+  ],
+  "jobs": {
+    "reviewers": {
+      "for": "/code-review's two reviewers",
+      "use": { "driver": "claudeAgent", "model": "claude-fable-5-1" },
+      "ifUnavailable": "thread"
+    },
+    "second-opinion": {
+      "for": "autoreview, from the other model family than the thread's",
+      "onClaudeThread": { "engine": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+      "onCodexThread": { "engine": "claude", "model": "claude-opus-5-5" },
+      "ifUnavailable": "wait"
+    },
+    "verifier": {
+      "for": "ship verify's independent verdict on a risky PR, or when the user says verify",
+      "onClaudeThread": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+      "onCodexThread": { "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "xhigh" },
+      "onTeammatePr": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+      "ifUnavailable": "wait"
+    },
+    "teammate-prep": {
+      "for": "preparing the review of a teammate's PR",
+      "use": { "driver": "claudeAgent", "model": "claude-opus-5-5" },
+      "ifUnavailable": "thread"
+    },
+    "research": {
+      "for": "the research skill and wayfinder's research tickets, through the Pi provider",
+      "use": { "driver": "pi", "model": "deepseek/deepseek-flash" },
+      "ifUnavailable": "thread"
+    }
+  }
+}
