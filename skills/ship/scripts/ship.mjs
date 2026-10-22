@@ -186,7 +186,7 @@ function verdictReason(p, door, status, ruleB) {
 // approvals of its current patch, since GitHub's own count can include an approval gone stale
 // (`approversByNumber` holds humanApprovers() per PR; reviewDecision alone is not trusted, because a
 // bot can approve). Where none is required, the caller's request to land stands in for it.
-// `force` skips only the wait for a required approval; a standing change request still blocks.
+// `force` skips only the wait for a required approval, never a change request GitHub enforces.
 // The caller's own verdict counts on their own PR (`me`).
 //
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned

@@ -11,7 +11,7 @@ Invoke as `/ship [queue | verify <pr> | land <bottom-pr> [--force]] [--trusted l
 
 Choose `--trusted` and `--repo` once at the start, as `$FLAGS`, and pass the same `$FLAGS` to every `run` and `verdict check` in this invocation. A later check with fewer flags trusts more people than the first one did.
 
-`$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans, and makes two writes: the verdict comment that `verdict record` posts, and the pinned merge that `merge` makes. Every rebase and retarget is yours to do, and you merge one PR at a time. It refuses a flag it does not know, and it refuses an archived repository before reading any PR, so a dropped project's PRs never show up.
+`$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans, and makes two writes: the verdict comment that `verdict record` posts, and the pinned merge that `merge` makes. Every rebase and retarget is yours to do, and you merge one PR at a time. It refuses a flag it does not know, a flag with no value and a stray argument, and it refuses an archived repository before reading any PR, so a dropped project's PRs never show up.
 
 Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved. REST also shows a classic protection rule's details only to admins, so a protected default branch counts as asking for a review. A PR that needs a human approval waits, and the queue's merge-now list is empty. A PR on an unprotected default branch still lands on the request to land, and `merge --force` refuses until the quota resets.
 
@@ -63,7 +63,7 @@ node "$SHIP" verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by
 
 Landing requires an explicit request to land.
 
-1. Decide rule B for each PR in the stack: read its diff and its proof, the PR body's evidence and the tests it adds, and name the PRs that touch authority, stored data, money or a production switch the proof doesn't cover, plus each PR the user said `verify` on. Run `verify` for each named PR that has no current verdict. Call the named PRs `$RULE_B`.
+1. Decide rule B for each PR in the stack: read its diff and its proof, the PR body's evidence and the tests it adds, and name the PRs that touch authority, stored data, money or a production switch the proof doesn't cover, plus each PR the user said `verify` on. Run `verify` for each named PR that has no current verdict. Call the named PRs, comma-joined, `$RULE_B`.
 2. Run `node "$SHIP" run <bottom-pr> --rule-b $RULE_B $FLAGS`, leaving out `--rule-b` when no PR is named, and adding `--force` only when the user typed `ship land --force`. It walks the stack upward from the bottom PR, checks each verdict rule B asks for against the current patch and each approval against the patch it was given on, and prints the landable run as `#pr@<full head SHA>` plus its ceiling, meaning the first PR that can't land and the reason.
 3. For each PR in the run, bottom first:
    1. If the PR does not target the default branch, rebase it onto the current tip, push, retarget it with `gh pr edit <pr> --base <default>` (REST, on a rate-limit error: `gh api -X PATCH repos/{owner}/{repo}/pulls/<pr> -f base=<default>`), then run `node "$SHIP" verdict check <pr> $FLAGS`. A stale verdict sends the PR back to `verify`.
