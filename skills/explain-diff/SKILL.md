@@ -27,9 +27,9 @@ Read the changed files themselves, their callers and their tests, not just the h
 
 ## 2. Explain
 
-Write it in this order, with about 400 words of prose after the sketch:
+Write the answer in this order, with nothing before the sketch and about 400 words of prose after it:
 
-1. **The sketch.** Start the answer with it, and put no note or preface before it. Draw the change before and after in a fenced `text` block: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines, each under 40 characters, so it reads on a phone.
+1. **The sketch.** The answer's first line is the sketch's opening fence, with no status line, note or label above it. Draw the change before and after in a fenced `text` block: boxes and arrows for a flow, a call tree, a file tree, or the code's shape with `-` and `+` lines. Keep it to about 12 lines, each under 40 characters, so it reads on a phone.
 2. **The problem.** One or two sentences, no code.
 3. **The key idea.** The one thing that makes the change click: a method, a flag, an inversion.
 4. **The trace.** One realistic input followed through the changed code. Write one line per step, each naming its file and line in the link form Style gives. Add one edge value when it changes the outcome.
