@@ -75,7 +75,7 @@ For a taste score, show the final artifact with both the critic's and the user's
 
 ## Helpers
 
-Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, do it yourself and say so.
+Hand work to a native subagent on the thread's model. With no subagent available, do it yourself and say so.
 
 ## Attribution
 

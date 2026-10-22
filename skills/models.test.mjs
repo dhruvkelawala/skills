@@ -20,3 +20,15 @@ test("every job a skill names is in models.json", () => {
   );
   assert.deepEqual(missing, []);
 });
+
+test("no skill text names a model", () => {
+  const ids = Object.values(jobs).flatMap((job) =>
+    Object.values(job).flatMap((entry) => entry?.model ?? []),
+  );
+  const modelShapes = /\b(?:sonnet|opus|haiku|fable|gpt-\d[\w.-]*|claude-[a-z]+-\d[\w-]*|deepseek[\w/-]*|gemini[\w.-]*)\b/gi;
+  const named = skillText.flatMap(({ path, text }) => [
+    ...ids.filter((id) => text.includes(id)).map((id) => `${path}: ${id}`),
+    ...[...text.matchAll(modelShapes)].map(([name]) => `${path}: ${name}`),
+  ]);
+  assert.deepEqual(named, []);
+});

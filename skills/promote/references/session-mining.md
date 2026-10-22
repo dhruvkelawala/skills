@@ -46,6 +46,6 @@ Return each candidate as the mistake and its correction, the rule, the affected 
 
 ## Large transcripts
 
-Read the transcript yourself in one pass by default. When it is too large for one pass, hand it to a helper agent with the `research` role: on Pi or SumoCode spawn role `research`; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. Give it the absolute path, the line boundary, the target repo, and this file's "Read it" and "What counts" sections. With no helper available, read it yourself in chunks and say so. Check every cited line yourself before using a candidate.
+Read the transcript yourself in one pass by default. When it is too large for one pass, hand it to a native subagent on the thread's model. Give it the absolute path, the line boundary, the target repo, and this file's "Read it" and "What counts" sections. With no subagent available, read it yourself in chunks and say so. Check every cited line yourself before using a candidate.
 
 Complete when every user correction and every agent reversal up to the boundary is a candidate or has a reason for its exclusion.

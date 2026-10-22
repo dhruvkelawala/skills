@@ -48,7 +48,7 @@ Write "because" only at Direct or Supported. Code shows what happens; author tex
 
 ## Deep sweep
 
-Read [references/sources.md](references/sources.md), then search each source this session can reach: git and PRs, the issue tracker, docs, team chat, observability, error tracking, and analytics. Hand each source to a helper agent with the `research` role: on Pi or SumoCode spawn role `research`; in Claude Code use the Agent tool (general-purpose, model `sonnet` for cheap work); in Codex use the standard subagent. With no helper available, search the sources yourself one after another and say so.
+Read [references/sources.md](references/sources.md), then search each source this session can reach: git and PRs, the issue tracker, docs, team chat, observability, error tracking, and analytics. Hand each source to a native subagent on the thread's model. With no subagent available, search the sources yourself one after another and say so.
 
 Answer in the same shape, with one confidence word per claim, then one coverage line per source.
 
