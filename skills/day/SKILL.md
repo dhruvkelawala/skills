@@ -80,3 +80,40 @@ Read the reply against the numbered list:
 Stop each run marked stop, as [Stop a run](#stop-a-run) says, and write the [night record](#the-night-record). Then reply with one line per stopped run, saying where it stopped, and one count for the runs that continue.
 
 **Complete when:** every line marked stop has been stopped, the night record holds every stopped and continuing run, and the reply is posted.
+
+## Stop a run
+
+Stop each thread marked stop in four moves, in this order:
+
+1. **Interrupt.** When the thread had an active run in step 1, call `t3_thread_interrupt` with its `threadId`, `runId` set to that run, `reason: "Stopped by the goodnight check. Say \"go on\" to restart."` and `clientRequestId: "day-stop-<runId>"`. Pinning the run leaves alone any run the user started after the list, and the request ID makes a retry interrupt once. Then call `t3_thread_wait` with the same `runId` and a 60 second timeout, and check that the run ended as `interrupted`, `completed`, `failed` or `cancelled`. When the wait times out, read the thread once more. If it is still running, its line in the record and the reply says so.
+2. **Unwatch.** Call `unwatch_pull_request` with the `threadId` and the `url` of each PR in its `pullRequests`. The PR stays linked to the thread.
+3. **Save where it stopped.** Read its checkout with `git -C <worktreePath> rev-parse --short HEAD` and `git -C <worktreePath> status`, keeping the head, the count of uncommitted files, and any rebase, merge or cherry-pick that `git status` names as in progress. The worktree keeps the files as they are, and the thread picks them up when it restarts. Take where it stopped from its last message, or from its run record's `stage`, in one line.
+4. **Record** it in the night record.
+
+**Complete when:** each stopped thread's run has ended or is recorded as still stopping, each of its PRs got an unwatch call, and the night record has its line.
+
+## The night record
+
+The night record is `~/.agent/day/night-<YYYY-MM-DD>-<HHMM>.md`, written when the reply is acted on. When a record from the last 12 hours exists, add to it instead, so a second goodnight in one night keeps the first one's stops.
+
+```md
+# Night record, <YYYY-MM-DD> <HH:MM>
+
+## Stopped
+- <ISO time> · [<title>](t3-thread://v1/<threadId>) · PR <url, or none> · <branch> at <short sha>, <n> uncommitted files<, rebase in progress> · stopped at: <one line>
+
+## Continued
+- <ISO time> · [<title>](t3-thread://v1/<threadId>) · <the reason it continued>
+```
+
+The morning report lists, under "stopped last night", each stopped line whose thread has not run since its stop time. `t3_thread_read` shows this in `recentRuns`: a run requested after the stop time means the thread restarted, whoever restarted it.
+
+## "go on"
+
+"go on" with a line number or a thread, said here or in the morning report's thread, restarts a stopped run. Send the thread a message with `t3_thread_send` and `mode: "auto"`:
+
+```text
+go on: the goodnight check stopped this run at <time>, at <where it stopped>. Continue from there, and watch <PR url> again if you were watching it.
+```
+
+Reply with the thread's link. Said in the stopped thread itself, "go on" is that thread's own word, and the interrupt reason tells it why it stopped.
