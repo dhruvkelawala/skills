@@ -31,14 +31,25 @@ const save = () => writeFileSync(issuesFile, JSON.stringify(created, null, 2));
 const args = process.argv.slice(2).flatMap((a) => (/^--[\w-]+=/.test(a) ? [a.slice(0, a.indexOf("=")), a.slice(a.indexOf("=") + 1)] : [a]));
 appendFileSync(join(dir, "calls.jsonl"), `${JSON.stringify(args)}\n`);
 
+// Flags that take no value; every other flag consumes the next argument.
+const BOOLEAN_FLAGS = new Set(["--web", "-w", "--comments", "-c", "--remove-milestone", "--paginate", "--slurp", "-i", "--include", "--silent", "--verbose"]);
+const positionals = args.filter((a, i) => !a.startsWith("-") && !(i > 0 && args[i - 1].startsWith("-") && !BOOLEAN_FLAGS.has(args[i - 1])));
+
 const flag = (...names) => {
   const i = args.findIndex((a) => names.includes(a));
   return i >= 0 ? args[i + 1] : undefined;
 };
 const flags = (...names) => args.flatMap((a, i) => (names.includes(a) ? [args[i + 1]] : []));
 const readFile = (file) => readFileSync(file === "-" ? 0 : file, "utf8");
+const fail = (message) => {
+  process.stderr.write(`${message}\n`);
+  process.exit(1);
+};
 const asListed = (issue) => ({ ...issue, state: "OPEN", labels: issue.labels.map((name) => ({ name })) });
-const findIssue = (number) => created.find((i) => i.number === Number(number));
+const issueNumber = (ref) => Number(String(ref ?? "").match(/(?:^#?|\/issues\/)(\d+)$/)?.[1]);
+const findIssue = (ref) => created.find((i) => i.number === issueNumber(ref));
+const sampleIssue = (ref) => ISSUES.find((i) => i.number === issueNumber(ref));
+const allIssues = () => [...created.map(asListed), ...ISSUES];
 const print = (data) => {
   const json = JSON.stringify(data);
   const jq = flag("--jq", "-q");
@@ -53,69 +64,81 @@ function create(title, body, labels) {
   return issue;
 }
 
-function edit(issue, { title, body, addLabels = [], removeLabels = [] }) {
+function edit(issue, { title, body, labels, addLabels = [], removeLabels = [] }) {
   if (title !== undefined) issue.title = title;
   if (body !== undefined) issue.body = body;
-  issue.labels = [...new Set([...issue.labels, ...addLabels])].filter((l) => !removeLabels.includes(l));
+  issue.labels = [...new Set([...(labels ?? issue.labels), ...addLabels])].filter((l) => !removeLabels.includes(l));
   save();
 }
 
-// gh api fields: -f/--raw-field sends the text as is; -F/--field reads @file and parses literals.
-function apiFields() {
+// gh api: -f/--raw-field sends the text as is, -F/--field also reads @file, and `key[]` builds an array.
+// With --input the body comes from that file and the fields become query parameters.
+function apiBody() {
+  const input = flag("--input");
+  if (input) return JSON.parse(readFile(input));
   const fields = {};
-  const add = (pair, typed) => {
+  args.forEach((a, i) => {
+    if (!["-f", "--raw-field", "-F", "--field"].includes(a)) return;
+    const pair = args[i + 1];
     const [key, value] = [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)];
-    const parsed = typed && value.startsWith("@") ? readFile(value.slice(1)) : value;
+    const parsed = (a === "-F" || a === "--field") && value.startsWith("@") ? readFile(value.slice(1)) : value;
     if (key.endsWith("[]")) (fields[key.slice(0, -2)] ??= []).push(parsed);
     else fields[key] = parsed;
-  };
-  args.forEach((a, i) => {
-    if (a === "-f" || a === "--raw-field") add(args[i + 1], false);
-    if (a === "-F" || a === "--field") add(args[i + 1], true);
   });
-  const input = flag("--input");
-  return input ? { ...fields, ...JSON.parse(readFile(input)) } : fields;
+  return fields;
 }
 
 function api() {
-  const path = (args.slice(1).find((a) => /^\/?repos\//.test(a)) ?? "").replace(/^\//, "").split("?")[0];
-  const fields = apiFields();
-  const method = (flag("-X", "--method") ?? (Object.keys(fields).length ? "POST" : "GET")).toUpperCase();
-  const [, number, sub] = path.match(/^repos\/[^/]+\/[^/]+\/issues\/(\d+)(?:\/(\w+))?$/) ?? [];
-  if (method === "POST" && /^repos\/[^/]+\/[^/]+\/issues$/.test(path)) {
-    const issue = create(fields.title, fields.body ?? "", fields.labels ?? []);
+  const path = (positionals[1] ?? "").replace(/^\//, "").split("?")[0];
+  const body = apiBody();
+  const method = (flag("-X", "--method") ?? (Object.keys(body).length || flag("--input") ? "POST" : "GET")).toUpperCase();
+  const labelList = body.labels ?? (Array.isArray(body) ? body : []);
+  if (method !== "GET" && !Array.isArray(labelList)) fail("gh: Invalid request. For 'properties/labels', is not an array. (HTTP 422)");
+  if (/^repos\/[^/]+\/[^/]+$/.test(path)) return print(REPO);
+  if (/^repos\/[^/]+\/[^/]+\/labels$/.test(path)) return print(LABELS);
+  if (/^repos\/[^/]+\/[^/]+\/issues$/.test(path)) {
+    if (method === "GET") return print(allIssues());
+    if (!body.title) fail("gh: Validation Failed: title missing (HTTP 422)");
+    const issue = create(body.title, body.body ?? "", labelList);
     return print({ number: issue.number, html_url: issue.url });
   }
-  if (number && findIssue(number)) {
-    const issue = findIssue(number);
-    if (sub === "labels" && method === "POST") edit(issue, { addLabels: fields.labels ?? [] });
-    if (!sub && method === "PATCH") edit(issue, { title: fields.title, body: fields.body, addLabels: fields.labels ?? [] });
-    return print(sub === "labels" ? issue.labels.map((name) => ({ name })) : { ...asListed(issue), html_url: issue.url });
-  }
-  if (/\/labels/.test(path)) return print(LABELS);
-  if (/\/issues/.test(path)) return print([...created.map(asListed), ...ISSUES]);
-  if (/^repos\/[^/]+\/[^/]+$/.test(path)) return print(REPO);
+  const [, number, sub, labelName] = path.match(/^repos\/[^/]+\/[^/]+\/issues\/(\d+)(?:\/(labels)(?:\/(.+))?)?$/) ?? [];
+  const issue = findIssue(number);
+  if (!issue) return sampleIssue(number) && method === "GET" ? print(sampleIssue(number)) : fail("gh: Not Found (HTTP 404)");
+  if (sub && method === "POST") edit(issue, { addLabels: labelList });
+  if (sub && method === "PUT") edit(issue, { labels: labelList });
+  if (sub && method === "DELETE") edit(issue, { removeLabels: labelName ? [decodeURIComponent(labelName)] : issue.labels });
+  if (!sub && method === "PATCH") edit(issue, { title: body.title, body: body.body, labels: body.labels });
+  print(sub ? issue.labels.map((name) => ({ name })) : { ...asListed(issue), html_url: issue.url });
 }
 
-const [group, verb, target] = args;
-if (group === "issue" && verb === "create") {
+function bodyFlag() {
   const file = flag("--body-file", "-F");
-  const body = file ? readFile(file) : (flag("--body", "-b") ?? "");
-  console.log(create(flag("--title", "-t"), body, flags("--label", "-l").flatMap((l) => l.split(","))).url);
-} else if (group === "issue" && verb === "edit" && findIssue(target)) {
-  const file = flag("--body-file", "-F");
-  edit(findIssue(target), {
+  return file ? readFile(file) : flag("--body", "-b");
+}
+
+const [group, verb] = positionals;
+const target = positionals[2];
+if (args[0] === "--version") console.log("gh version 2.0.0 (fake)");
+else if (group === "issue" && verb === "create") {
+  if (!flag("--title", "-t")) fail("must provide `--title` and `--body` when not running interactively");
+  console.log(create(flag("--title", "-t"), bodyFlag() ?? "", flags("--label", "-l").flatMap((l) => l.split(","))).url);
+} else if (group === "issue" && verb === "edit") {
+  const issue = findIssue(target) ?? fail(`GraphQL: Could not resolve to an issue or pull request with the number of ${target}.`);
+  edit(issue, {
     title: flag("--title", "-t"),
-    body: file ? readFile(file) : flag("--body", "-b"),
+    body: bodyFlag(),
     addLabels: flags("--add-label").flatMap((l) => l.split(",")),
     removeLabels: flags("--remove-label").flatMap((l) => l.split(",")),
   });
-  console.log(findIssue(target).url);
+  console.log(issue.url);
 } else if (group === "issue" && verb === "view") {
   const issue = findIssue(target);
-  print(issue ? asListed(issue) : (ISSUES.find((i) => String(i.number) === String(target)) ?? ISSUES[0]));
-} else if (group === "issue" && verb === "list") print([...created.map(asListed), ...ISSUES]);
+  print(issue ? asListed(issue) : (sampleIssue(target) ?? fail(`GraphQL: Could not resolve to an issue or pull request with the number of ${target}.`)));
+} else if (group === "issue" && verb === "list") print(allIssues());
 else if (group === "repo" && verb === "view") print(REPO);
 else if (group === "label" && verb === "list") print(LABELS);
+else if (group === "label" && verb === "create") console.log(`✓ Label "${target}" created in acme/demo`);
 else if (group === "api") api();
 else if (group === "auth") console.log("github.com\n  ✓ Logged in to github.com account tester");
+else fail(`fake gh: unsupported command: gh ${args.join(" ")}`);
