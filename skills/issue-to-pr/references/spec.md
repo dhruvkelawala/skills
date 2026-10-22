@@ -13,7 +13,7 @@ The spec thread builds nothing, so it stays in the thread and checkout where it 
 1. Write the spec's run record header, as [run record](run-record.md) shows, with `spec_mode: stack` and `thread:` set to this thread's id from `t3_thread_configuration`.
 2. Run `spec.mjs tickets <record>`. It prints the spec's open tickets in build order, each with its open blockers. Append it to the contract as printed. When it reports a problem, such as a blocker in another repository or blocked-by links that form a loop, record `blocked: <problem>` and stop.
 3. Finish the contract: the base, what is out of scope, and the human gates, at least the review of each PR.
-4. Post the brief, then start what can start.
+4. Post the [spec's brief](#brief), then start what can start.
 
 ## Start what can start
 
@@ -23,9 +23,23 @@ Run this step after the brief, and again each time the thread wakes:
 2. For each `#<n> starts on <branch>` line, start the ticket's build with `t3_thread_launch`. Set `message` to `/issue-to-pr <n> --spec <spec>`, adding `stack <PR>` when the line ends `stacked on <PR>`, and this run's `--merge` and `--max-repairs`. Set `workspaceStrategy` to `{"type": "worktree", "baseRef": "<branch>", "branch": "<type>/<n>-<short-description>", "startFromOrigin": true}`. Then run `spec.mjs started <record> <n> <threadId>` straight away, so that a later wake never starts the ticket twice.
 3. Leave a `waits for` line alone. When a ticket's run ends blocked, only the tickets above it wait, with `waits for #<n>, which is blocked`, and the rest keep building. A ticket whose two open blockers sit in different stacks waits until one of them merges.
 4. On `running`, record `stage: watching` and end the turn. Each ticket's thread wakes this one when its PR is published and when its run stops. `/issue-to-pr <spec> resume` runs this step by hand.
-5. On `done`, nothing can move without the user: every ticket is waiting on them, blocked, merged, or waits for one of those. Record `stage: ready` when no ticket is blocked or waiting, otherwise `blocked: <each blocked or waiting ticket and why>`, and stop.
+5. On `done`, nothing can move without the user: every ticket is waiting on them, blocked, merged, or waits for one of those. Record `stage: ready` when no ticket is blocked or waiting, otherwise `blocked: <each blocked or waiting ticket and why>`, then post the [spec's recap](#recap) and stop.
 
-**Complete when:** `spec.mjs next` prints `done`, and the record shows a thread for every ticket that started.
+**Complete when:** `spec.mjs next` prints `done`, the record shows a thread for every ticket that started, and the recap is posted.
+
+## Brief
+
+The spec thread posts one brief for the whole spec, in [the brief](../SKILL.md#brief)'s shape, with three changes:
+
+- The first line reads `Building #<spec> as a stack: <spec title>`.
+- Each plan step is one ticket, `#<n> <title>`, worded as the `Tickets:` list words it.
+- The last line ends `Lane: per PR`, because each ticket's build sets its own lane.
+
+## Recap
+
+When the spec stops, it posts one recap that covers every PR. Under the result, list every ticket on a line of its own, as `spec.mjs next` last printed it, so each PR shows with its state. Then come the five lines: `Review:` and `Evidence:` sum up what the PRs carry, and `Next:` offers `/pr-review <the stack>`, because the stack is reviewed from this thread.
+
+`messages.mjs recap` refuses a spec's recap that leaves out a ticket, its state or its PR.
 
 ## A ticket's build
 

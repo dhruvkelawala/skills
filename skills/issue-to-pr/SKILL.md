@@ -43,7 +43,7 @@ Once the contract is pinned, post the brief in the thread and keep going. Don't 
 
     <sign-off>
 
-Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own.
+Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own. A spec's brief plans its tickets instead, as [spec](references/spec.md#brief) shows.
 
 ## Recap
 
@@ -59,7 +59,7 @@ When the run stops, post the recap: the result first, then one line each for wha
 
     <sign-off>
 
-The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again. After its recap, a ticket of a spec wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
+A spec's recap also gives every ticket a line with its state and PR, as [spec](references/spec.md#recap) shows. The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again. After its recap, a ticket of a spec wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
 
 ## Sign-off
 
@@ -74,7 +74,7 @@ node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief fil
 node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
 ```
 
-The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
+The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria or a spec's tickets, that a spec's recap lists every ticket, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
 ## Taste check
 

@@ -18,18 +18,22 @@ const CRITERIA = [
 function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const record = (issue, { predecessor, criteria = CRITERIA } = {}) => {
+  // A spec's record lists `tickets` where a build's lists criteria; a ticket's record names its `pr`.
+  const record = (issue, { predecessor, criteria = CRITERIA, tickets, pr } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
+      ...(tickets ? ["spec_mode: stack"] : []),
       `mode: ${predecessor ? "stacked" : "standalone"}`,
       ...(predecessor ? [`predecessor_pr: https://github.com/o/r/pull/${predecessor}`] : []),
       "stage: contract",
+      `pr: ${pr ? `https://github.com/o/r/pull/${pr}` : "none"}`,
       "",
       "## Contract",
       "",
-      "Acceptance criteria:",
-      ...criteria.flatMap((criterion, i) => [`${i + 1}. ${criterion}`, "   surface: web. capture: a still of the results screen."]),
+      ...(tickets
+        ? ["Tickets:", ...tickets.flatMap((ticket, i) => [`${i + 1}. ${ticket}`, ...(i ? ["   blocked by: #1"] : [])])]
+        : ["Acceptance criteria:", ...criteria.flatMap((criterion, i) => [`${i + 1}. ${criterion}`, "   surface: web. capture: a still of the results screen."])]),
       "",
       "Human gate: none.",
       "",
@@ -170,4 +174,29 @@ test("the taste-check page shows each record's latest brief and recap, in the or
   assert.ok(html.includes("Show the &lt;score&gt; on screen"), "message text is escaped");
   const tags = [...html.matchAll(/<a\b[^>]*>/g)].map(([tag]) => tag);
   assert.deepEqual(tags.filter((tag) => !/^<a href="[^"]*">$/.test(tag)), [], "a link in message text becomes an anchor with an href and nothing else");
+});
+
+const TICKETS = ["#1 Show the score", "#2 Share the score"];
+
+test("a spec's brief plans its tickets, says it builds as a stack, and leaves the lane to each PR", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const path = record(10, { tickets: TICKETS });
+  const specBrief = (overrides) => brief({ building: "Building #10 as a stack: Scores", plan: TICKETS, ...overrides })
+    .replace("Lane: light", overrides?.lane ?? "Lane: per PR");
+  refused("brief", path, specBrief({ plan: CRITERIA }), /missing ticket: #1 Show the score[\s\S]*not a ticket: The results screen/);
+  refused("brief", path, specBrief({ building: "Building #10: Scores" }), /Building #<n> as a stack: <spec title>/);
+  refused("brief", path, specBrief({ lane: "Lane: full" }), /Lane: per PR/);
+  saved("brief", path, specBrief());
+});
+
+test("a spec's recap lists every ticket with its state, and the PR of each that has one", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const path = record(10, { tickets: TICKETS });
+  record(1, { pr: 21 });
+  const tickets = ["- #1 ready: https://github.com/o/r/pull/21", "- #2 waits for #1 to merge, because they are in different stacks"];
+  const specRecap = (lines) => recap({ result: "Spec #10 is waiting on you: 1 PR ready", lines: [...lines, ...RECAP_LINES] });
+  refused("recap", path, specRecap(tickets.slice(0, 1)), /no line for #2/);
+  refused("recap", path, specRecap(["- #1 ready", tickets[1]]), /#1's line needs its PR, https:\/\/github\.com\/o\/r\/pull\/21/);
+  refused("recap", path, specRecap(["- #1 https://github.com/o/r/pull/21", tickets[1]]), /#1's line starts with its state/);
+  saved("recap", path, specRecap(tickets));
 });
