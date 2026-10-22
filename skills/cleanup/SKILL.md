@@ -50,8 +50,8 @@ bash <skill-dir>/scripts/artifact-audit.sh <code-root>
 
 The script is read-only. It prints one tab-separated row per item, with its `KIND`, `NAME`, `SIZE_KIB`, a suggested `BUCKET`, a `CLEAN` command, the `WORKTREE` that holds it and its `PATH`.
 
-- Artifacts are the `node_modules`, `target`, `.next` and `.turbo` directories under the folder, outer ones only, and Xcode's DerivedData. An artifact in a Git work tree is a candidate only when Git ignores it and no Git checkout sits inside it. One that Git does not ignore, which includes one holding tracked files, one holding a checkout, and one outside Git are held.
-- Caches are the npm, pnpm, Yarn, Bun, Go, pip, uv, Homebrew, CocoaPods, Cargo and Gradle caches at their default places under `$HOME`. `CLEAN` is the tool's own command, or `delete` when the tool has none.
+- Artifacts are the `node_modules`, `target`, `.next` and `.turbo` directories under the folder, outer ones only, and Xcode's DerivedData. An artifact in a Git work tree is a candidate only when Git ignores it and no Git checkout sits inside it. Every other artifact is held, including one outside Git.
+- Caches are the npm, pnpm, Yarn, Bun, Go, pip, uv, Homebrew, CocoaPods, Cargo and Gradle caches at their default places under `$HOME`. `CLEAN` is the tool's own command, or `delete` where deleting the path is the safe way.
 
 Leave every other cache and app data alone, such as `~/Library/Caches/<App>` and `~/Library/Application Support`, because they hold logins and history.
 

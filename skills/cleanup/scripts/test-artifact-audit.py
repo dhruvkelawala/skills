@@ -48,6 +48,7 @@ def repo(path, ignore, files):
 
 for cache in [".npm/_cacache/index-v5/aa", "Library/Caches/Homebrew/downloads/pkg.tar.gz",
               "go/pkg/mod/cache/download/mod.zip", ".cargo/registry/cache/crate.crate",
+              ".bun/install/cache/pkg.tgz",
               "Library/Developer/Xcode/DerivedData/App-abc/Build/app.o",
               "Library/Caches/SomeApp/cookies"]:
     write(HOME / cache)
@@ -107,10 +108,12 @@ expect(HOME / ".npm/_cacache", "cache", "npm", "CANDIDATE", "npm cache clean --f
 expect(HOME / "Library/Caches/Homebrew", "cache", "homebrew", "CANDIDATE", "brew cleanup --prune=all")
 expect(HOME / "go/pkg/mod", "cache", "go-mod", "CANDIDATE", "go clean -modcache")
 expect(HOME / ".cargo/registry", "cache", "cargo", "CANDIDATE", "delete")
+# bun pm refuses to run outside a project, and the skill runs CLEAN from $HOME.
+expect(HOME / ".bun/install/cache", "cache", "bun", "CANDIDATE", "delete")
 # Nested artifacts belong to the outer row, and other app caches are never listed.
 assert not any("left-pad" in path or "SomeApp" in path for path in by_path), result.stdout
-assert len(rows) == 12, result.stdout
-assert "artifacts=8 caches=4" in result.stderr, result.stderr
+assert len(rows) == 13, result.stdout
+assert "artifacts=8 caches=5" in result.stderr, result.stderr
 # A code root that holds $HOME still lists Xcode's DerivedData once.
 home_run = subprocess.run(["/bin/bash", str(SCRIPT), str(HOME)], env=ENV,
                           capture_output=True, text=True, check=True)

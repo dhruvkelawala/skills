@@ -61,7 +61,7 @@ pnpm|pnpm store prune|.local/share/pnpm/store
 yarn|delete|Library/Caches/Yarn
 yarn|delete|.cache/yarn
 yarn|delete|.yarn/berry/cache
-bun|bun pm cache rm|.bun/install/cache
+bun|delete|.bun/install/cache
 go-build|go clean -cache|Library/Caches/go-build
 go-build|go clean -cache|.cache/go-build
 go-mod|go clean -modcache|go/pkg/mod
