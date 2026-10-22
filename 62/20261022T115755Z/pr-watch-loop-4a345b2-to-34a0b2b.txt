@@ -1,0 +1,14 @@
+== skills/pr-watch/SKILL.md, watch loop, before (4a345b2) ==
+49:     [--ignore-check "<name>"]... --watch --json
+52:   Exit `0` is ready, `1` is pending or timed out, and `2` is blocked. Each JSON line is `{ state, reasons, threads, notes }`.
+53:3. On pending with "has not reviewed the current HEAD" for a reviewer that takes a request comment, post the request once with `gh pr comment` (REST: `gh api -X POST repos/{owner}/{repo}/issues/<n>/comments -f body="<text>"`), note the HEAD it was for, and watch again.
+54:4. On a pending timeout, report the last reasons and stop. Waiting longer is the user's call.
+65:**Complete when:** the gate exits `0` for the exact current HEAD, or the budget or timeout is spent and the report lists every reason still open.
+
+== after (34a0b2b) ==
+80:2. Run the gate once, from this skill's directory:
+85:     [--ignore-check "<name>"]... --held-file "$HELD" --json
+100:   - **Someone else**, such as a running check, a reviewer that has not covered the HEAD, or a person who has your posted reply or re-request. Call `watch_pull_request` for the PR and end the turn. T3 wakes the thread when a check fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict, and you start again at step 1. It wakes only for comments made after the call, so handle the existing ones first. A wake is news, so run the gate before acting on it.
+101:   - **The user**, when the gate exits `0`, anything is held for "post", the budget is spent, or a reason needs the user's decision. Call `unwatch_pull_request`, which returns the thread to the user's inbox, and report.
+103:   A subagent cannot watch, because its parent thread owns the PR. It runs one pass and returns the PR URL, the HEAD, the gate result and the held file to the parent.
+105:**Complete when:** the gate exits `0` for the exact current HEAD and the PR is unwatched, or the PR waits on someone else and T3 watches it, or it waits on the user, is unwatched, and the report lists what is held and every reason still open.
