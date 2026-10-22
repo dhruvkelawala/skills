@@ -1,9 +1,9 @@
 ---
-name: code-walkthrough
-description: Guide a paced, file-by-file review of an unfamiliar or agent-written codebase, fixing small things as you go, keeping a living checklist, and filing the rest as issues. Use when the user wants to inherit, audit, onboard to, or pre-release review a whole codebase at their own pace. For one PR or changeset use pr-review or explain-diff instead.
+name: codebase-dive
+description: Use for /codebase-dive, or when the user wants to learn a whole unfamiliar or agent-written codebase at their own pace, to inherit, audit, onboard to or review it before a release. Guides a paced, file-by-file read, fixing small things as you go, keeping a living checklist, and filing the rest as issues. For one PR or changeset use pr-review or explain-diff instead.
 ---
 
-# Code walkthrough
+# Codebase dive
 
 The user reads every file; you introduce each one, answer what they ask, fix what they flag, and record progress. They set the pace. You never move on until they say so.
 
