@@ -7,6 +7,10 @@ import { findingsFor } from "./fixture.mjs";
 
 const dir = process.env.FAKE_DIR;
 const args = process.argv.slice(2);
+if (args.includes("-h") || args.includes("--help")) {
+  process.stdout.write("usage: autoreview [--mode {auto,local,uncommitted,branch,commit}] [--base BASE] [--engine ENGINE] [--model MODEL] [--thinking THINKING] [--max-priority {P0,P1,P2,P3}]\n");
+  process.exit(0);
+}
 const flag = (name) => args[args.indexOf(name) + 1];
 const rev = (ref) => {
   try {
