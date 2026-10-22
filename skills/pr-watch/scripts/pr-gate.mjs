@@ -5,7 +5,8 @@
 //   state:   "ready" | "pending" | "blocked"
 //   reasons: human-readable strings explaining a non-ready state
 //   threads: what a repair must address: unresolved, non-outdated review threads,
-//            and unanswered written reviews from people (marked kind: "review")
+//            and unanswered written reviews from people (marked kind: "review").
+//            A thread's `bot` is true while no person has spoken in it.
 //   notes:   present only when non-empty; checks that are not required and did not
 //            pass. Informational: they never change the state.
 //
@@ -14,7 +15,8 @@
 //                    headRefOid, expectedHead, headCommittedAt, author }
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
 //   truncated:     true when any GitHub collection exceeded one page
-//   reviewThreads: [{ isResolved, isOutdated, path, line, author, body }]
+//   reviewThreads: [{ isResolved, isOutdated, path, line, author, authorType, lastAuthor,
+//                     lastAuthorType, body }]   // author is the first comment's, lastAuthor the newest's
 //   threadsUnknown: why the threads could not be read, such as "GraphQL quota"; holds the gate at pending
 //   reviews:       [{ author, authorType, commitId, state, submittedAt, body }]
 //   comments:      [{ author, body, createdAt }]      // PR-level issue comments
@@ -92,6 +94,7 @@ export function evaluateGate(snapshot, options = {}) {
       path: t.path ?? null,
       line: t.line ?? null,
       author: t.author ?? null,
+      bot: isBotThread(t, pr.author),
       body: truncate(t.body),
     }));
   if (activeThreads.length > 0) {
@@ -153,10 +156,9 @@ function unansweredReviews(snapshot) {
   const reviews = snapshot?.reviews ?? [];
   const comments = snapshot?.comments ?? [];
   const hasText = (item) => String(item.body ?? "").trim() !== "";
-  const isBot = (review) => review.authorType === "Bot" || /\[bot\]$/i.test(String(review.author ?? ""));
   return reviews.filter((review) => {
     if (review.state !== "COMMENTED" || !hasText(review)) return false;
-    if (isBot(review) || sameLogin(review.author, prAuthor)) return false;
+    if (isBot(review.author, review.authorType) || sameLogin(review.author, prAuthor)) return false;
     const after = timestamp(review.submittedAt);
     const authorComment = comments.some((c) => sameLogin(c.author, prAuthor) && timestamp(c.createdAt) > after);
     const laterReview = reviews.some((other) => other !== review
@@ -201,6 +203,18 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
     return { pending: `${label} is reviewing the current HEAD` };
   }
   return { pending: `${label} has not reviewed the current HEAD` };
+}
+
+function isBot(login, type) {
+  return type === "Bot" || /\[bot\]$/i.test(String(login ?? ""));
+}
+
+// The gate reads a thread's first and newest comments only, so a person who spoke in between and
+// was answered goes unseen. A reply from the PR author keeps a bot's thread a bot's.
+function isBotThread(thread, prAuthor) {
+  const last = thread.lastAuthor;
+  const lastIsBotOrAuthor = last == null || isBot(last, thread.lastAuthorType) || sameLogin(last, prAuthor);
+  return isBot(thread.author, thread.authorType) && lastIsBotOrAuthor;
 }
 
 function sameLogin(a, b) {
@@ -323,7 +337,8 @@ const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){
       reviewThreads(first:100){
         nodes{
           isResolved isOutdated path line
-          comments(first:1){ nodes{ author{ login } body } }
+          comments(first:1){ nodes{ author{ __typename login } body } }
+          latest: comments(last:1){ nodes{ author{ __typename login } } }
         }
         pageInfo{ hasNextPage }
       }
@@ -413,12 +428,16 @@ async function readGraphql({ owner, name }, prNumber, runGh) {
     ),
     reviewThreads: (pr.reviewThreads?.nodes ?? []).map((t) => {
       const first = t.comments?.nodes?.[0];
+      const last = t.latest?.nodes?.[0];
       return {
         isResolved: t.isResolved,
         isOutdated: t.isOutdated,
         path: t.path ?? null,
         line: t.line ?? null,
         author: first?.author?.login ?? null,
+        authorType: first?.author?.__typename ?? null,
+        lastAuthor: last?.author?.login ?? null,
+        lastAuthorType: last?.author?.__typename ?? null,
         body: first?.body ?? "",
       };
     }),

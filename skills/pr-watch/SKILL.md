@@ -34,7 +34,7 @@ A reviewer is any account that reviews PRs in this repository: a bot such as Cod
 
 - **Checks.** When the base branch has required checks, only those block or hold the gate. Other checks appear in `notes` and never block. With no required checks, every check counts, so pass `--ignore-check <name>` for each optional check that should not hold the PR, such as a slow visual recap.
 - **Merge state.** GitHub's UNSTABLE merge state does not block on its own. Conflicts, a draft or closed PR, and a HEAD mismatch still block.
-- **Threads.** `threads` lists unresolved review threads with path, line, author and body.
+- **Threads.** `threads` lists unresolved review threads with path, line, author, body and `bot`. `bot` is true when a bot opened the thread and no person has spoken in it since. Replies from the PR author keep it a bot's thread.
 - **GraphQL quota.** When the gate's GraphQL query fails with a rate-limit error, it reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with `review threads unknown: GraphQL quota`, because REST cannot tell whether a thread is resolved. Each poll tries GraphQL first, so the reason clears once the quota resets (`gh api rate_limit --jq .resources.graphql.reset`).
 - **Written reviews.** A COMMENTED review with a body, from a human account other than the PR author, appears in `threads` with `kind: "review"` and blocks. It counts as answered once the PR author posts a later PR comment or a later review with a non-empty body, or the same reviewer posts a newer review. The empty review that GitHub creates for a reply inside a thread does not answer it.
 
@@ -54,7 +54,7 @@ A reviewer is any account that reviews PRs in this repository: a bot such as Cod
 4. On a pending timeout, report the last reasons and stop. Waiting longer is the user's call.
 5. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
-   - **Unresolved thread.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
+   - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
    - **Written review** (`kind: "review"`). Read it, fix each point or decide against it, then post one PR comment with `gh pr comment` (REST: as in step 3) that answers it point by point.
    - **Changes requested by a human.** Address the review, then re-request it with `gh pr edit --add-reviewer` (REST: `gh api -X POST repos/{owner}/{repo}/pulls/<n>/requested_reviewers -f "reviewers[]=<login>"`). Leave the human's review in place.
    - **Merge conflict or wrong base.** Rebase onto the live base, rerun the project's tests, and push with `--force-with-lease`.

@@ -199,7 +199,7 @@ test("blocked: review decision CHANGES_REQUESTED", () => {
 
 // --- review threads ---------------------------------------------------------
 
-test("blocked: unresolved thread is reported with path, line, author, and body", () => {
+test("blocked: unresolved thread is reported with path, line, author, body, and whether a bot wrote it", () => {
   const result = evaluateGate(baseSnapshot({
     reviewThreads: [
       { isResolved: false, isOutdated: false, path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" },
@@ -208,8 +208,26 @@ test("blocked: unresolved thread is reported with path, line, author, and body",
     ],
   }));
   assert.equal(result.state, "blocked");
-  assert.deepEqual(result.threads, [{ path: "src/a.ts", line: 12, author: BOT, body: "Null check missing" }]);
+  assert.deepEqual(result.threads, [{ path: "src/a.ts", line: 12, author: BOT, bot: true, body: "Null check missing" }]);
 });
+
+// A thread is a bot's only while no person has spoken in it: a person who opens it or answers the
+// bot gets their reply held until "post". The PR author's own replies keep a bot's thread a bot's.
+for (const [name, thread, bot] of [
+  ["a bot opened it and has the last word", { author: "codex-connector", authorType: "Bot", lastAuthor: "codex-connector", lastAuthorType: "Bot" }, true],
+  ["a bot opened it and the PR author replied", { author: "codex-connector", authorType: "Bot", lastAuthor: "dhruv", lastAuthorType: "User" }, true],
+  ["a login ending in [bot] opened it", { author: BOT }, true],
+  ["a person opened it", { author: "teammate", authorType: "User", lastAuthor: "teammate", lastAuthorType: "User" }, false],
+  ["a bot opened it and a person joined", { author: "codex-connector", authorType: "Bot", lastAuthor: "teammate", lastAuthorType: "User" }, false],
+]) {
+  test(`thread from ${name}: bot is ${bot}`, () => {
+    const result = evaluateGate(baseSnapshot({
+      pr: { ...baseSnapshot().pr, author: "dhruv" },
+      reviewThreads: [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 1, body: "b", ...thread }],
+    }));
+    assert.equal(result.threads[0].bot, bot);
+  });
+}
 
 test("thread bodies are truncated for prompt safety", () => {
   const result = evaluateGate(baseSnapshot({
@@ -451,7 +469,11 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
                 } },
               } }] },
               reviewThreads: {
-                nodes: [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, comments: { nodes: [{ author: { login: BOT }, body: "fix me" }] } }],
+                nodes: [{
+                  isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
+                  comments: { nodes: [{ author: { __typename: "Bot", login: "review-bot" }, body: "fix me" }] },
+                  latest: { nodes: [{ author: { __typename: "User", login: "teammate" } }] },
+                }],
                 pageInfo: { hasNextPage: false },
               },
               reviews: { nodes: [{ author: { __typename: "Bot", login: BOT }, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary", commit: { oid: HEAD } }], pageInfo: { hasNextPage: false } },
@@ -476,7 +498,10 @@ test("fetchSnapshot maps GraphQL and REST payloads into the snapshot shape", asy
     { name: "legacy", status: "IN_PROGRESS", conclusion: null, required: false },
   ]);
   assert.deepEqual(snapshot.reviews, [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT, body: "summary" }]);
-  assert.deepEqual(snapshot.reviewThreads, [{ isResolved: false, isOutdated: false, path: "src/a.ts", line: 4, author: BOT, body: "fix me" }]);
+  assert.deepEqual(snapshot.reviewThreads, [{
+    isResolved: false, isOutdated: false, path: "src/a.ts", line: 4,
+    author: "review-bot", authorType: "Bot", lastAuthor: "teammate", lastAuthorType: "User", body: "fix me",
+  }]);
   assert.deepEqual(snapshot.reactions, [{ author: BOT, content: "+1", createdAt: REVIEWED_AT }]);
   assert.equal(snapshot.truncated, false);
   assert.equal(calls.length, 3);
