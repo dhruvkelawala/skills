@@ -4,7 +4,7 @@
 //   ship.mjs queue   [--repo o/r] [--me <login>] [--json]
 //   ship.mjs verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes <file>] [--repo o/r]
 //   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
-//   ship.mjs run     <bottom-pr> [--policy approval|verdict] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
+//   ship.mjs run     <bottom-pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
 //   ship.mjs merge   <pr> --head <run[0].head> [--repo o/r] [--json]
 //
 // Nothing here rebases, retargets, or force-pushes, and `merge` lands only the head it is given. The
@@ -165,17 +165,16 @@ export function walkStack(prs, bottomNumber) {
   }
 }
 
-// One-way doors always need human approval. Two-way doors need approval under "approval" policy,
-// or only a current passing verdict from a non-author under "verdict" policy. `approversByNumber`
-// holds humanApprovers() per PR; reviewDecision alone is not trusted, because a bot can approve.
-// GitHub does not let an author approve their own PR, so on the caller's own PR (`me`) the explicit
-// request to land stands in for the approval, and the caller's own verdict counts.
-export const POLICIES = ["approval", "verdict"];
-
+// ship follows GitHub's review rule for the default branch, where every PR in a stack lands.
+// `reviewRequired` says whether that branch asks for an approving review; a PR GitHub already shows
+// as REVIEW_REQUIRED waits too. Where a review is required, the PR waits for a human approval
+// (`approversByNumber` holds humanApprovers() per PR; reviewDecision alone is not trusted, because a
+// bot can approve). Where none is required, the caller's request to land stands in for it.
+// The caller's own verdict counts on their own PR (`me`).
+//
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned
 // head cannot be enforced. ship never lands onto a branch with a merge queue.
-export function landableRun(stack, statusByNumber, { policy = "approval", approversByNumber = new Map(), mergeQueue = false, me } = {}) {
-  if (!POLICIES.includes(policy)) throw new Error(`unknown policy "${policy}"; use ${POLICIES.join(" or ")}`);
+export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), reviewRequired = false, mergeQueue = false, me } = {}) {
   if (mergeQueue && stack.length) return { run: [], ceiling: { number: stack[0].number, blocker: "the target branch uses a merge queue, which merges later heads ship cannot pin" } };
   const run = [];
   for (const p of stack) {
@@ -183,15 +182,13 @@ export function landableRun(stack, statusByNumber, { policy = "approval", approv
     const door = parseDoor(p.body);
     const ownPr = Boolean(me) && actor(p.author?.login) === actor(me);
     const approvers = approversByNumber.get(p.number) ?? [];
-    const approvedBy = approvers.length > 0 ? approvers : ownPr ? [`${me} (own PR)`] : [];
-    const approved = approvedBy.length > 0;
+    const needsReview = reviewRequired || p.reviewDecision === "REVIEW_REQUIRED";
     let blocker = null;
     if (s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""}`;
     else if (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr)) blocker = "verdict was not recorded by someone other than the PR author";
-    else if (door !== "two-way" && !approved) blocker = `${door} door needs human approval`;
-    else if (policy === "approval" && !approved) blocker = "policy needs human approval";
+    else if (needsReview && approvers.length === 0) blocker = "GitHub requires a review: waiting for a human approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
-    run.push({ number: p.number, head: p.headRefOid, door, verdict: s.verdict, approvedBy });
+    run.push({ number: p.number, head: p.headRefOid, door, verdict: s.verdict, approvedBy: approvers.length > 0 ? approvers : [`${me} (land request)`] });
   }
   return { run, ceiling: null };
 }
@@ -277,24 +274,36 @@ function nameWithOwner(repo) {
 }
 
 function prReviews(n, repo) {
-  const out = sh("gh", ["api", "--paginate", `repos/${nameWithOwner(repo)}/pulls/${n}/reviews`, "--jq", ".[] | {state, submitted_at, user: {login: .user.login, type: .user.type}}"]);
-  return out ? out.split("\n").map((l) => JSON.parse(l)) : [];
+  return restList(`repos/${nameWithOwner(repo)}/pulls/${n}/reviews?per_page=100`);
 }
 
-function hasMergeQueue(branch, repo) {
+// What the branch's rules ask of a merge: a merge queue, and approving reviews. GraphQL shows
+// classic protection (refUpdateRule) and rulesets to anyone who can read the repository.
+function branchRules(branch, repo) {
   const [owner, name] = nameWithOwner(repo).split("/");
-  const q = "query($o:String!,$n:String!,$b:String!){repository(owner:$o,name:$n){mergeQueue(branch:$b){id}}}";
+  const q = "query($o:String!,$n:String!,$b:String!,$q:String!){repository(owner:$o,name:$n){mergeQueue(branch:$b){id} ref(qualifiedName:$q){refUpdateRule{requiredApprovingReviewCount} rules(first:100){nodes{type parameters{... on PullRequestParameters{requiredApprovingReviewCount}}}}}}}";
   return graphqlOrRest(
-    () => sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`, "--jq", ".data.repository.mergeQueue.id // empty"]).length > 0,
     () => {
+      const r = JSON.parse(sh("gh", ["api", "graphql", "-f", `query=${q}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`, "-f", `q=refs/heads/${branch}`])).data.repository;
+      const counts = [r.ref?.refUpdateRule?.requiredApprovingReviewCount, ...(r.ref?.rules.nodes ?? []).filter((n) => n.type === "PULL_REQUEST").map((n) => n.parameters?.requiredApprovingReviewCount)];
+      return { mergeQueue: Boolean(r.mergeQueue?.id), requiresReview: counts.some((c) => c > 0) };
+    },
+    () => {
+      let rules = [];
       try {
-        return restJson(`repos/${owner}/${name}/rules/branches/${branch}`).some((rule) => rule.type === "merge_queue");
+        rules = restJson(`repos/${owner}/${name}/rules/branches/${branch}`);
       } catch (error) {
-        // A plan without rulesets answers 403, and it has no merge queue either. A rate limit's 403
-        // says nothing about the queue.
-        if (!isRateLimited(error) && /HTTP 40[34]/.test(error?.stderr ?? "")) return false;
-        throw error;
+        // A plan without rulesets answers 403, and it has no rulesets to read. A rate limit's 403
+        // says nothing about them.
+        if (isRateLimited(error) || !/HTTP 40[34]/.test(error?.stderr ?? "")) throw error;
       }
+      // REST shows a classic protection rule's details only to admins, so any protected branch
+      // counts as asking for a review.
+      return {
+        mergeQueue: rules.some((rule) => rule.type === "merge_queue"),
+        requiresReview: restJson(`repos/${owner}/${name}/branches/${branch}`).protected === true
+          || rules.some((rule) => rule.type === "pull_request" && rule.parameters?.required_approving_review_count > 0),
+      };
     },
   );
 }
@@ -355,12 +364,16 @@ function textQueue(q) {
   ].join("\n");
 }
 
+// A flag ship does not know, such as a misspelt or removed one, could loosen a rule if ignored.
+const FLAGS = ["json", "repo", "me", "trusted", "head", "by", "notes"];
+
 async function main() {
   const a = parseArgs(process.argv.slice(2));
+  const unknown = Object.keys(a).find((k) => k !== "_" && !FLAGS.includes(k));
+  if (unknown) throw new Error(`unknown flag --${unknown}`);
   const [cmd, sub, ...rest] = a._;
   const repo = a.repo;
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
-  if (a.policy !== undefined && !POLICIES.includes(a.policy)) throw new Error(`unknown policy "${a.policy}"; use ${POLICIES.join(" or ")}`);
   const authenticated = () => sh("gh", ["api", "user", "--jq", ".login"]);
   // verdict check and run grant the own-PR rules to the caller, so the caller is always the
   // authenticated account; --me may only repeat it. queue uses --me just to sort the list.
@@ -395,8 +408,8 @@ async function main() {
     const me = caller();
     const statuses = new Map(stack.map((p) => [p.number, statusFor(p, repo, trusted, me)]));
     const approvers = new Map(stack.map((p) => [p.number, humanApprovers(prReviews(p.number, repo), { prAuthor: p.author?.login, reviewDecision: p.reviewDecision })]));
-    const mergeQueue = stack.length > 0 && hasMergeQueue(defaultBranch(repo), repo);
-    const result = { ...landableRun(stack, statuses, { policy: a.policy ?? "approval", approversByNumber: approvers, mergeQueue, me }), stackStop: stop ?? null };
+    const { mergeQueue, requiresReview } = stack.length > 0 ? branchRules(defaultBranch(repo), repo) : {};
+    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, reviewRequired: requiresReview, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
       [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}`).join(" -> ") || "(none)"}`,
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",
