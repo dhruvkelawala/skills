@@ -54,12 +54,12 @@ Before and after, from `support-report-pr-349-eli25.html`:
 >
 > After. **The model reads the messages, and the app decides what gets posted.** The report reads two things: Jira tickets, and last week's messages from the QA and release Slack channels. Before it reads anything, it checks that every channel exists and that the bot can open it. Then it strips anything that looks like a password or token, keeps only Monday to Sunday, and cuts the pile to a fixed size.
 
-**Done when** the page has its opener, every section sits under a heading that is a plain sentence, and a plan or spike ends on one next action.
+**Done when** the page has its opener, its prose runs to about 400 words, every section sits under a heading that is a plain sentence, and a plan or spike ends on one next action.
 
 ## 3. Build the page
 
 1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same file in place and show it again.
-2. Build it in the Field Guide look, which lives in the visual-explainer skill's folder. Read its `references/field-guide.md`, then take the parts the page needs from its `templates/field-guide.html`: the tokens, fonts, plates, chips and cards, not the outline. A short page needs few of them.
+2. Build it in the Field Guide look, from the `visual-explainer` folder in your skills directory. Read its `references/field-guide.md`, then take the parts the page needs from its `templates/field-guide.html`: the tokens, fonts, plates, chips and cards, not the outline. A short page needs few of them.
 3. Follow T3's light or dark mode. T3 gives a visual page its colours as CSS variables but leaves `prefers-color-scheme` unset, so Field Guide's switch cannot see the mode. Drop the Light and Dark switch and its stored choice, keep the dark token blocks, and put this script first in `<head>`:
 
    ```html
@@ -89,8 +89,8 @@ Before and after, from `support-report-pr-349-eli25.html`:
 
 ## 4. Preview and show
 
-1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 390 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. These checks replace Field Guide's delivery checks.
-2. Show it with `html_render`, at the `contentHeight` the 390-pixel preview reported, up to 2000, because only phones use that height. Open no local browser: the page lives in the thread, where the user reads it on any device.
+1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 360 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. These checks replace Field Guide's first delivery check, on its switch and widths, and its other checks still apply.
+2. Show it with `html_render`. Set its height to the `contentHeight` of the 360-pixel preview, because T3 uses the height only on phones, which are about 360 pixels wide. Open no local browser: the page lives in the thread, where the user reads it on any device.
 
 **Done when** `html_render` has shown the page in the thread.
 
