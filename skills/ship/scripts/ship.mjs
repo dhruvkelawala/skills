@@ -197,16 +197,15 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
     const door = parseDoor(p.body);
     const ownPr = Boolean(me) && actor(p.author?.login) === actor(me);
     const approvers = approversByNumber.get(p.number) ?? [];
-    const needsReview = reviewRequired || p.reviewDecision === "REVIEW_REQUIRED";
+    const waiting = (reviewRequired || p.reviewDecision === "REVIEW_REQUIRED") && approvers.length === 0;
     const why = verdictReason(p, door, s, ruleB);
     let blocker = null;
     if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
     else if (why && (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr))) blocker = "verdict was not recorded by someone other than the PR author";
-    else if (needsReview && approvers.length === 0 && !force) blocker = "GitHub requires a review: waiting for a human approval of this patch";
-    else if (needsReview && approvers.length === 0 && p.reviewDecision === "CHANGES_REQUESTED") blocker = "a reviewer requested changes, and --force skips only the wait for an approval";
+    else if (waiting && !force) blocker = "GitHub requires a review: waiting for a human approval of this patch";
+    else if (waiting && p.reviewDecision === "CHANGES_REQUESTED") blocker = "a reviewer requested changes, and --force skips only the wait for an approval";
     if (blocker) return { run, ceiling: { number: p.number, blocker } };
-    const forced = needsReview && approvers.length === 0;
-    run.push({ number: p.number, head: p.headRefOid, door, verdict: why ? s.verdict : "not needed", approvedBy: approvers.length > 0 || forced ? approvers : [`${me} (land request)`], forced });
+    run.push({ number: p.number, head: p.headRefOid, door, verdict: why ? s.verdict : "not needed", approvedBy: approvers.length > 0 || waiting ? approvers : [`${me} (land request)`], forced: waiting });
   }
   return { run, ceiling: null };
 }
@@ -289,21 +288,17 @@ function patchesAt(pr, commits) {
     const diff = sh("git", ["-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, base, commit], { maxBuffer: 1 << 28, trimOutput: false });
     return { head: commit, base, patchId: patchFingerprint(diff) };
   };
-  const fetched = (commit) => {
+  const present = (commit) => [["cat-file", "-e", `${commit}^{commit}`], ["fetch", "--quiet", "--no-tags", "origin", commit]].some((args) => {
     try {
-      sh("git", ["cat-file", "-e", `${commit}^{commit}`]);
-      return true;
-    } catch {}
-    try {
-      sh("git", ["fetch", "--quiet", "--no-tags", "origin", commit]);
+      sh("git", args);
       return true;
     } catch {
       return false;
     }
-  };
+  });
   try {
     sh("git", ["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${pr.baseRefName}:${baseRef}`, `+refs/pull/${pr.number}/head:${headRef}`]);
-    return new Map(commits.map((commit) => [commit, commit === pr.headRefOid || fetched(commit) ? patchAt(commit) : null]));
+    return new Map(commits.map((commit) => [commit, commit === pr.headRefOid || present(commit) ? patchAt(commit) : null]));
   } finally {
     for (const ref of [baseRef, headRef]) try { sh("git", ["update-ref", "-d", ref]); } catch {}
   }

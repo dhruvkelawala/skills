@@ -188,7 +188,7 @@ fail("", "gh: Not Found (HTTP 404)");
   };
   const state = () => JSON.parse(readFileSync(statePath, "utf8"));
   const setState = (changes) => writeFileSync(statePath, JSON.stringify({ ...state(), ...changes }));
-  return { dir, git, head, ship, cli, state, setState };
+  return { git, head, ship, cli, state, setState };
 }
 
 test("GraphQL quota spent: queue, verdict and run read and post through REST", (t) => {
