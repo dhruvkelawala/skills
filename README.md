@@ -30,6 +30,14 @@
 | [why](skills/why/SKILL.md) | Why code or a decision looks the way it does, from git and the PR with a confidence word, or why the agent took an action this session. `--deep` searches every source. (pstack) |
 | [worktree-cleanup](skills/worktree-cleanup/SKILL.md) | Read-only audit of git worktrees and iOS simulators, then removal by approved bucket, with a hold list for anything that could lose work. Branch deletion is a separate approval. (pstack) |
 
+## Parts
+
+A part is a skill that other skills run as one of their steps. They load it from its sibling folder, such as `../unslop/SKILL.md`, so the path works wherever the repo's skills are linked.
+
+| Part | Description |
+|-------|-------------|
+| [unslop](skills/unslop/SKILL.md) | Cut AI tells from prose. eli25, how, explain-diff and why run it last on what they write. |
+
 ## Installation
 
 Add to your Pi `settings.json`:
