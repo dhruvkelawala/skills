@@ -174,6 +174,8 @@ function describeVisit(t, v) {
 const reviewerTasks = (v) => v.t3.filter((e) => e.tool === "delegate_task" && e.target?.model === reviewersModel);
 const reportsOf = (v, tasks) => v.t3.filter((e) => e.tool === "report" && tasks.some((d) => d.taskId === e.taskId));
 const secondOpinionsAt = (v) => v.secondOpinion.filter((e) => e.head === v.head && e.base === v.base);
+// A tour stop is a numbered item that opens with a link to its file and line, as the skill's tour example shows.
+const tourStops = (v) => v.reply.split("\n").filter((line) => /^\s*\d+\.\s+\[[^\]]*\]\([^)\s]+:\d+\)/.test(line));
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
@@ -191,12 +193,14 @@ describe("pr-review", { concurrency: true }, () => {
 
   test("the tour names every file a reviewer flagged", async (t) => {
     for (const v of await firstVisits(t)) {
-      for (const file of flaggedFiles("first")) assert.ok(v.reply.includes(file), `${v.name}: the review never names ${file}`);
+      const stops = tourStops(v);
+      for (const file of flaggedFiles("first")) assert.ok(stops.some((stop) => stop.includes(`/${file}:`)), `${v.name}: no tour stop links ${file}`);
     }
   });
 
   test("the review has no Judge line, triage block or diff block", async (t) => {
     for (const v of await firstVisits(t)) {
+      assert.ok(v.introAt && tourStops(v).length, `${v.name}: no intro and tour to check`);
       const text = v.texts.map((x) => x.text).join("\n");
       assert.doesNotMatch(text, /\bJudge:/, `${v.name}: a Judge line`);
       assert.doesNotMatch(text, /^#\d+ .*\+\d+ -\d+ in \d+ files/m, `${v.name}: a triage header line`);
