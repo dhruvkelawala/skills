@@ -162,4 +162,4 @@ export const REVIEWS = {
 };
 
 export const findingsFor = (reviewer, phase) => REVIEWS[reviewer][phase === "fixed" ? "fixed" : "first"];
-export const flaggedFiles = (phase) => [...new Set(Object.keys(REVIEWS).flatMap((r) => findingsFor(r, phase).map((f) => f.file)))];
+export const findingsAt = (phase) => Object.keys(REVIEWS).flatMap((r) => findingsFor(r, phase));

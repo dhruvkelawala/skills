@@ -12,7 +12,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, flaggedFiles } from "./fixture.mjs";
+import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, findingsAt } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
@@ -174,27 +174,34 @@ function describeVisit(t, v) {
 const reviewerTasks = (v) => v.t3.filter((e) => e.tool === "delegate_task" && e.target?.model === reviewersModel);
 const reportsOf = (v, tasks) => v.t3.filter((e) => e.tool === "report" && tasks.some((d) => d.taskId === e.taskId));
 const secondOpinionsAt = (v) => v.secondOpinion.filter((e) => e.head === v.head && e.base === v.base);
-// A tour stop is a numbered item that opens with a link to its file and line, as the skill's tour example shows.
-const tourStops = (v) => v.reply.split("\n").filter((line) => /^\s*\d+\.\s+\[[^\]]*\]\([^)\s]+:\d+\)/.test(line));
+const axes = (entries) => [...new Set(entries.map((e) => e.axis))].sort();
+// The tour runs from the intro to the wrap-up's Findings, and each stop is a numbered item that opens with a link to
+// its file and line, as the skill's tour example shows.
+const tourStops = (v) => v.reply.split(/^\s*(?:\d+\.\s+)?\*\*Findings\b/m)[0].split("\n").filter((line) => /^\d+\.\s+\[[^\]]*\]\([^)\s]+:\d+\)/.test(line));
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
   test("runs /code-review's two reviewers and the second opinion, and has their reports before the intro", async (t) => {
     for (const v of await firstVisits(t)) {
       const tasks = reviewerTasks(v);
-      assert.deepEqual([...new Set(tasks.map((d) => d.axis))].sort(), ["spec", "standards"], `${v.name}: /code-review's two reviewers did not both run on the reviewers job`);
+      assert.deepEqual(axes(tasks), ["spec", "standards"], `${v.name}: /code-review's two reviewers did not both run on the reviewers job`);
+      const reports = reportsOf(v, tasks);
+      assert.deepEqual(axes(reports), ["spec", "standards"], `${v.name}: the agent never read both reviewers' reports`);
       const second = secondOpinionsAt(v);
       assert.ok(second.length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
       assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
-      const ready = Math.max(...reportsOf(v, tasks).map((e) => e.at), ...second.map((e) => e.at));
+      const ready = Math.max(...reports.map((e) => e.at), ...second.map((e) => e.at));
       assert.ok(ready < v.introAt, `${v.name}: the intro came before both reviewers had reported`);
     }
   });
 
   test("the tour names every file a reviewer flagged", async (t) => {
     for (const v of await firstVisits(t)) {
+      assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
       const stops = tourStops(v);
-      for (const file of flaggedFiles("first")) assert.ok(stops.some((stop) => stop.includes(`/${file}:`)), `${v.name}: no tour stop links ${file}`);
+      for (const { file, priority } of findingsAt("first")) {
+        assert.ok(stops.some((stop) => stop.includes(`/${file}:`) && stop.includes(priority)), `${v.name}: no tour stop links ${file} with its ${priority}`);
+      }
     }
   });
 
@@ -214,13 +221,16 @@ describe("pr-review", { concurrency: true }, () => {
   test("a return visit after a real push reruns both reviewers on the new head", async (t) => {
     const v = await chain("push").back();
     describeVisit(t, v);
-    assert.deepEqual([...new Set(reviewerTasks(v).map((d) => d.axis))].sort(), ["spec", "standards"], `${v.name}: /code-review's reviewers did not rerun`);
+    const tasks = reviewerTasks(v);
+    assert.deepEqual(axes(tasks), ["spec", "standards"], `${v.name}: /code-review's reviewers did not rerun`);
+    assert.deepEqual(axes(reportsOf(v, tasks)), ["spec", "standards"], `${v.name}: the agent never read both reviewers' reports`);
     assert.ok(secondOpinionsAt(v).length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
   });
 
   test("a return visit after a pure rebase runs no reviewer", async (t) => {
     const v = await chain("rebase").back();
     describeVisit(t, v);
+    assert.ok(v.introAt, `${v.name}: no review opening with ${PR_URL}`);
     assert.match(v.reply, /rebas/i, `${v.name}: the review does not say the PR was rebased`);
     assert.deepEqual(v.t3.filter((e) => e.tool === "delegate_task"), [], `${v.name}: a reviewer ran`);
     assert.deepEqual(v.secondOpinion, [], `${v.name}: the second opinion ran`);
