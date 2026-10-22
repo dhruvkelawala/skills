@@ -25,8 +25,6 @@ row() {
 artifact_row() {
     local path=$1 worktree bucket
     if worktree=$(git -C "${path%/*}" rev-parse --show-toplevel 2>/dev/null); then
-        # Git reports a directory as not ignored when it is not ignored or tracks files in it.
-        # The outer repo's ignore rules say nothing about a checkout nested inside the directory.
         if [ -n "$(find "$path" -name .git -print -quit 2>/dev/null)" ]; then bucket=HOLD-GIT-CHECKOUT
         elif git -C "$worktree" check-ignore -q -- "$path"; then bucket=CANDIDATE-CHECK-USAGE
         else bucket=HOLD-NOT-IGNORED; fi
@@ -49,7 +47,8 @@ if [ -d "$derived" ]; then
     artifacts=$((artifacts + 1))
 fi
 
-# Default locations only, macOS then Linux. CLEAN is the tool's own command, or `delete` for the path.
+# ponytail: default locations only, so a cache moved by an environment variable such as GOMODCACHE
+# is missed. Read those variables when a moved cache matters.
 while IFS='|' read -r name clean path; do
     [ -d "$HOME/$path" ] || continue
     row cache "$name" CANDIDATE "$clean" - "$HOME/$path"
