@@ -1,0 +1,22 @@
+# publish-evidence.test.mjs against the script at a4b78d7 (before the fix)
+$ node --test skills/evidence/scripts/publish-evidence.test.mjs
+✖ publishes on the remote's latest evidence commit when the checkout has no remote-tracking ref for it (592.064417ms)
+✖ publishes on the remote's latest evidence commit when the checkout keeps a local evidence branch from an earlier run (571.464ms)
+✖ publishes on the remote's latest evidence commit when the checkout has a stale remote-tracking ref for it (642.808084ms)
+✔ creates the evidence branch with only a README and the capture on the first publish (365.267833ms)
+✖ refuses a branch name that has a remote branch nested under it, and names the clash (471.61325ms)
+✖ refuses a branch name that would nest under a remote branch, and names the clash (474.617ms)
+ℹ tests 6
+ℹ pass 1
+ℹ fail 5
+✖ failing tests:
+  AssertionError [ERR_ASSERTION]: To $TMPDIR/publish-evidence-FTt80x/remote.git
+   ! [rejected]        evidence -> evidence (non-fast-forward)
+  AssertionError [ERR_ASSERTION]: fatal: a branch named 'evidence' already exists
+  AssertionError [ERR_ASSERTION]: To $TMPDIR/publish-evidence-JeAeCU/remote.git
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /branch 'evidence' clashes with 'evidence\/field-guide' on origin/. Input:
+  "remote: error: cannot lock ref 'refs/heads/evidence': 'refs/heads/evidence/field-guide' exists; cannot create 'refs/heads/evidence'        \n" +
+    actual: "remote: error: cannot lock ref 'refs/heads/evidence': 'refs/heads/evidence/field-guide' exists; cannot create 'refs/heads/evidence'        \nTo $TMPDIR/publish-evidence-7WWuYs/remote.git\n ! [remote rejected] evidence -> evidence (failed to update ref)\nerror: failed to push some refs to '$TMPDIR/publish-evidence-7WWuYs/remote.git'\n",
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /branch 'evidence\/pr' clashes with 'evidence' on origin/. Input:
+  "remote: error: cannot lock ref 'refs/heads/evidence/pr': 'refs/heads/evidence' exists; cannot create 'refs/heads/evidence/pr'        \n" +
+    actual: "remote: error: cannot lock ref 'refs/heads/evidence/pr': 'refs/heads/evidence' exists; cannot create 'refs/heads/evidence/pr'        \nTo $TMPDIR/publish-evidence-iqJjra/remote.git\n ! [remote rejected] evidence/pr -> evidence/pr (failed to update ref)\nerror: failed to push some refs to '$TMPDIR/publish-evidence-iqJjra/remote.git'\n",
