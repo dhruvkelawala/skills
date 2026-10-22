@@ -1,0 +1,51 @@
+# /cleanup audit, dry run at 1302a12 over a fixture code root and HOME
+$ fixture snapshot (path, size, mtime, mode of every entry)
+0d39faba57fc0cd7
+
+## 1. Worktrees
+$ bash skills/cleanup/scripts/worktree-audit.sh <fixture>/code
+REPO                WORKTREE                              BRANCH   SIZE_KIB  HEAD_AGE_DAYS  MERGED  DIRTY                            UNPUSHED               REMOTE                          BUCKET                 HEAD
+<fixture>/code/app  <fixture>/code/app                    main     2472      0              YES     tracked:0,untracked:0,ignored:3  UNKNOWN                present                         PRIMARY                ab2e7420b22d0006ab498013797afb682a8fc529
+<fixture>/code/app  <fixture>/code/app.worktrees/feature  feature  892       0              YES     tracked:0,untracked:0,ignored:1  0                      present                         CANDIDATE-CHECK-USAGE  ab2e7420b22d0006ab498013797afb682a8fc529
+<fixture>/code/app  <fixture>/code/app/.worktrees/target  wip      16        0              YES     tracked:0,untracked:1,ignored:0  0(cached-unpublished)  absent-deleted-or-never-pushed  HOLD-DIRTY             ab2e7420b22d0006ab498013797afb682a8fc529
+REPO <fixture>/code/app default=main merge-ref=ab2e7420b22d0006ab498013797afb682a8fc529
+SUMMARY repos_with_worktrees=1 worktrees=3 errors=0 skipped_invalid_git_markers=0 (read-only; nothing removed)
+$ gh pr list --repo dhruvkelawala/skills --state merged --limit 1000 --json number,headRefName,headRefOid --jq length   (PR evidence query)
+46
+$ git -C <fixture>/code/app.worktrees/feature ls-files -o -i --exclude-standard --directory
+node_modules/
+$ lsof -d cwd -Fn | sed -n 's/^n//p' | sort -u | wc -l   (in-use list; paths not shown)
+192
+$ find ~/.claude/projects ~/.pi/agent/sessions ~/.codex/sessions -name '*.jsonl' -mtime -1 -print0 | xargs -0 grep -ho '"cwd":"[^"]*"' | sort -u | wc -l   (paths not shown)
+1
+
+## 2. Simulators
+$ xcrun simctl list devices | grep -c '('   (device lines)
+62
+$ xcrun simctl runtime list | grep -c Ready
+3
+
+## 3. Build artifacts and caches
+$ HOME=<fixture>/home bash skills/cleanup/scripts/artifact-audit.sh <fixture>/code
+KIND      NAME          SIZE_KIB  BUCKET                 CLEAN                     WORKTREE                              PATH
+artifact  node_modules  1956      CANDIDATE-CHECK-USAGE  delete                    <fixture>/code/app                    <fixture>/code/app/node_modules
+artifact  .next         296       CANDIDATE-CHECK-USAGE  delete                    <fixture>/code/app                    <fixture>/code/app/.next
+artifact  target        16        HOLD-GIT-CHECKOUT      delete                    <fixture>/code/app                    <fixture>/code/app/.worktrees/target
+artifact  target        4         HOLD-NOT-IGNORED       delete                    <fixture>/code/vendored               <fixture>/code/vendored/target
+artifact  target        4884      CANDIDATE-CHECK-USAGE  delete                    <fixture>/code/rust-tool              <fixture>/code/rust-tool/target
+artifact  node_modules  880       CANDIDATE-CHECK-USAGE  delete                    <fixture>/code/app.worktrees/feature  <fixture>/code/app.worktrees/feature/node_modules
+artifact  DerivedData   684       CANDIDATE              delete                    -                                     <fixture>/home/Library/Developer/Xcode/DerivedData
+cache     npm           684       CANDIDATE              npm cache clean --force   -                                     <fixture>/home/.npm/_cacache
+cache     go-mod        684       CANDIDATE              go clean -modcache        -                                     <fixture>/home/go/pkg/mod
+cache     homebrew      684       CANDIDATE              brew cleanup --prune=all  -                                     <fixture>/home/Library/Caches/Homebrew
+cache     cargo         684       CANDIDATE              delete                    -                                     <fixture>/home/.cargo/registry
+SUMMARY artifacts=7 caches=4 (read-only; nothing removed)
+
+$ fixture snapshot after the audit
+0d39faba57fc0cd7
+UNCHANGED: the audit run removed and wrote nothing
+
+$ python3 skills/cleanup/scripts/test-artifact-audit.py
+PASS: artifacts, caches, sizes, holds, read-only
+$ python3 skills/cleanup/scripts/test-worktree-audit.py
+PASS: 8 classifications, HEAD SHAs, offline safety, invalid markers, deduplication, whitespace paths, trunk, read-only

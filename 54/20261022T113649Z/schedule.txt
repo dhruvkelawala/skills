@@ -1,0 +1,13 @@
+# Saturday schedule at 1302a12
+$ sed -n '/^## Schedule the Saturday audit/,/^Each run/p' skills/cleanup/SKILL.md
+## Schedule the Saturday audit
+
+A scheduled task runs where its thread runs, so create it from a T3 thread on the machine to audit. Call `schedule_task` with:
+
+- `prompt`: `/cleanup audit <code-root>`
+- `schedule`: `{"type": "fixed_time", "timeOfDay": "12:00", "weekdays": [6]}`, passed as an object, not a string. Weekday 0 is Sunday and 6 is Saturday, and the time is the machine's local time.
+- `title`: `Saturday cleanup audit`
+
+Each run posts into that thread, so the reply that names buckets goes there too. Tell the user the `nextRunAt` the tool returns.
+
+T3 schedule_task schema, fixed_time trigger: "weekdays": items "Weekday number where 0 is Sunday and 6 is Saturday."; "timeOfDay": string; "Run at a fixed local wall-clock time on selected weekdays."
