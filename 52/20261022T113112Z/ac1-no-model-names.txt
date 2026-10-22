@@ -1,0 +1,23 @@
+# AC1: no model id or nickname in any SKILL.md or reference file, apart from skills/models.json
+
+## Before, at base 4a345b2
+$ git grep -inE 'sonnet|opus|haiku|fable|gpt-[0-9]|claude-[a-z]+-[0-9]|deepseek|gemini' 4a345b2 -- 'skills/*.md' | cut -c1-140
+skills/apr/SKILL.md:25:2. **Engine and model.** `codex` runs with `--model gpt-6.1-sol --thinking xhigh`; `claude` runs with `--model claude
+skills/hillclimb/SKILL.md:78:Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agen
+skills/how/SKILL.md:25:Do the trace yourself by default. When the question spans several subsystems and the user asks for depth, split it in
+skills/issue-to-pr/SKILL.md:111:1. Hand the watch to a helper agent with the `implement-cheap` role: on Pi or SumoCode spawn role `implement
+skills/issue-to-pr/references/watcher-hosts.md:8:| Claude Code | the Agent tool, `subagent_type: general-purpose`, model `sonnet` | leaving 
+skills/perf/SKILL.md:91:Hand work to a helper agent with the named role: on Pi or SumoCode spawn that role; in Claude Code use the Agent too
+skills/promote/references/session-mining.md:49:Read the transcript yourself in one pass by default. When it is too large for one pass, hand 
+skills/verification-skill/SKILL.md:51:2. Read each feature from source. Hand each feature to a helper agent with the `research` role: on Pi 
+skills/why/SKILL.md:51:Read [references/sources.md](references/sources.md), then search each source this session can reach: git and PRs, the
+
+## After, at head 838968a
+$ grep -rinE 'sonnet|opus|haiku|fable|gpt-[0-9]|claude-[a-z]+-[0-9]|deepseek|gemini' skills --include='*.md'; echo exit $?
+exit 1
+
+$ node --test --test-name-pattern='names a model' skills/models.test.mjs
+✔ no skill text names a model (2.247417ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
