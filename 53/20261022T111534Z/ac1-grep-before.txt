@@ -1,0 +1,40 @@
+# at base 4a345b2
+$ grep -ri 'herdr\|hunk session\|terminal-browser' skills/ | cut -c1-120
+skills/evidence/references/surfaces.md:Inside Herdr, run `terminal-browser open http://localhost:3000/<route>`, then `te
+skills/eli25/SKILL.md:description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, in
+skills/eli25/SKILL.md:- Inside Herdr (`HERDR_ENV=1`) with `terminal-browser` on PATH, run `terminal-browser new-tab <pat
+skills/eli25/SKILL.md:- Anywhere else, open it in the user's own browser with `open` on macOS or `xdg-open` on Linux, ev
+skills/pr-review/references/hunk.md:# Stops as Hunk notes in Herdr
+skills/pr-review/references/hunk.md:Use this only inside Herdr (`HERDR_ENV=1`). It opens the pinned range in Hunk and at
+skills/pr-review/references/hunk.md:- `scripts/find-session.mjs`, which snapshots Hunk sessions and finds the one this r
+skills/pr-review/references/hunk.md:Read the installed CLI instead of assuming its syntax: `herdr tab`, `herdr pane`, `h
+skills/pr-review/references/hunk.md:Snapshot the Hunk sessions that already exist:
+skills/pr-review/references/hunk.md:Reuse only a Hunk session this run created earlier. Leave every other session alone.
+skills/pr-review/references/hunk.md:- **Tab (default).** Run `herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "
+skills/pr-review/references/hunk.md:- **Split.** Run `herdr pane split --pane "$HERDR_PANE_ID" --direction right --ratio
+skills/pr-review/references/hunk.md:Start Hunk through Herdr, never in the agent's own terminal:
+skills/pr-review/references/hunk.md:herdr pane run <pane-id> "hunk diff 'refs/pr-review/<n>-base...refs/pr-review/<n>-he
+skills/pr-review/references/hunk.md:For a session this run created earlier, reload it with `hunk session reload "$hunk_s
+skills/pr-review/references/hunk.md:**Done when** `hunk session review "$hunk_session_id" --json` lists exactly the file
+skills/pr-review/references/hunk.md:   hunk session reload "$hunk_session_id" -- diff '<range>'
+skills/pr-review/references/hunk.md:4. **Check the order.** `hunk session review "$hunk_session_id" --json` must list th
+skills/pr-review/references/hunk.md:5. **Attach the stops.** Apply all of them once with `hunk session comment apply "$h
+skills/pr-review/references/hunk.md:**Done when** `hunk session comment list "$hunk_session_id"` shows the stops numbere
+skills/pr-review/references/hunk.md:1. Go to the first stop: `hunk session navigate "$hunk_session_id" --file <first-fil
+skills/pr-review/references/hunk.md:2. Focus what you created: `herdr tab focus <tab-id>` for a tab, or `herdr pane focu
+skills/pr-review/references/hunk.md:3. Verify with `hunk session context "$hunk_session_id" --json`.
+skills/pr-review/references/hunk.md:hunk session comment list "$hunk_session_id" --type all
+skills/pr-review/references/hunk.md:herdr pane move <pane-id> --new-tab --workspace "$HERDR_WORKSPACE_ID" --label "Revie
+skills/pr-review/scripts/find-session.mjs:// Identify the Hunk session this workflow launched, without jq or temp files.
+skills/pr-review/scripts/find-session.mjs://   node find-session.mjs identify --repo <root> --pane <herdr-pane-id> --bef
+skills/pr-review/scripts/find-session.mjs:// PID is a foreground process of the given Herdr pane. Exactly one match wins
+skills/pr-review/scripts/find-session.mjs:// Reads state through `hunk` and `herdr` via execFile only; never mutates any
+skills/pr-review/scripts/find-session.mjs:    const data = await run("herdr", ["pane", "process-info", "--pane", paneId]
+skills/pr-review/scripts/find-session.mjs:  return { ok: false, reason: `no new Hunk session for ${repoRoot} in pane ${p
+skills/pr-review/scripts/find-session.mjs:    "       find-session.mjs identify --repo <root> --pane <herdr-pane-id> --b
+skills/pr-review/scripts/find-session.test.mjs:  assert.match(r2.reason, /no new Hunk session/);
+skills/pr-review/SKILL.md:compatibility: Requires git and gh. Inside Herdr it also uses herdr, hunk and node.
+skills/pr-review/SKILL.md:- `split` makes Herdr open Hunk in a 50/50 split instead of a new tab.
+skills/pr-review/SKILL.md:- **Inside Herdr** (`test "${HERDR_ENV:-}" = 1`), also attach one numbered Hunk note per desig
+skills/pr-review/SKILL.md:- Their Hunk notes: `hunk session comment list <session> --type all`. Without `--type all` you
+exit=0  matches=37

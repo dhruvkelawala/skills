@@ -1,0 +1,7 @@
+# at head 0b5a9ff
+$ grep -ri 'herdr\|hunk session\|terminal-browser' skills/
+exit=1  matches=0
+$ grep -rnoi '.\{0,30\}hunk.\{0,20\}' skills/   # what is left: diff hunks, not the Hunk tool
+skills/promote/references/session-mining.md:49:ailable, read it yourself in chunks and say so. Check 
+skills/explain-diff/SKILL.md:24:and their tests, not just the hunks. Find the reason f
+skills/ship/scripts/ship.mjs:40:-to-head diff, whitespace and hunk line numbers

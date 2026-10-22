@@ -1,0 +1,20 @@
+# at base 4a345b2
+$ git ls-files skills/pr-review
+skills/pr-review/SKILL.md
+skills/pr-review/agents/openai.yaml
+skills/pr-review/extensions/walkthrough-order.ts
+skills/pr-review/references/hunk.md
+skills/pr-review/scripts/find-session.mjs
+skills/pr-review/scripts/find-session.test.mjs
+skills/pr-review/scripts/write-order.mjs
+$ node --test $(git ls-files "*.test.mjs")
+✔ landableRun: someone else's PR still needs a human approval and a verdict from another account (0.056541ms)
+ℹ tests 112
+ℹ suites 0
+ℹ pass 112
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7147.118083
+exit=0
