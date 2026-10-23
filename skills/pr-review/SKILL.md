@@ -26,7 +26,11 @@ The queue is every open PR waiting on the user's review, across their repositori
 
 Each entry has `repo`, `number`, `url`, `title`, `author`, `base`, `head`, `size`, `files`, `returnVisit`, `stackBottom` and `unblocks`.
 
-A **sitting** is a bare `/pr-review`: one thread, with no time cap. Read the queue, show it as the table in step 2, and walk it from the top until the user says `stop` or it runs out. When the queue is empty, say so in one line and stop.
+A **sitting** is a bare `/pr-review`: one thread, with no time cap.
+
+1. Read the queue. When it is empty, say so in one line and stop.
+2. Walk it from the top, one PR at a time, until the user says `stop` or the queue runs out.
+3. The user doesn't see the script's output, so the first PR's review opens with the queue: one table in the queue's order, with a row per PR giving the PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
 
 ## 1. Pin each PR
 
@@ -58,7 +62,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 ## 2. Prep
 
-Prep comes before anything you write about the PR, on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill such as `day`, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
+Prep comes before the PR's review (step 3), on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill such as `day`, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
 
 1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
@@ -72,13 +76,13 @@ Prep comes before anything you write about the PR, on every PR. A PR whose prep 
 6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
 7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
 
-For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk. A sitting starts with the queue as one table, in its order: PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
+For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
 **Complete when** both reviewers have reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide.
 
 ## 3. Walk one PR at a time
 
-Send each PR's review as one message: the intro, then the wrap-up. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
+Send each PR's review as one message: the intro, then the wrap-up. In a sitting, the first one opens with the queue table. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
 
 **The next PR's prep runs while the user reads.** In a sitting or a stack, when you start a PR's review, start the next PR's prep in the background, unless its prep record is already written for its head:
 
@@ -127,7 +131,7 @@ Each stop is one numbered item: the file and lines, the name the lines define (a
    - request changes, only for a P0 or P1, or a change to production authority
 5. One line that counts the style and smell notes, such as "4 style and smell notes; say `what else` to see them".
 
-Keep the intro and the wrap-up under about 300 words together.
+Keep the intro and the wrap-up under about 300 words together, not counting the queue table.
 
 **Verifier.** Run the `verifier` job only for a PR that touches authority, data, money or a production switch where its proof doesn't cover that, or when the user says `verify`. Give a fresh `delegate_task` child on that job's entry, `onTeammatePr` on someone else's PR, the PR number, the head SHA and the three lanes in step 2 of [ship's verify](../ship/SKILL.md#verify). Its PASS, PASS+NOTES or FAIL, with the evidence for each lane, goes into the wrap-up and into the review you post, rather than a comment of its own. When it is still running at the intro, the wrap-up says so, and its result follows when it returns.
 

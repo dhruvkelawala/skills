@@ -214,6 +214,13 @@ function assertGuideReady(v) {
 // A PR's review in chat: the message that holds its link and the wrap-up's suggested verdict.
 const reviewOf = (v, url) => v.texts.find((x) => x.text.includes(url) && /\bverdict\b/i.test(x.text));
 const mentionAt = (text, n) => text.search(new RegExp(`(?:#|/pull/)${n}\\b`));
+// The queue as shown: a table or list with one row per PR. A row belongs to the PR it names first, since #5's row
+// may say it sits on #7.
+const queueRows = (text) =>
+  text.split("\n").filter((l) => /^\s*(?:\||\d+[.)]\s|[-*]\s)/.test(l)).map((row) => {
+    const [a, b] = [mentionAt(row, PR), mentionAt(row, LAYER)];
+    return a < 0 && b < 0 ? null : b < 0 || (a >= 0 && a < b) ? PR : LAYER;
+  }).filter(Boolean);
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
@@ -297,9 +304,10 @@ describe("pr-review", { concurrency: true }, () => {
     describeVisit(t, v);
     const review = reviewOf(v, PR_URL);
     assert.ok(review, `${v.name}: no review of #${PR}`);
-    const listed = v.texts.find((x) => mentionAt(x.text, PR) >= 0 && mentionAt(x.text, LAYER) >= 0);
-    assert.ok(listed && listed.at <= review.at, `${v.name}: no queue naming #${PR} and #${LAYER} before the first review`);
-    assert.ok(mentionAt(listed.text, PR) < mentionAt(listed.text, LAYER), `${v.name}: the queue puts #${LAYER} before #${PR}, the stack bottom it sits on`);
+    const listed = v.texts.find((x) => queueRows(x.text).includes(PR) && queueRows(x.text).includes(LAYER));
+    assert.ok(listed && listed.at <= review.at, `${v.name}: no queue table with a row for #${PR} and for #${LAYER} before the first review`);
+    const rows = queueRows(listed.text);
+    assert.ok(rows.indexOf(PR) < rows.indexOf(LAYER), `${v.name}: the queue puts #${LAYER} before #${PR}, the stack bottom it sits on`);
     const reports = reportsOf(v, reviewerTasks(v));
     assert.deepEqual(axes(reports), ["spec", "standards"], `${v.name}: /code-review's two reviewers did not report on #${PR}`);
     assert.ok(secondOpinionsAt(v).length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
