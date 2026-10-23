@@ -49,7 +49,7 @@ Each plan step is one acceptance criterion, worded as the contract words it. The
 
 When the run stops, post the recap: the result first, then one line each for what was built, review, evidence, what couldn't be checked and what's next. Links open in T3, never local paths or localhost. End with a sign-off.
 
-    <result, with the PR link>
+    <result, with the PR link>. The tour is in the Guide tab.
 
     - Built: <what changed, as a user sees it>
     - Review: <the passes that ran and what they found>
@@ -58,6 +58,8 @@ When the run stops, post the recap: the result first, then one line each for wha
     - Next: <the one thing to do next>
 
     <sign-off>
+
+Once the PR exists, the recap is the intro to your review of it, the way `/pr-review` opens a teammate's PR. Its first line links the PR and points at the PR panel's Guide tab, where T3's review guide holds the tour, written for the head before the recap posts (stage 7). When the PR has no guide, the first line says why instead.
 
 A spec's recap also gives every ticket a line with its state and PR, as [spec](references/spec.md#recap) shows. The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again. After its recap, a ticket of a spec wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
 
@@ -74,11 +76,11 @@ node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief fil
 node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
 ```
 
-The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria or a spec's tickets, that a spec's recap lists every ticket, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
+The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria or a spec's tickets, that a spec's recap lists every ticket, that a recap's first line links the PR and that the record's `guide:` line is for the head, and the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
 ## Taste check
 
-Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. In a copy that names a PR, add the `guide:` line its run would have recorded, or the script refuses every recap. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
 
 ```bash
 node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html
@@ -173,7 +175,8 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 2. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run.
 3. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. Either mismatch stops the run as `blocked` with both values.
 4. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
-5. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
+5. Start the PR's review guide with `write_pull_request_guides` now, because T3 takes a few minutes to write it. Stage 7 checks it before the recap.
+6. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
 
 **Complete when:** an open, ready-for-review PR exists at the current head on the contracted base and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
 
@@ -217,7 +220,8 @@ Run this stage once stage 6 records anything but `watching`.
    ```
 
 4. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
-5. Write the report into the record, and post the [recap](#recap). Its `Next:` line offers `/pr-review <PR or stack>` to read the settled diff.
+5. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
+6. Write the report into the record, and post the [recap](#recap). Its `Next:` line offers `/pr-review <PR or stack>` to read the settled diff.
 
 Leave the branch and any worktree for the user to clean up.
 

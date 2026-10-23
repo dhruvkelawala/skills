@@ -14,20 +14,23 @@ const CRITERIA = [
 ];
 
 // A directory of run records for one repo, as ~/.agent/issue-to-pr/<repo>/ holds them. Each record
-// has a header and a contract with CRITERIA, the way stage 1 writes it.
+// has a header and a contract with CRITERIA, the way stage 1 writes it. A record given a `pr` has
+// been published, with its `head` and, once stage 7 checked it, its `guide`.
 function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // A spec's record lists `tickets` where a build's lists criteria; a ticket's record names its `pr`.
-  const record = (issue, { predecessor, criteria = CRITERIA, tickets, specMode = "stack", pr } = {}) => {
+  const record = (issue, { predecessor, criteria = CRITERIA, tickets, specMode = "stack", pr, head, guide } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
       ...(tickets ? [`spec_mode: ${specMode}`] : []),
       `mode: ${predecessor ? "stacked" : "standalone"}`,
       ...(predecessor ? [`predecessor_pr: https://github.com/o/r/pull/${predecessor}`] : []),
-      "stage: contract",
+      `stage: ${pr ? "ready" : "contract"}`,
+      ...(head ? [`head: ${head}`] : []),
       `pr: ${pr ? `https://github.com/o/r/pull/${pr}` : "none"}`,
+      ...(guide ? [`guide: ${guide}`] : []),
       "",
       "## Contract",
       "",
@@ -152,6 +155,23 @@ test("a recap leads with the result, has its five lines in order, and links noth
   saved("recap", path, recap());
   const prose = "- Couldn't check: the localhost preview, which a phone can't open.";
   saved("recap", path, recap({ lines: RECAP_LINES.map((line) => (line.includes("Couldn't check:") ? prose : line)), signOff: "📵 No localhost on a phone" }));
+});
+
+test("once the run has a PR, the recap's first line links it and points at a guide written for the head", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const pr = 9;
+  const head = "c0ffee1234567890c0ffee1234567890c0ffee12";
+  const published = (guide) => record(7, { pr, head, guide });
+  const toGuide = "#7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.";
+  refused("recap", published(`written for ${head}`), recap({ result: "#7 is ready for your review. The tour is in the Guide tab." }),
+    /first line links the PR, https:\/\/github\.com\/o\/r\/pull\/9/);
+  refused("recap", published(`written for ${head}`), recap({ result: "#7 is ready for your review: https://github.com/o/r/pull/9" }), /Guide tab/);
+  refused("recap", published(), recap({ result: toGuide }), /no `guide:` line/);
+  refused("recap", published("written for ba5eba11ba5eba11ba5eba11ba5eba11ba5eba11"), recap({ result: toGuide }),
+    /guide is written for ba5eba1, but the head is c0ffee1/);
+  saved("recap", published("written for c0ffee1"), recap({ result: toGuide, signOff: "🧭 The tour waits in its tab" }));
+  saved("recap", published("none: review guides are off on this server"),
+    recap({ result: "#7 is ready for your review: https://github.com/o/r/pull/9. Guides are off here, so there's no tour.", signOff: "🗺️ No map this time" }));
 });
 
 test("the taste-check page shows each record's latest brief and recap, in the order given", (t) => {

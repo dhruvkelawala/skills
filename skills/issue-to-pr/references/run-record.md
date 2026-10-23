@@ -29,6 +29,7 @@ pr: <URL or none>
 spec_mode: stack | one-pr   (a spec's own record)
 thread: <the spec thread's id>   (a spec's own record)
 spec: <spec URL>   (a ticket a spec thread started)
+guide: written for <head> | none: <reason>   (once stage 7 checked it)
 ```
 
 Stage reports go below the header, appended in order:
