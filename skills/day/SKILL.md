@@ -1,11 +1,11 @@
 ---
 name: day
-description: Use when the user says goodnight or that they are wrapping up for the day, invokes /day night, or replies to the goodnight list with "yes", a change to a line, or "go on". Lists every T3 thread waiting on the user or gone quiet, suggests continue or stop for each run, and after the reply stops the chosen runs cleanly and records them for the morning report.
+description: Use when the user invokes /day morning or /day night, says goodnight or that they are wrapping up for the day, replies to the morning report with builds to start or "go on", or replies to the goodnight list with "yes", a change to a line, or "go on". The morning report, sent by a 10:00 scheduled task, lists the builds to start, the issues almost ready, the review queue with its first PR prepped, stale PRs, late comments and the runs stopped overnight, and starts a build thread only for each build the reply names. The goodnight check lists every T3 thread waiting on the user or gone quiet, suggests continue or stop for each run, and after the reply stops the chosen runs cleanly and records them for the morning.
 ---
 
 # Day
 
-The day has two fixed anchors, a morning report and a goodnight check, and this skill owns both. This file covers the goodnight check, which is night mode.
+The day has two fixed anchors, a morning report and a goodnight check, and this skill owns both. The morning report is morning mode, `/day morning`, which a 10:00 scheduled task sends: follow [morning.md](morning.md). This file covers the goodnight check, which is night mode.
 
 Invoke as `/day night`, or say "goodnight". The T3 tools see the threads of the T3 server this thread runs on, so start the check from a thread on the machine where T3 runs new threads.
 
@@ -111,7 +111,7 @@ The night record is `~/.agent/day/night-<YYYY-MM-DD>-<HHMM>.md`, written when th
 - <ISO time with offset> · [<title>](t3-thread://v1/<threadId>) · <the reason it continued>
 ```
 
-The morning report reads the newest night record. Under "stopped last night" it lists each stopped line whose thread has not run since its stop time. In `t3_thread_read`'s `recentRuns`, a run requested after the stop time means the thread restarted, whoever restarted it. A run stopped on an earlier night and never restarted shows up in the next goodnight check as gone quiet.
+The morning report lists the stopped lines of the newest record from the last 24 hours whose threads have not run since ([morning step 2](morning.md#2-gather-the-rest)). A run stopped on an earlier night and never restarted shows up in the next goodnight check as gone quiet.
 
 ## "go on"
 
