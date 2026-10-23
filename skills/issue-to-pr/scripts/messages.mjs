@@ -8,12 +8,14 @@
 //
 // A message with problems is not saved: each problem prints on its own line and the exit code is 1.
 // The brief's plan is checked against the record's `Acceptance criteria:` list, or a spec's `Tickets:`
-// list, and a spec's recap must give each ticket its line. Sign-offs must not repeat any of the last
-// 10 saved in the run records beside this one, which are this repo's runs.
+// list. A recap is checked against the record's `pr:`, `head:` and `guide:` lines, and a spec's recap
+// must give each ticket its line. Sign-offs must not repeat any of the last 10 saved in the run
+// records beside this one, which are this repo's runs.
 
 import { appendFileSync, existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { header } from "./run-record.mjs";
 
 import { STATES, ticketsOf } from "./spec.mjs";
 
@@ -23,7 +25,9 @@ const USAGE = [
   "       messages.mjs page <record>... > taste.html",
 ].join("\n");
 const KINDS = { brief: "Brief", recap: "Recap" };
-const RECAP_LINES = ["Built:", "Review:", "Evidence:", "Couldn't check:", "Next:"];
+const RECAP_LINES = ["Built:", "Review:", "Verifier:", "Evidence:", "Couldn't check:", "Next:"];
+// The verifier's verdict, or `skipped`, then why: the rule B reason it ran, or why it didn't.
+const VERIFIER = /^Verifier:\s*(PASS\+NOTES|PASS|FAIL|skipped)?\b[\s,.:;]*(.*)$/i;
 const RECENT_SIGN_OFFS = 10;
 const SIGN_OFF_WORDS = 12;
 // Saved as `## Brief, <ISO time>` with the message in a four-backtick fence, so a message may hold ```.
@@ -67,6 +71,7 @@ function recapProblems(message, record, path) {
   if (!lines[0].trim() || RECAP_LINES.some((label) => lines[0].startsWith(label))) {
     problems.push("the recap starts with the result on its first line");
   }
+  problems.push(...reviewIntroProblems(lines[0], record));
   const found = RECAP_LINES.map((label) => ({ label, at: lines.findIndex((line) => line.startsWith(label)) }));
   for (const { label, at } of found) {
     if (at < 0) problems.push(`the recap has no \`${label}\` line`);
@@ -76,6 +81,9 @@ function recapProblems(message, record, path) {
   if (present.some(({ at }, i) => i > 0 && at < present[i - 1].at)) {
     problems.push(`the recap's lines go in this order: ${RECAP_LINES.join(" ")}`);
   }
+  const [, verdict, why] = lines.find((line) => line.startsWith("Verifier:"))?.match(VERIFIER) ?? [];
+  if (why && !verdict) problems.push("`Verifier:` starts with its verdict, PASS, PASS+NOTES or FAIL, or `skipped`");
+  else if (verdict && !why) problems.push("`Verifier:` says why: the rule B reason it ran, or why it was skipped");
   if (lines.some((line) => LOCAL_LINK.test(line))) problems.push("links must open in T3: no local paths, file:// or localhost");
   if (/^spec_mode: stack\b/m.test(record)) problems.push(...ticketLineProblems(lines, ticketsOf(record), dirname(path)));
   return problems;
@@ -91,6 +99,27 @@ function ticketLineProblems(lines, tickets, dir) {
     return pr && !line.includes(pr) ? [`#${number}'s line needs its PR, ${pr}`] : [];
   });
 }
+
+// Once the run has a PR, the recap is the intro to the user's review of it: the first line links the
+// PR and points at its guide, which must be written for the head the record names.
+function reviewIntroProblems(first, record) {
+  const pr = header(record, "pr").match(/^https?:\/\/\S+\/pull\/\d+/)?.[0];
+  if (!pr) return [];
+  const problems = first.includes(pr) ? [] : [`the recap's first line links the PR, ${pr}`];
+  const guide = header(record, "guide");
+  const written = guide.match(/^written for ([0-9a-f]{7,40})\b/i)?.[1];
+  const head = header(record, "head");
+  if (written && !sameCommit(written, head)) {
+    problems.push(`the guide is written for ${written.slice(0, 7)}, but the head is ${head.slice(0, 7) || "not recorded"}: write it again for the head and wait for it`);
+  } else if (written && !/\bGuide tab\b/i.test(first)) {
+    problems.push("the recap's first line points at the Guide tab, where the PR's tour is");
+  } else if (!written && !/^none\b/i.test(guide)) {
+    problems.push("the run record has no `guide:` line: check the guide before the recap, then record `guide: written for <head>` or `guide: none: <why>`");
+  }
+  return problems;
+}
+
+const sameCommit = (a, b) => b.length >= 7 && (a.toLowerCase().startsWith(b.toLowerCase()) || b.toLowerCase().startsWith(a.toLowerCase()));
 
 function signOffProblems(lines, recent) {
   const problems = [];
@@ -141,7 +170,7 @@ function planMismatch(plan, criteria, noun) {
 }
 
 function stackedOnMismatch(value, record) {
-  const predecessor = record.match(/^predecessor_pr: .*\/pull\/(\d+)/m)?.[1];
+  const predecessor = header(record, "predecessor_pr").match(/\/pull\/(\d+)/)?.[1];
   if (!predecessor) return value === "none" ? [] : ["`Stacked on:` is `none` for a run that isn't stacked"];
   return new RegExp(`(?:#|/pull/)${predecessor}\\b`).test(value) ? [] : [`\`Stacked on:\` names the predecessor, #${predecessor}`];
 }
@@ -179,10 +208,9 @@ const sameSignOff = (a, b) => normalize(a) === normalize(b);
 function page(records) {
   const runs = records.map((record, i) => {
     const text = readFileSync(record, "utf8");
-    const header = (key) => text.match(new RegExp(`^${key}: (.+)$`, "m"))?.[1] ?? "";
     const latest = (kind) => savedMessages(text).filter((saved) => saved.kind === kind).at(-1)?.message;
-    const issue = header("issue");
-    const meta = [header("mode").match(/^(?:stacked|standalone)/)?.[0], header("lane").match(/^(?:light|full)/)?.[0]?.concat(" lane")];
+    const issue = header(text, "issue");
+    const meta = [header(text, "mode").match(/^(?:stacked|standalone)/)?.[0], header(text, "lane").match(/^(?:light|full)/)?.[0]?.concat(" lane")];
     return `<section class="run">
   <h2>${i + 1}. ${issueLink(issue)}<span class="meta">${meta.filter(Boolean).map((part) => `, ${part}`).join("")}</span></h2>
   ${bubble("Brief", latest("Brief"))}
@@ -228,7 +256,10 @@ function inline(message) {
     const [whole, text, url, bare, code] = match;
     html += escape(message.slice(from, match.index));
     if (url) html += `<a href="${escape(url)}">${escape(text)}</a>`;
-    else if (bare) html += `<a href="${escape(bare)}">${escape(bare)}</a>`;
+    else if (bare) {
+      const url = bare.replace(/[.,;:!?]+$/, "");
+      html += `<a href="${escape(url)}">${escape(url)}</a>${escape(bare.slice(url.length))}`;
+    }
     else html += `<code>${escape(code)}</code>`;
     from = match.index + whole.length;
   }

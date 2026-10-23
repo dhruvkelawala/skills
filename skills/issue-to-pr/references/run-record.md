@@ -23,12 +23,15 @@ branch: <name>
 stage: contract | implemented | reviewed | verified | published | watching | awaiting-human | ready | merged | blocked: <reason>
 head: <sha the stage was proven on>
 tree: <git rev-parse HEAD^{tree} at that head>
-repairs: <used>/<budget>
+repairs: <used>/<budget>   (only repairs.mjs changes it)
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
 pr: <URL or none>
 spec_mode: stack | one-pr   (a spec's own record)
 thread: <the spec thread's id>   (a spec's own record)
 spec: <spec URL>   (a ticket a spec thread started)
+draft: yes | no   (from stage 5; yes until the user's "done" in stage 8)
+guide: written for <head> | none: <reason>   (once stage 7 checked it)
+land: held at <head>, patch <fingerprint> | --merge | dropped at <head>: <reason>   (only land.mjs writes it)
 ```
 
 Stage reports go below the header, appended in order:
@@ -38,6 +41,8 @@ Stage reports go below the header, appended in order:
 - the build report
 - each review pass: the tree it reviewed, or the skip and its reason, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
 - the evidence links, each with the head it was captured at
+- the verifier's verdict and the rule B reason it ran, or why it was skipped
+- the user's review: each comment with its fix commit or answer
 - each watch pass: its gate result, its repairs and the stage it left
 - the handoff block
 - the report and the recap, each time the run stops
@@ -54,7 +59,7 @@ A spec's contract lists its tickets instead, under a line that reads `Tickets:`,
 
 1. Read the record. If an older record exists at `$(git rev-parse --git-dir)/issue-to-pr/<issue>.md`, read it too and copy its identifiers and reports into the new record. Leave the old file where it is.
 2. Run `git fetch` and compare the record with live state: `base_sha` is still reachable, the branch head exists, and, once a PR exists, `gh pr view <pr> --json state,headRefOid,baseRefName` (REST: `.state`, `.merged`, `.head.sha` and `.base.ref` from `gh api repos/{owner}/{repo}/pulls/<pr>`).
-3. When GitHub reports the PR as MERGED, record `merged` and stop. When it reports CLOSED, record `blocked: PR closed` and stop.
+3. When GitHub reports the PR as MERGED, clean up as [on merge](pr-thread.md#on-merge) says, which records `merged`, and stop. When it reports CLOSED, record `blocked: PR closed` and stop.
 4. When the live head differs from the record, set `stage` back to the last stage whose head still matches, and continue from that stage.
 
 **Complete when:** the record's stage, head and tree match live state.

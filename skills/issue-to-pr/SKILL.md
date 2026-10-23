@@ -1,6 +1,6 @@
 ---
 name: issue-to-pr
-description: Use when the user invokes /issue-to-pr with a GitHub issue, spec, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a watch through T3, standalone or as a stacked layer, and builds a spec's tickets as a stack of PRs or as one PR.
+description: Use when the user invokes /issue-to-pr with a GitHub issue, spec, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved, or says "land", "more" or "go on" in a thread that owns a PR. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format, a watch through T3 and the user's own review of the PR in the same thread, standalone or as a stacked layer, and builds a spec's tickets as a stack of PRs or as one PR.
 ---
 
 # Issue to PR
@@ -10,7 +10,7 @@ Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stac
 - Without a work item, the build starts from this conversation. A plan file, such as one `improve` wrote, starts it from that plan. Stage 1 files either one as an issue through `ticket`, then builds that issue.
 - A spec, an issue with open sub-issues, builds every ticket in it, each in its own thread and PR, stacked on its blocker's PR. `--one-pr` builds them all onto one branch and one PR instead. Follow [spec](references/spec.md).
 - `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
-- `--merge` lands the PR in stage 7 through the ship skill: an independent `ship verify`, then `ship land`. A stacked layer lands only once it is the bottom of its stack.
+- `--merge` is "land" given at the build's start: the PR lands in stage 7 through `ship land` once it is clean, after the verifier when rule B covers the PR. Only the user adds it. A stacked layer lands only once it is the bottom of its stack.
 - `--max-repairs` sets the repair budget. The default is 10.
 - `--spec <spec>` marks a ticket's build that a spec thread started. [Spec](references/spec.md#a-tickets-build) says what it adds.
 - `resume` continues a stopped run. Follow [resume](references/resume.md).
@@ -19,11 +19,11 @@ After the brief posts, the run continues without waiting. It stops only for a ha
 
 ## Run record
 
-The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the repository, where `<repo>` is `gh repo view --json name --jq .name` (REST: `gh api repos/{owner}/{repo} --jq .name`). Only this session writes it. Helper agents return reports, and this session appends them. [Run record](references/run-record.md) has the format and the checks to run when a record already exists. Every stage ends by updating `stage`, `head`, `tree` and `repairs`.
+The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the repository, where `<repo>` is `gh repo view --json name --jq .name` (REST: `gh api repos/{owner}/{repo} --jq .name`). Only this session writes it. Helper agents return reports, and this session appends them. [Run record](references/run-record.md) has the format and the checks to run when a record already exists. Every stage ends by updating `stage`, `head` and `tree`. Only `repairs.mjs` changes `repairs`.
 
-## Repair budget
+## The PR's thread
 
-A repair is one commit that changes code to fix a review finding, a failed check, a red `/verify` or a review-ready violation, in stage 3, 4 or 6, including pr-watch's repairs in stage 6. Count every repair in `repairs: <used>/<budget>`. When `used` reaches the budget, stop, record `blocked: repair budget`, and ask the user whether to raise it.
+This thread owns its PR until the PR merges. [The PR's thread](references/pr-thread.md) says what that means, here and in an `/apr` thread: the words the user says, such as "land" and "more", the fixes the thread makes on its own, the repair budget for the PR's whole life, when it watches, and the cleanup on merge. Each "repair" in the stages below is one its [repair budget](references/pr-thread.md#repair-budget) defines, and goes in the record the way it says.
 
 ## GitHub quota
 
@@ -47,17 +47,22 @@ Each plan step is one acceptance criterion, worded as the contract words it. The
 
 ## Recap
 
-When the run stops, post the recap: the result first, then one line each for what was built, review, evidence, what couldn't be checked and what's next. Links open in T3, never local paths or localhost. End with a sign-off.
+When the run stops, post the recap: the result first, then one line each for what was built, review, the verifier, evidence, what couldn't be checked and what's next. Links open in T3, never local paths or localhost. End with a sign-off.
 
-    <result, with the PR link>
+    <result, with the PR link>. The tour is in the Guide tab.
 
     - Built: <what changed, as a user sees it>
     - Review: <the passes that ran and what they found>
+    - Verifier: <its verdict and the rule B reason it ran, or skipped and why>
     - Evidence: <a link for each criterion, or its exemption>
     - Couldn't check: <what automation could not check, or nothing>
     - Next: <the one thing to do next>
 
     <sign-off>
+
+Once the PR exists, the recap is the intro to the user's review of it in stage 8. Its first line links the PR and points at the PR panel's Guide tab, where T3's review guide holds the tour. Stage 7 writes the guide for the head before the recap posts. When the PR has no guide, the first line says why instead.
+
+When the PR adds a part, changes a flow across parts, or is a stack, follow the recap with an `/eli25` page. When a change the user can see has no recording among its evidence, the `Next:` line suggests `try`, with two to four things to try and the expected result of each.
 
 A spec's recap also gives every ticket a line with its state and PR, as [spec](references/spec.md#recap) shows. The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again. After its recap, a ticket of a spec wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
 
@@ -74,11 +79,11 @@ node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief fil
 node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
 ```
 
-The script checks the fields, the length of "What it's about", that the plan matches the contract's criteria or a spec's tickets, that a spec's recap lists every ticket, the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
+The script checks the brief's fields, the length of "What it's about" and that the plan matches the contract's criteria or a spec's tickets. It checks the recap's lines, that its `Verifier:` line gives a verdict or `skipped` and why, that a spec's recap lists every ticket, and, once the record names a PR, that the first line links it and the record's `guide:` line is for the head. It checks the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
 ## Taste check
 
-Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. In a copy that names a PR, add the `guide:` line its run would have recorded, or the script refuses every recap. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
 
 ```bash
 node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html
@@ -108,7 +113,7 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 5. Look for a `/product-description` output (`README.md`, `goal.md` and `glossary.md`) through paths named in `AGENTS.md` or `EVIDENCE.md` and in sibling directories. When one exists for this product, read it and the touched feature documents, use their setup, action and expected result to make vague issue text concrete, and record their paths and source commit. Flag claims that conflict with the issue or the code.
 6. Read enough code to state the contract: in-scope paths, out-of-scope items, acceptance criteria, any human gate the work item names, and for each criterion the surface it lands on and the capture that will prove it.
 7. Run `/review-ready` in preflight mode against the contract. The test seam it names becomes `test_seam`.
-8. Append the contract to the run record, post the [brief](#brief), and continue. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
+8. Append the contract to the run record, post the [brief](#brief), and continue. With `--merge`, hold it as ["land"](references/pr-thread.md#land) says. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
 9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt, so leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
 
 **Complete when:** this thread is in the build's worktree, the run record holds the work item, mode, base ref and SHA, branch, contract and brief, the brief is posted, and the branch is checked out at `base_sha`.
@@ -170,26 +175,29 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 ## 5. Publish
 
 1. Write the PR body from [the PR body template](references/pr-body.md) into a temp file.
-2. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run.
-3. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. Either mismatch stops the run as `blocked` with both values.
-4. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
-5. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
+2. Check whether GitHub asks for a review before a PR merges into the default branch: `node <this skill's folder>/scripts/required-review.mjs <owner/repo> <default branch>`. When it prints `review required`, record `draft: yes`, and the PR opens as a draft so that nobody is asked to review it before the user has. Otherwise record `draft: no`.
+3. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run. For a draft, apr opens the PR with `gh pr create --draft` (REST: `-F draft=true`), or with `gh stack submit` without `--open`, in place of its rule that every PR opens ready for review. Its push-and-publish step is then complete once the draft is open at the local HEAD.
+4. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. `gh pr view --json isDraft` (REST: `.draft`) must match the record's `draft:`. Any mismatch stops the run as `blocked` with both values.
+5. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
+6. Start the PR's review guide with `write_pull_request_guides` now, because T3 takes a few minutes to write it. Stage 7 checks it before the recap.
+7. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
 
-**Complete when:** an open, ready-for-review PR exists at the current head on the contracted base and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
+**Complete when:** an open PR exists at the current head on the contracted base, a draft when the record says `draft: yes` and otherwise ready for review, and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
 
 ## 6. Watch
 
 This thread watches its own PR, and T3 wakes it when the PR changes.
 
-1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the repair listed as not re-reviewed, because autoreview runs once per run.
-2. Add each pr-watch repair to the counter, and append one line per repair to the run record with its source thread or check, the head it was reviewed at, and its commit.
+1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the repair listed as not re-reviewed, because autoreview runs once per run. While the record says `draft: yes`, the gate's `PR is a draft` and `PR merge state is DRAFT` wait on the user's review, so they are not a hand-back. Repair the other reasons as pr-watch says.
+2. Record each pr-watch fix with `repairs.mjs add`, as the [repair budget](references/pr-thread.md#repair-budget) says, its `--fix` naming the source thread or check and the head it was reviewed at, and post the line it prints. A human reviewer's clear request is `--asked`.
 3. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
 4. Record the stage from where pr-watch leaves the PR:
    - **Clean.** When the gate exits `0` at the current head, record `ready`.
+   - **The user's review of the draft.** When the two draft reasons are all the gate has left, it hides what is still pending, so list the head's checks with `gh pr checks <n>` (REST: `gh api repos/{owner}/{repo}/commits/<head>/check-runs`). While one is still running, call `watch_pull_request`, record `watching`, and end the turn. Otherwise record `awaiting-human: review of the draft`.
    - **Waiting on someone else**, such as a running check or a reviewer who has not covered the head. pr-watch has called `watch_pull_request`, so record `watching` with the open reasons and end the turn. When T3 wakes this thread, start this stage again at step 1.
    - **Waiting on the user's word**, such as replies held until "post". Record `awaiting-human` with what is held.
-   - **Budget spent.** Record `blocked: repair budget` and ask the user whether to raise it.
-   - **Any other hand-back**, such as a draft or closed PR, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.
+   - **Budget spent.** Stop as the [repair budget](references/pr-thread.md#repair-budget) says.
+   - **Any other hand-back**, such as a closed PR, a draft the record doesn't expect, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.
 
 **Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`.
 
@@ -197,16 +205,16 @@ This thread watches its own PR, and T3 wakes it when the PR changes.
 
 Run this stage once stage 6 records anything but `watching`.
 
-1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, record `merged`.
-2. With `--merge` and the stage at `ready`, land the PR through the ship skill:
+1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, clean up as [on merge](references/pr-thread.md#on-merge) says.
+2. **Verifier, under rule B.** At `ready` or `awaiting-human`, decide whether rule B covers the PR: it touches authority, stored data, money or a production switch and its proof doesn't cover that, its `**Door:**` line says one-way, or the user said `verify`. When it does, load and follow `/ship verify <n>`: a fresh agent runs the gates, the live behaviour and the blast-radius check at the current head, and records the verdict. On FAIL, fix each finding as a repair, counted against the budget, the way the review case in [resume](references/resume.md) does, then verify again. Otherwise skip it. Append the verdict and the rule B reason, or the skip and why, to the record, for the recap's `Verifier:` line.
+3. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
    1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
    2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
-   3. Load and follow `/ship verify <n>`. A fresh agent runs the gates, the live behaviour and the blast-radius check at the current head, and records the verdict. On FAIL, fix each finding as a repair, counted against the budget, the way the review case in [resume](references/resume.md) does, then verify again.
-   4. Load and follow `/ship land <n>`. On the caller's own PR, `--merge` is the explicit request to land, so it stands in for an approval. ship merges pinned to the verified head and confirms the merge.
-   5. Record `merged` with the merge commit, or `ready` with the blocker ship reports.
+   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
+   4. Once it merged, record the merge commit and clean up as [on merge](references/pr-thread.md#on-merge) says. Otherwise record `ready` with the blocker ship reports.
 
    Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
-3. Write the handoff block into the record:
+4. Write the handoff block into the record:
 
    ```md
    handoff
@@ -216,10 +224,22 @@ Run this stage once stage 6 records anything but `watching`.
    - human gates left: <approvals and from whom, a one-way door, the merge>
    ```
 
-4. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
-5. Write the report into the record, and post the [recap](#recap). Its `Next:` line offers `/pr-review <PR or stack>` to read the settled diff.
+5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
+6. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
+7. Write the report into the record, and post the [recap](#recap). Its `Next:` line names the user's next move, such as reviewing the PR in this thread, and saying "done" on a draft.
 
-Leave the branch and any worktree for the user to clean up.
+## 8. The user's review
+
+After the recap, the user reviews the PR in this thread, the way `/pr-review` reviews a teammate's PR, with the recap as its intro and the guide as its tour. Their comments become fixes, and no review or comment goes on GitHub, because the PR is their own.
+
+1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Make each request one fix commit, with its focused tests, and record it with `repairs.mjs add --asked`, the comment as its `--fix`.
+2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the fixes listed as not re-reviewed. Start the guide for the new head with `write_pull_request_guides` right after the push.
+3. Run stages 6 and 7 again. The recap they end with covers only what changed since the last one: its `Built:` line gives each comment's fix.
+4. Only the user's "done" marks a draft ready. When they say it and the record says `draft: yes`, run `gh pr ready <n>`. It has no REST call, so when the GraphQL quota is spent, wait for it to reset. Record `draft: no`, then run stage 6 again, where the approval GitHub requires comes from someone else.
+
+`try` and the other words the user says here work as [the PR's thread](references/pr-thread.md#words) says.
+
+**Complete when:** each of the user's comments is fixed or answered, and a draft turned ready only on their "done".
 
 ## Report
 
@@ -227,6 +247,6 @@ The report goes in the run record whenever the run stops. The thread gets the re
 
 - Work item, mode, lane, base SHA, branch, PR URL, final head, and stage, with the reason when blocked
 - Repairs used against the budget, by stage
-- `/verify` result and anything that could not run, and the ship verdict when `--merge` ran
+- `/verify` result and anything that could not run, and the verifier's verdict with its rule B reason, or why it was skipped
 - Findings repaired, rejected and deferred as follow-ups, with sources and commits
 - The handoff block, and the `/promote` proposals when a finding recurred

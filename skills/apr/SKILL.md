@@ -1,6 +1,6 @@
 ---
 name: apr
-description: Use when the user invokes /apr, /apr claude or /apr --skip-review, asks to review and publish local changes, or when /issue-to-pr or /pr-watch reaches its publish step. Autoreviews from a pinned base, commits, pushes, opens or updates a ready-for-review GitHub PR, standalone or as a stacked layer, then watches it with /pr-watch until CI and reviewers are clean.
+description: Use when the user invokes /apr, /apr claude or /apr --skip-review, asks to review and publish local changes, or when /issue-to-pr or /pr-watch reaches its publish step. Autoreviews from a pinned base, commits, pushes, opens or updates a ready-for-review GitHub PR, standalone or as a stacked layer, then watches it with /pr-watch until CI and reviewers are clean. Its thread then owns the PR until it merges.
 ---
 
 # APR
@@ -14,7 +14,7 @@ Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<pr
 - `--base` pins the review range and the PR base. `/issue-to-pr` passes its `base_sha`.
 - `stack [<predecessor PR URL>]` publishes the current branch as a layer on that PR. Without a URL, apr treats the branch as stacked when `gh stack view` succeeds and lists it, and takes the branch below it as the predecessor.
 - `--no-watch` stops after the PR is published. `/issue-to-pr` and `/pr-watch` pass it because they own the watch themselves.
-- `--max-repairs` is the repair budget for the watch. The default is 10.
+- `--max-repairs` is the PR's repair budget, for its whole life, as [the PR's thread](#the-prs-thread) counts it. The default is 10.
 - `--body-file` supplies a prepared PR body. apr uses it as written apart from filling the autoreview line. `/issue-to-pr` passes one built from its template.
 - `--run-record` names an `/issue-to-pr` run record. When it holds a clean autoreview for the current tree, step 4 reuses that result instead of reviewing again.
 
@@ -89,9 +89,21 @@ Open every PR ready for review, not as a draft, and with no `[codex]` or other t
 
 ## 7. Watch and repair
 
-Skip with `--no-watch`. Otherwise load and follow `/pr-watch <PR URL> --max-repairs <N>` for this PR, with the remaining budget from `--max-repairs`. It resolves reviewers, the request comment and ignored checks from its own configuration, and it hands each repair back to `/apr --no-watch`.
+Skip with `--no-watch`. Otherwise load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record>` for this PR, with the budget left in the run record. It resolves reviewers, the request comment and ignored checks from its own configuration, and it hands each repair back to `/apr --no-watch`.
 
 **Complete when:** `/pr-watch` reports the gate exiting `0` for the current HEAD, or reports the budget or timeout spent with every reason still open.
+
+## The PR's thread
+
+This thread owns the PR it published until the PR merges. The words the user says here ("land", "post", "more", "go on", `try` and `verify`), the fixes it makes on its own, the repair budget, the watch and the cleanup on merge follow [the PR's thread](../issue-to-pr/references/pr-thread.md), as in a build's thread.
+
+When `/issue-to-pr` calls apr, the build's run record holds them. Otherwise the run record is pr-watch's, `~/.agent/pr-watch/<owner>/<repo>/<pr>.md`. Once the PR exists, start the record with this header and a blank line, unless it already has one, for the scripts that page names:
+
+```md
+pr: <PR URL>
+base_ref: refs/remotes/origin/<base branch>
+repairs: 0/<budget>
+```
 
 ## PR body
 
