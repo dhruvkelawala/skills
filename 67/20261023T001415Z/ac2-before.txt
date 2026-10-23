@@ -1,0 +1,56 @@
+# #67 ac2 at 8079158
+
+$ messages.mjs recap records/7.md   # no Verifier line
+    | #7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🧪 No verifier line
+recap saved to records/7.md
+exit 0
+
+$ messages.mjs recap records/7.md   # a Verifier line with no verdict
+    | #7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Verifier: looked fine to me
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🧪 No verdict
+recap saved to records/7.md
+exit 0
+
+$ messages.mjs recap records/7.md   # verifier skipped, and why
+    | #7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Verifier: skipped, rule B doesn't apply: a two-way door, and no authority, data, money or switch.
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🚪 Two-way door
+recap saved to records/7.md
+exit 0
+
+$ messages.mjs recap records/7.md   # verifier ran under rule B
+    | #7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Verifier: PASS, rule B: the PR changes who may delete a project.
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🔐 Fresh eyes
+recap saved to records/7.md
+exit 0

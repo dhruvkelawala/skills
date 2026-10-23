@@ -1,0 +1,3 @@
+# skills/issue-to-pr/SKILL.md at 8079158: draft, ready and done
+$ grep -n -i -E 'draft|ready for review|"done"|gh pr ready' skills/issue-to-pr/SKILL.md
+188:   - **Any other hand-back**, such as a draft or closed PR, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.

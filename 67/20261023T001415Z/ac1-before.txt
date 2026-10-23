@@ -1,0 +1,44 @@
+# #67 ac1 at 8079158
+A record whose PR is https://github.com/o/r/pull/9, at head c0ffee1.
+
+$ messages.mjs recap records/7.md   # no PR link, no guide line
+    | #7 is ready for your review.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Verifier: skipped, rule B doesn't apply: a two-way door.
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🧪 First try
+recap saved to records/7.md
+exit 0
+
+$ messages.mjs recap records/7.md   # guide written for an older head
+    | #7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Verifier: skipped, rule B doesn't apply: a two-way door.
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🧪 Second try
+recap saved to records/7.md
+exit 0
+
+$ messages.mjs recap records/7.md   # guide written for the head
+    | #7 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.
+    | 
+    | - Built: the results screen shows the score.
+    | - Review: pass 1 and autoreview clean.
+    | - Verifier: skipped, rule B doesn't apply: a two-way door.
+    | - Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true
+    | - Couldn't check: nothing.
+    | - Next: your review of #9 here.
+    | 
+    | 🧭 Third try
+recap saved to records/7.md
+exit 0

@@ -1,0 +1,12 @@
+# required-review.mjs against a gh stand-in, at a831213
+$ node --test --test-reporter=spec skills/issue-to-pr/scripts/required-review.test.mjs
+✔ says how many approvals a branch's protection or rulesets ask for, through GraphQL or, with its quota spent, REST (1430.753333ms)
+✔ a failed read of the branch rules exits 2 rather than reporting no review (92.980542ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1571.276583
