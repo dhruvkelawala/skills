@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The cleanup once a PR has merged: the worktree that holds its branch, the local branch, and
 // origin's branch. Nothing goes until GitHub says the PR merged, and whatever could lose work stays,
-// with the reason: a checkout with uncommitted changes, or a branch with commits the PR never had.
+// with the reason: a checkout with uncommitted changes, a worktree with ignored files Git doesn't keep,
+// such as a `.env`, or a branch with commits the PR never had.
 //
 //   after-merge.mjs <PR URL>
 //
@@ -16,6 +17,9 @@ import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
+// The build output the cleanup skill deletes as rebuildable. Removing a worktree deletes its ignored
+// files too, so any other ignored file keeps the worktree.
+const REBUILDABLE = new Set(["node_modules", "target", ".next", ".turbo"]);
 
 const run = (command, args) => execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const git = (cwd, ...args) => run("git", ["-C", cwd, ...args]);
@@ -65,6 +69,12 @@ function removeLocal(pr, main, holder) {
     git(main.path, "switch", "--quiet", pr.base);
     console.log(`switched the main checkout, ${main.path}, to ${pr.base}`);
   } else if (holder) {
+    const ignored = git(holder.path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory").split("\n")
+      .filter((path) => path && !path.split("/").some((part) => REBUILDABLE.has(part)));
+    if (ignored.length) {
+      const named = ignored.slice(0, 5).join(", ") + (ignored.length > 5 ? `, and ${ignored.length - 5} more` : "");
+      return `${holder.path}: removing it would delete ignored files Git doesn't keep: ${named}`;
+    }
     try {
       git(main.path, "worktree", "remove", holder.path);
     } catch (error) {
