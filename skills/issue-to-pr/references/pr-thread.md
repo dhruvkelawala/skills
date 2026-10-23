@@ -34,6 +34,29 @@ node <issue-to-pr>/scripts/land.mjs check <record>
 
 `--merge` is "land" given at the build's start. Stage 1 holds it with `land.mjs hold <record> --merge`, and it lands whatever patch is clean. Only the user adds `--merge`, and a thread that starts a build passes it on only when the user gave it.
 
+## Fixes after the build
+
+From stage 6 on, the thread fixes failed checks, conflicts and bot findings on its own, through pr-watch, and posts one line in the thread per fix: the line `repairs.mjs add` prints. Replies to people wait for "post".
+
+## Repair budget
+
+A PR has 10 repairs for its whole life: the build, its watch and the fixes after, until it merges. `--max-repairs` sets another number at the build's start, and each "more" adds 10.
+
+A repair is one commit that changes code to fix a review finding, a failed check, a bot finding, a red `/verify`, a review-ready violation or a verifier's FAIL, or one rebase that resolves a conflict. Fixes the user asks for, such as their comments in stage 8, and a human reviewer's clear requests don't count. A restack after the predecessor moved is a repair only when it resolved a conflict.
+
+Record each fix right after its commit, counted or not, with `--asked` for one the user or a human reviewer asked for. On "more", add 10 to the budget:
+
+```bash
+node <issue-to-pr>/scripts/repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--asked]
+node <issue-to-pr>/scripts/repairs.mjs more <record>
+```
+
+`add` appends the fix to the record, keeps the header's `repairs: <used>/<budget>`, and prints the line to post. pr-watch gets the repairs left as `--max-repairs`. When `add` says the budget is spent, or refuses a fix because it already was, stop: record `blocked: repair budget`, call `unwatch_pull_request` so the thread moves to the user's inbox, and post what is still open. A refused fix stays unpushed until "more".
+
+## Watching
+
+The thread watches its PR with `watch_pull_request` only while the PR waits on someone else, such as a running check, a bot or a person. When it's the user's move, as at a clean PR, a held reply, a spent budget or a question, it calls `unwatch_pull_request`, and the thread sits in the user's inbox.
+
 ## `try`
 
 Run the PR for the user to test by hand. Find the launch recipe and prepare the app as `/pr-review`'s `try` does, but from this thread's checkout, and open it in T3's preview browser (`preview_open`) or, for a mobile app, the device panel (`device_open`). Stop what it started when they move on.

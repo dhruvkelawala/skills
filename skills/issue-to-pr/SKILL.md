@@ -19,9 +19,9 @@ After the brief posts, the run continues without waiting. It stops only for a ha
 
 The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the repository, where `<repo>` is `gh repo view --json name --jq .name` (REST: `gh api repos/{owner}/{repo} --jq .name`). Only this session writes it. Helper agents return reports, and this session appends them. [Run record](references/run-record.md) has the format and the checks to run when a record already exists. Every stage ends by updating `stage`, `head`, `tree` and `repairs`.
 
-## Repair budget
+## The PR's thread
 
-A repair is one commit that changes code to fix a review finding, a failed check, a red `/verify` or a review-ready violation, in stage 3, 4 or 6, including pr-watch's repairs in stage 6. Count every repair in `repairs: <used>/<budget>`. When `used` reaches the budget, stop, record `blocked: repair budget`, and ask the user whether to raise it.
+This thread owns its PR until the PR merges. [The PR's thread](references/pr-thread.md) says what that means, here and in an `/apr` thread: the words the user says, such as "land" and "more", the fixes the thread makes on its own, the repair budget for the PR's whole life, when it watches, and the cleanup on merge. Every repair, from stage 3 to the merge, goes through its `repairs.mjs`.
 
 ## GitHub quota
 
@@ -185,14 +185,14 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 This thread watches its own PR, and T3 wakes it when the PR changes.
 
 1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the repair listed as not re-reviewed, because autoreview runs once per run. While the record says `draft: yes`, the gate's `PR is a draft` and `PR merge state is DRAFT` wait on the user's review, so they are not a hand-back. Repair the other reasons as pr-watch says.
-2. Add each pr-watch repair to the counter, and append one line per repair to the run record with its source thread or check, the head it was reviewed at, and its commit.
+2. Record each pr-watch fix with `repairs.mjs add`, as the [repair budget](references/pr-thread.md#repair-budget) says, its `--fix` naming the source thread or check and the head it was reviewed at, and post the line it prints. A human reviewer's clear request is `--asked`.
 3. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
 4. Record the stage from where pr-watch leaves the PR:
    - **Clean.** When the gate exits `0` at the current head, record `ready`.
    - **The user's review of the draft.** When the two draft reasons are all the gate has left, it hides what is still pending, so list the head's checks with `gh pr checks <n>` (REST: `gh api repos/{owner}/{repo}/commits/<head>/check-runs`). While one is still running, call `watch_pull_request`, record `watching`, and end the turn. Otherwise record `awaiting-human: review of the draft`.
    - **Waiting on someone else**, such as a running check or a reviewer who has not covered the head. pr-watch has called `watch_pull_request`, so record `watching` with the open reasons and end the turn. When T3 wakes this thread, start this stage again at step 1.
    - **Waiting on the user's word**, such as replies held until "post". Record `awaiting-human` with what is held.
-   - **Budget spent.** Record `blocked: repair budget` and ask the user whether to raise it.
+   - **Budget spent.** Stop as the [repair budget](references/pr-thread.md#repair-budget) says.
    - **Any other hand-back**, such as a closed PR, a draft the record doesn't expect, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.
 
 **Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`.
@@ -230,7 +230,7 @@ Leave the branch and any worktree for the user to clean up.
 
 After the recap, the user reviews the PR in this thread, the way `/pr-review` reviews a teammate's PR, with the recap as its intro and the guide as its tour. Their comments become fixes, and no review or comment goes on GitHub, because the PR is their own.
 
-1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Make each request one fix commit, with its focused tests, and append the comment and its commit to the run record.
+1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Make each request one fix commit, with its focused tests, and record it with `repairs.mjs add --asked`, the comment as its `--fix`.
 2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the fixes listed as not re-reviewed. Start the guide for the new head with `write_pull_request_guides` right after the push.
 3. Run stages 6 and 7 again. The recap they end with covers only what changed since the last one: its `Built:` line gives each comment's fix.
 4. Only the user's "done" marks a draft ready. When they say it and the record says `draft: yes`, run `gh pr ready <n>`. It has no REST call, so when the GraphQL quota is spent, wait for it to reset. Record `draft: no`, then run stage 6 again, where the approval GitHub requires comes from someone else.

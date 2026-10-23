@@ -28,7 +28,7 @@ Do each step once.
 
 1. Read every new review, thread and `kind: "review"` entry in full. Check each finding against the code and rate it as stage 3 does.
 2. When the gate reports the branch as behind its base or in conflict, rebase onto the live base.
-3. Fix each accepted finding as a repair, one commit each with the focused tests, or decide to reject it with a reason.
+3. Fix each accepted finding, one commit each with the focused tests, and record it as the [repair budget](pr-thread.md#repair-budget) says, with `--asked` for a human reviewer's clear request. Or decide to reject it with a reason.
 4. Run `/verify` at the new head.
 5. Push only this branch: `git push origin <branch>`, with `--force-with-lease` after a rebase.
 6. Answer the reviewers. Reply on each thread, and resolve it after its fix is pushed or its rejection is posted. For a `kind: "review"` entry, post one PR comment that answers it point by point.
