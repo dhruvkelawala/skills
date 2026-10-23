@@ -69,10 +69,11 @@ function brief({ building = "Building #7: Show the score on the results screen",
   ].join("\n");
 }
 
-// The five lines as SKILL.md's recap shows them, a markdown list so the thread keeps them apart.
+// The six lines as SKILL.md's recap shows them, a markdown list so the thread keeps them apart.
 const RECAP_LINES = [
   "- Built: the results screen shows the score, and a dash when there is none.",
   "- Review: pass 1 and autoreview clean, light lane.",
+  "- Verifier: skipped, rule B doesn't apply: a two-way door, and no authority, data, money or switch.",
   "- Evidence: https://github.com/o/r/blob/evidence/7/score.png?raw=true",
   "- Couldn't check: the score on a real phone.",
   "- Next: review #9.",
@@ -152,6 +153,17 @@ test("a recap leads with the result, has its five lines in order, and links noth
   saved("recap", path, recap());
   const prose = "- Couldn't check: the localhost preview, which a phone can't open.";
   saved("recap", path, recap({ lines: RECAP_LINES.map((line) => (line.includes("Couldn't check:") ? prose : line)), signOff: "📵 No localhost on a phone" }));
+});
+
+test("a recap's Verifier line gives the verdict and why the verifier ran, or that it was skipped and why", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const path = record(7);
+  const verifier = (line, signOff) => recap({ lines: RECAP_LINES.map((l) => (l.includes("Verifier:") ? line : l)), signOff });
+  refused("recap", path, recap({ lines: RECAP_LINES.filter((line) => !line.includes("Verifier:")) }), /no `Verifier:` line/);
+  refused("recap", path, verifier("- Verifier: looked fine to me"), /PASS, PASS\+NOTES or FAIL, or `skipped`/);
+  refused("recap", path, verifier("- Verifier: skipped"), /why/);
+  saved("recap", path, verifier("- Verifier: PASS+NOTES, rule B: the PR changes who may delete a project.", "🔐 Checked by fresh eyes"));
+  saved("recap", path, verifier("- Verifier: skipped, rule B doesn't apply: a two-way door, and no authority, data, money or switch.", "🚪 Two-way door, no detour"));
 });
 
 test("once the run has a PR, the recap's first line links it and points at a guide written for the head", (t) => {
