@@ -1,6 +1,6 @@
 ---
 name: issue-to-pr
-description: Use when the user invokes /issue-to-pr with a GitHub issue, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format and a watch through T3, standalone or as a stacked layer.
+description: Use when the user invokes /issue-to-pr with a GitHub issue, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format, a watch through T3 and the user's own review of the PR in the same thread, standalone or as a stacked layer.
 ---
 
 # Issue to PR
@@ -59,6 +59,8 @@ When the run stops, post the recap: the result first, then one line each for wha
     <sign-off>
 
 Once the PR exists, the recap is the intro to your review of it, the way `/pr-review` opens a teammate's PR. Its first line links the PR and points at the PR panel's Guide tab, where T3's review guide holds the tour, written for the head before the recap posts (stage 7). When the PR has no guide, the first line says why instead.
+
+When the PR adds a part, changes a flow across parts, or is a stack, follow the recap with an `/eli25` page. When a change you can see has no recording among its evidence, the `Next:` line suggests `try`, with two to four things to try and the expected result of each.
 
 The run stops when it records `ready`, `awaiting-human`, `blocked` or `merged`. A turn that ends at `watching` posts no recap, because T3 wakes the thread again.
 
@@ -169,23 +171,25 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 ## 5. Publish
 
 1. Write the PR body from [the PR body template](references/pr-body.md) into a temp file.
-2. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run.
-3. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. Either mismatch stops the run as `blocked` with both values.
-4. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
-5. Start the PR's review guide with `write_pull_request_guides` now, because T3 takes a few minutes to write it. Stage 7 checks it before the recap.
-6. Record the PR URL, head, tree and `published`.
+2. Check whether GitHub asks for a review before a PR merges into the default branch: `node <this skill's folder>/scripts/required-review.mjs <owner/repo> <default branch>`. When it prints `review required`, the PR opens as a draft, so that nobody is asked to review it before you have, and you record `draft: yes`. Otherwise record `draft: no`.
+3. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-file <file>`, adding `stack <predecessor PR URL>` for a layer. apr skips its own autoreview when the record holds a clean one for the current tree. When the tree changed after the stage 3 autoreview, also pass `--skip-review`, because autoreview runs once per run. For a draft, apr opens the PR with `gh pr create --draft` (REST: `-F draft=true`), or `gh stack submit` without `--open`, in place of its rule that every PR opens ready for review.
+4. Check the published PR, through `gh pr view` or, on a rate limit, REST's `gh api repos/{owner}/{repo}/pulls/<n>`. `gh pr view --json baseRefName` (REST: `.base.ref`) must name the default branch, or the predecessor's head branch for a layer. `gh pr view --json changedFiles` (REST: `.changed_files`) must equal `git diff --name-only <base_sha>...HEAD | wc -l`. `gh pr view --json isDraft` (REST: `.draft`) must match the record's `draft:`. Any mismatch stops the run as `blocked` with both values.
+5. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
+6. Start the PR's review guide with `write_pull_request_guides` now, because T3 takes a few minutes to write it. Stage 7 checks it before the recap.
+7. Record the PR URL, head, tree and `published`.
 
-**Complete when:** an open, ready-for-review PR exists at the current head on the contracted base and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
+**Complete when:** an open PR exists at the current head on the contracted base, a draft when the record says `draft: yes` and otherwise ready for review, and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
 
 ## 6. Watch
 
 This thread watches its own PR, and T3 wakes it when the PR changes.
 
-1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the repair listed as not re-reviewed, because autoreview runs once per run.
+1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the repair listed as not re-reviewed, because autoreview runs once per run. While the record says `draft: yes`, the gate's `PR is a draft` and `PR merge state is DRAFT` wait on your review, so they are not a hand-back: repair the other reasons as pr-watch says.
 2. Add each pr-watch repair to the counter, and append one line per repair to the run record with its source thread or check, the head it was reviewed at, and its commit.
 3. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
 4. Record the stage from where pr-watch leaves the PR:
    - **Clean.** When the gate exits `0` at the current head, record `ready`.
+   - **Your review of the draft.** When the two draft reasons are all the gate has left, record `awaiting-human: your review of the draft`.
    - **Waiting on someone else**, such as a running check or a reviewer who has not covered the head. pr-watch has called `watch_pull_request`, so record `watching` with the open reasons and end the turn. When T3 wakes this thread, start this stage again at step 1.
    - **Waiting on the user's word**, such as replies held until "post". Record `awaiting-human` with what is held.
    - **Budget spent.** Record `blocked: repair budget` and ask the user whether to raise it.
@@ -218,9 +222,22 @@ Run this stage once stage 6 records anything but `watching`.
 
 5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
 6. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
-7. Write the report into the record, and post the [recap](#recap). Its `Next:` line offers `/pr-review <PR or stack>` to read the settled diff.
+7. Write the report into the record, and post the [recap](#recap). Its `Next:` line names your next move, such as your review of the PR in this thread, ending with "done" for a draft.
 
 Leave the branch and any worktree for the user to clean up.
+
+## 8. Your review
+
+After the recap, you review the PR in this thread, the way `/pr-review` reviews a teammate's PR, and the recap is its intro. The guide holds the tour. Nothing is posted on GitHub for your review of your own PR: your comments become fixes.
+
+1. Take your comments from chat, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Make each request one fix commit, with its focused tests, and append the comment and its commit to the run record.
+2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head and the fixes listed as not re-reviewed. Start the guide for the new head with `write_pull_request_guides` right after the push.
+3. Run stages 6 and 7 again. The recap they end with covers only what changed since the last one: its `Built:` line gives each comment's fix.
+4. When you say "done" and the record says `draft: yes`, mark the PR ready with `gh pr ready <n>`. It has no REST call, so when the GraphQL quota is spent, wait for it to reset. Record `draft: no`, then run stage 6 again: the approval GitHub requires now comes from someone else. Only your "done" marks the draft ready.
+
+When you say `try`, run the PR for you to test by hand. Find the launch recipe and prepare the app as `/pr-review`'s `try` does, but from this build's worktree, and open it in T3's preview browser (`preview_open`) or, for a mobile app, the device panel (`device_open`). Stop what it started when you move on.
+
+**Complete when:** each of your comments is fixed or answered, and a draft is ready for review only after your "done".
 
 ## Report
 
