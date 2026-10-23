@@ -15,7 +15,7 @@ const hoursAfter = (iso, hours) => new Date(Date.parse(iso) + hours * 60 * 60 * 
 
 // Runs the morning script against a GitHub world served by the fake gh on PATH, with HOME holding the
 // issue-to-pr run records this machine has.
-function morning(t, world, runRecords = []) {
+function run(t, world, runRecords = []) {
   const dir = mkdtempSync(join(tmpdir(), "day-morning-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "world.json"), JSON.stringify(world));
@@ -27,9 +27,13 @@ function morning(t, world, runRecords = []) {
     writeFileSync(join(dir, "home", ".agent", "issue-to-pr", `${record}.md`), "stage: implemented\n");
   }
   const env = { ...process.env, HOME: join(dir, "home"), PATH: `${join(dir, "bin")}:${process.env.PATH}`, FAKE_GH_WORLD: join(dir, "world.json") };
-  const run = spawnSync(process.execPath, [morningPath], { encoding: "utf8", env });
-  assert.equal(run.status, 0, run.stderr);
-  return JSON.parse(run.stdout);
+  return spawnSync(process.execPath, [morningPath], { encoding: "utf8", env });
+}
+
+function morning(t, world, runRecords) {
+  const result = run(t, world, runRecords);
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
 }
 
 const issue = (number, fields) => ({ number, title: `issue ${number}`, author: "maker", state: "open", labels: [], body: "", createdAt: daysAgo(30), ...fields });
@@ -159,4 +163,12 @@ test("late comments are what people and review bots wrote on your PRs after they
       comments: [{ author: "alice", at: hoursAfter(merged30, 4), url: "https://github.com/maker/app/pull/30#comment-2", body: "This breaks the empty case on main." }],
     },
   ]);
+});
+
+// The report puts one line with the error in place of the four lists, so a failed read must not look like empty ones.
+test("a GitHub read that fails exits 2 with the error and prints no lists", (t) => {
+  const result = run(t, { me: "maker", repos: { "maker/app": { gone: true, issues: [ready(1)] } } });
+  assert.equal(result.status, 2, result.stdout);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /^morning: .*HTTP 404/m);
 });

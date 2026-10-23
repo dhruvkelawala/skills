@@ -4,7 +4,9 @@
 // reads an agent makes about one repository, issue or PR. $FAKE_GH_LOG, when set, gets one line per call.
 // A call it does not model exits 1, so a caller can't read a made-up success.
 //
-// World: { me, repos: { "<owner>/<name>": { archived, defaultBranch, pushedAt, issues: [issue], pulls: [pull] } } }
+// World: { me, repos: { "<owner>/<name>": { archived, gone, defaultBranch, pushedAt, issues: [issue], pulls: [pull] } } }
+//   gone: search still lists the repository's issues and PRs, but its REST reads fail with a 404, as for a
+//         repository the user lost access to.
 //   issue: { number, title, author, state, labels, body, createdAt, updatedAt, involves, blockedBy, blocking }
 //   pull:  { number, title, author, state ("open" | "merged" | "closed"), draft, body, base, head, sha, createdAt,
 //            updatedAt, mergedAt, requested, additions, deletions, files, comments, reviewComments, reviews }
@@ -108,6 +110,7 @@ function api(path) {
   const repo = `${owner}/${name}`;
   if (route.split("/")[0] !== "repos" || !repos[repo]) fail(`fake gh: api ${route} is not modelled`);
   const r = repos[repo];
+  if (r.gone) fail("gh: Not Found (HTTP 404)");
   if (!kind) return print(repoRest(repo));
   const n = Number(number);
   if (kind === "pulls" && !number) return printList((r.pulls ?? []).filter((p) => query.get("state") !== "open" || pullState(p) === "open").map((p) => pullRest(repo, p)));

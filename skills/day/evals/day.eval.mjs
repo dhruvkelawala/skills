@@ -101,6 +101,8 @@ const sectionText = (text, name) => {
   const ends = SECTIONS.map((s) => sectionAt(text, s)).filter((i) => i > start);
   return text.slice(start, ends.length ? Math.min(...ends) : undefined);
 };
+// The issues or PRs a stretch of the report links to, in the order it links them.
+const linked = (text, kind) => [...text.matchAll(new RegExp(`${REPO_URL}/${kind}/(\\d+)`, "g"))].map(([, n]) => Number(n));
 // The issue a numbered line of the report links to.
 const issueOnLine = (text, n) => Number(new RegExp(`^\\s*${n}[.)]\\s.*?${REPO_URL}/issues/(\\d+)`, "m").exec(text)?.[1]);
 
@@ -114,7 +116,7 @@ function describeTurn(t, r) {
 }
 
 describe("day morning", { concurrency: true }, () => {
-  test("the report has the seven sections in order, and leaves out an empty one", async (t) => {
+  test("the report has the seven sections in order, each with its lines, and leaves out an empty one", async (t) => {
     const r = await morning().report;
     describeTurn(t, r);
     const report = reportOf(r);
@@ -124,6 +126,11 @@ describe("day morning", { concurrency: true }, () => {
     present.forEach((s, i) => assert.ok(at[i] >= 0, `${r.name}: no "${s}" section`));
     assert.deepEqual([...at].sort((a, b) => a - b), at, `${r.name}: sections out of order: ${present.join(", ")}`);
     assert.equal(sectionAt(report.text, "Late comments"), -1, `${r.name}: an empty "Late comments" section`);
+    const lines = (name, kind) => [...new Set(linked(sectionText(report.text, name), kind))];
+    assert.deepEqual(lines("Builds to start", "issues"), BUILDS, `${r.name}: builds to start are not #31, #32, #33 in the script's order`);
+    assert.deepEqual(lines("Almost ready", "issues"), [34], `${r.name}: almost ready does not list #34 alone`);
+    assert.deepEqual(lines("Review queue", "pull"), [PR, 5], `${r.name}: the review queue is not #${PR}, then #5 stacked on it`);
+    assert.deepEqual(lines("Going stale", "pull"), [20], `${r.name}: going stale does not list #20 alone`);
     const stopped = sectionText(report.text, "Stopped last night");
     assert.ok(stopped.includes(`t3-thread://v1/${STOPPED.threadId}`), `${r.name}: the run still stopped is not listed`);
     for (const gone of [RESTARTED, OLD_STOP]) assert.ok(!stopped.includes(gone.threadId), `${r.name}: lists ${gone.threadId}, restarted or from an older night`);
@@ -148,6 +155,7 @@ describe("day morning", { concurrency: true }, () => {
       assert.ok(launch, `${v.name}: no thread launched for ${url}`);
       assert.match(launch.message, new RegExp(`^/issue-to-pr ${url}\\b`), `${v.name}: #${n}'s thread does not start with /issue-to-pr`);
       assert.equal(launch.projectId, PROJECT.id, `${v.name}: #${n}'s thread is not in the project whose checkout is ${REPO}`);
+      assert.match(launch.title, new RegExp(`^Build #${n}: \\S`), `${v.name}: #${n}'s thread is not titled "Build #${n}: ...", which the started-build check looks for`);
       const w = launch.workspaceStrategy ?? {};
       assert.deepEqual([w.type, w.baseRef, w.startFromOrigin], ["worktree", "main", true], `${v.name}: #${n}'s thread is not in a new worktree from origin's main`);
       assert.match(w.branch ?? "", new RegExp(`^[a-z]+/${n}-[a-z0-9-]+$`), `${v.name}: #${n}'s branch is not <type>/${n}-<description>`);

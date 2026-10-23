@@ -10,7 +10,7 @@ The report posts with the review queue's first PR already prepped, so the sittin
 
 1. Run `node <skills-dir>/pr-review/scripts/queue.mjs`. It prints pr-review's queue as JSON, in the order a sitting walks it. When the queue is empty, go to step 2.
 2. Take the first entry. Its prep record is `$HOME/.agent/pr-review/<repository name>/<number>.md`. When that record names the entry's `head`, the PR is already prepped.
-3. Otherwise start its prep the way pr-review's background prep does it ([pr-review step 3](../pr-review/SKILL.md#3-walk-one-pr-at-a-time)): one `delegate_task` child, async, on the `teammate-prep` job in `<skills-dir>/models.json`, since the queue holds none of the user's own PRs. Its task names the PR's URL and head, and tells the child to load pr-review, run its step 1 and prep for that PR only (step 2, or step 4's for a return visit), add a draft of the review message to the prep record, send the user nothing, post nothing, and leave the `seen` ref alone. Keep its `taskId`.
+3. Otherwise start its prep exactly as pr-review's background prep starts the next PR's ([pr-review step 3](../pr-review/SKILL.md#3-walk-one-pr-at-a-time), "The next PR's prep runs while the user reads"): one async `delegate_task` child on the `teammate-prep` job in `<skills-dir>/models.json`, since the queue holds none of the user's own PRs. Keep its `taskId`.
 
 **Complete when:** the queue is read, and its first PR is prepped or its prep child is running.
 
@@ -84,7 +84,7 @@ For each build:
 
 1. **Find its project.** Call `t3_project_list` and follow `nextCursor` until it is null. The build's project is the one whose `workspaceRoot` is a checkout of the issue's repository, which `git -C <workspaceRoot> remote get-url origin` names. With no such project, its reply line says so and nothing starts for it.
 2. **Check it hasn't started.** When `t3_thread_list` in that project with `titleContains: "Build #<n>:"` finds a thread, the build has started since the report, so link that thread and launch nothing.
-3. **Launch its thread** as [issue-to-pr's step 3](../issue-to-pr/SKILL.md#1-pin-the-contract) does. Call `t3_thread_launch` with the project's `projectId`, `title` set to `Build #<n>: <short title>`, `message` set to `/issue-to-pr <issue URL>`, and `workspaceStrategy` set to `{"type": "worktree", "baseRef": "<default branch>", "branch": "<type>/<n>-<short-description>", "startFromOrigin": true}`, with a conventional-commit type and the repository's default branch from `gh api repos/<owner>/<repo> --jq .default_branch`. The launch has no retry key, so after an error or a lost response, check `t3_thread_list` before calling it again.
+3. **Launch its thread** exactly as issue-to-pr launches a build's thread ([issue-to-pr stage 1, item 3](../issue-to-pr/SKILL.md#1-pin-the-contract), "To launch a build's thread"), with the base branch set to the repository's default branch from `gh api repos/<owner>/<repo> --jq .default_branch`. Add the project's `projectId`, set `title` to `Build #<n>: <short title>`, and set `message` to `/issue-to-pr <issue URL>`, so the thread knows the repository. The launch has no retry key, so after an error or a lost response, check `t3_thread_list` before calling it again.
 
 Then reply with one line per build: its thread as `[Build #<n>: <short title>](t3-thread://v1/<threadId>)`, or why it has none.
 

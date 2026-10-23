@@ -135,11 +135,12 @@ async function main() {
   try {
     const me = await gh("api", "user", "--jq", ".login");
     const now = Date.now();
-    const [b, a, s, l] = await Promise.all([builds(me), almostReady(me), stale(me, now), lateComments(me, now)]);
-    process.stdout.write(`${JSON.stringify({ builds: b, almostReady: a, stale: s, lateComments: l }, null, 2)}\n`);
+    const [ready, close, quiet, late] = await Promise.all([builds(me), almostReady(me), stale(me, now), lateComments(me, now)]);
+    process.stdout.write(`${JSON.stringify({ builds: ready, almostReady: close, stale: quiet, lateComments: late }, null, 2)}\n`);
     return 0;
   } catch (error) {
-    process.stderr.write(`morning: ${error.message}\n`);
+    // A failed gh call's message holds the command and gh's own error on separate lines; the report wants one.
+    process.stderr.write(`morning: ${error.message.replace(/\s+/g, " ").trim()}\n`);
     return 2;
   }
 }

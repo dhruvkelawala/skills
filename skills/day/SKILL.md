@@ -1,11 +1,11 @@
 ---
 name: day
-description: Use when the user invokes /day morning or /day night, says goodnight or that they are wrapping up for the day, replies to the morning report with builds to start or "go on", or replies to the goodnight list with "yes", a change to a line, or "go on". The morning report, sent by a 10:00 scheduled task, lists the builds to start, the issues almost ready, the review queue with its first PR prepped, stale PRs, late comments and the runs stopped overnight, and starts a build thread only for each build the reply names. The goodnight check lists every T3 thread waiting on the user or gone quiet, suggests continue or stop for each run, and after the reply stops the chosen runs cleanly and records them for the morning.
+description: Use when the user invokes /day morning (the 10:00 scheduled task sends it) or /day night, says goodnight or that they are wrapping up for the day, or replies to the morning report or the goodnight list, as in "start 1 and 3", "yes", a change to a line, or "go on". The morning report lists the day's builds, reviews and overnight results and starts only the builds the reply names. The goodnight check suggests continue or stop for each run and stops only what the user confirms.
 ---
 
 # Day
 
-The day has two fixed anchors, a morning report and a goodnight check, and this skill owns both. The morning report is morning mode, `/day morning`, which a 10:00 scheduled task sends: follow [morning.md](morning.md). This file covers the goodnight check, which is night mode.
+The day has two fixed anchors, a morning report and a goodnight check, and this skill owns both. For the morning report, `/day morning`, which a 10:00 scheduled task sends, follow [morning.md](morning.md). This file covers the goodnight check, which is night mode.
 
 Invoke as `/day night`, or say "goodnight". The T3 tools see the threads of the T3 server this thread runs on, so start the check from a thread on the machine where T3 runs new threads.
 
