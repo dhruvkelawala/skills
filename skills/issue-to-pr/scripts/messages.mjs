@@ -7,12 +7,15 @@
 //   messages.mjs page <record>...   print the taste-check page: each record's latest brief and recap
 //
 // A message with problems is not saved: each problem prints on its own line and the exit code is 1.
-// The brief's plan is checked against the record's `Acceptance criteria:` list. Sign-offs must not
-// repeat any of the last 10 saved in the run records beside this one, which are this repo's runs.
+// The brief's plan is checked against the record's `Acceptance criteria:` list, or a spec's `Tickets:`
+// list, and a spec's recap must give each ticket its line. Sign-offs must not repeat any of the last
+// 10 saved in the run records beside this one, which are this repo's runs.
 
 import { appendFileSync, existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { STATES, ticketsOf } from "./spec.mjs";
 
 const USAGE = [
   "usage: messages.mjs brief <record> < brief.txt",
@@ -27,11 +30,18 @@ const SIGN_OFF_WORDS = 12;
 const SAVED = /^## (Brief|Recap), (\S+)\n\n````text\n([\s\S]*?)\n````$/gm;
 const LOCAL_LINK = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1)\b|\blocalhost:\d|\bfile:\/\/|(?:^|[\s(<"'`])(?:~\/|\/(?:Users|home|tmp|private|var|Volumes)\/)/;
 const INSTRUCTION = /(?:^|\s)\/[a-z]|\b(?:reply|redirect)\b/i;
+const BUILD = { as: "", title: "issue title", step: "criterion", lanes: ["light", "full"] };
+const SPEC_BRIEFS = {
+  stack: { as: " as a stack", title: "spec title", step: "ticket", lanes: ["per PR"] },
+  "one-pr": { as: " as one PR", title: "spec title", step: "ticket", lanes: ["light", "full"] },
+};
 
 function briefProblems(lines, record) {
   const problems = [];
-  if (!/^Building (?:#\d+|[A-Z][A-Z0-9]*-\d+): \S/.test(lines[0])) {
-    problems.push("the first line must be `Building #<n>: <issue title>`");
+  const tickets = ticketsOf(record).map((ticket) => ticket.step);
+  const shape = tickets.length ? SPEC_BRIEFS[record.match(/^spec_mode: (\S+)/m)?.[1]] ?? SPEC_BRIEFS.stack : BUILD;
+  if (!new RegExp(`^Building (?:#\\d+|[A-Z][A-Z0-9]*-\\d+)${shape.as}: \\S`).test(lines[0])) {
+    problems.push(`the first line must be \`Building #<n>${shape.as}: <${shape.title}>\``);
   }
 
   const about = sectionText(lines, /^What it['’]s about:/, /^Plan:/);
@@ -40,17 +50,18 @@ function briefProblems(lines, record) {
   else if (sentences(about) > 2) problems.push(`\`What it's about:\` has ${sentences(about)} sentences; keep it to one or two`);
 
   const plan = planSteps(lines);
-  if (!plan.length) problems.push("the brief has no plan: list each acceptance criterion under `Plan:` as a numbered step");
-  else problems.push(...planMismatch(plan, criteriaOf(record)));
+  if (!plan.length) problems.push(`the brief has no plan: list each ${shape.step} under \`Plan:\` as a numbered step`);
+  else problems.push(...planMismatch(plan, tickets.length ? tickets : criteriaOf(record), shape.step));
 
+  const lane = shape.lanes.length > 1 ? `<${shape.lanes.join(" | ")}>` : shape.lanes[0];
   const stacked = lines.find((line) => line.startsWith("Stacked on:"));
-  const match = stacked?.match(/^Stacked on: (.+) · Lane: (?:light|full)$/);
-  if (!match) problems.push("the brief needs a `Stacked on: <PR | none> · Lane: <light | full>` line");
+  const match = stacked?.match(/^Stacked on: (.+) · Lane: (.+)$/);
+  if (!match || !shape.lanes.includes(match[2])) problems.push(`the brief needs a \`Stacked on: <PR | none> · Lane: ${lane}\` line`);
   else problems.push(...stackedOnMismatch(match[1], record));
   return problems;
 }
 
-function recapProblems(message) {
+function recapProblems(message, record, path) {
   const problems = [];
   const lines = message.map((line) => line.replace(/^[-*] /, ""));
   if (!lines[0].trim() || RECAP_LINES.some((label) => lines[0].startsWith(label))) {
@@ -66,7 +77,19 @@ function recapProblems(message) {
     problems.push(`the recap's lines go in this order: ${RECAP_LINES.join(" ")}`);
   }
   if (lines.some((line) => LOCAL_LINK.test(line))) problems.push("links must open in T3: no local paths, file:// or localhost");
+  if (/^spec_mode: stack\b/m.test(record)) problems.push(...ticketLineProblems(lines, ticketsOf(record), dirname(path)));
   return problems;
+}
+
+function ticketLineProblems(lines, tickets, dir) {
+  return tickets.flatMap(({ number }) => {
+    const line = lines.find((text) => new RegExp(`^#${number}\\b`).test(text));
+    if (!line) return [`the recap has no line for #${number}: list every ticket with its state, as \`spec.mjs next\` prints it`];
+    if (!STATES.includes(line.match(/^#\d+ ([a-z-]+)/)?.[1])) return [`#${number}'s line starts with its state, such as \`#${number} ready\``];
+    const record = join(dir, `${number}.md`);
+    const pr = existsSync(record) && readFileSync(record, "utf8").match(/^pr: (https?:\/\/\S+)/m)?.[1];
+    return pr && !line.includes(pr) ? [`#${number}'s line needs its PR, ${pr}`] : [];
+  });
 }
 
 function signOffProblems(lines, recent) {
@@ -106,13 +129,13 @@ function planSteps(lines) {
   return steps;
 }
 
-function planMismatch(plan, criteria) {
+function planMismatch(plan, criteria, noun) {
   if (!criteria.length) return ["the run record has no `Acceptance criteria:` list to check the plan against"];
   const steps = plan.map(normalize);
   const wanted = criteria.map(normalize);
   return [
-    ...criteria.filter((_, i) => !steps.includes(wanted[i])).map((criterion) => `missing criterion: ${criterion}`),
-    ...plan.filter((_, i) => !wanted.includes(steps[i])).map((step) => `not a criterion: ${step}`),
+    ...criteria.filter((_, i) => !steps.includes(wanted[i])).map((criterion) => `missing ${noun}: ${criterion}`),
+    ...plan.filter((_, i) => !wanted.includes(steps[i])).map((step) => `not a ${noun}: ${step}`),
     ...plan.filter((_, i) => steps.indexOf(steps[i]) !== i).map((step) => `listed twice: ${step}`),
   ];
 }
@@ -217,8 +240,9 @@ const escape = (text) => text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<"
 function save(kind, record) {
   const text = readFileSync(0, "utf8").replace(/\s+$/, "");
   const lines = text.split("\n");
+  const recordText = readFileSync(record, "utf8");
   const problems = [
-    ...(kind === "brief" ? briefProblems(lines, readFileSync(record, "utf8")) : recapProblems(lines)),
+    ...(kind === "brief" ? briefProblems(lines, recordText) : recapProblems(lines, recordText, record)),
     ...signOffProblems(lines, recentSignOffs(record)),
   ];
   if (problems.length) {

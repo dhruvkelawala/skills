@@ -8,7 +8,7 @@ Stage 1 finds the stack before the build moves into its own worktree, so the cur
 
 1. List candidates with `gh pr list --state open --json number,url,title,headRefName,baseRefName,headRefOid` (REST: `gh api --paginate "repos/{owner}/{repo}/pulls?state=open&per_page=100"`, where those fields are `.number`, `.html_url`, `.title`, `.head.ref`, `.base.ref` and `.head.sha`). Chain each PR whose `baseRefName` is another open PR's `headRefName`. A chain is a stack, and its top is the PR whose head branch is no other PR's base. A lone open PR is a one-layer stack.
 2. Pick the stack the `stack` argument names: a PR in the chain, its URL, or a stack number. Without an argument, take the only chain. With several chains, take the one the work item names by PR or branch, or ask once, listing each chain by its top PR's title.
-3. The top PR is the predecessor. Run `git fetch origin <top headRefName>`. The base ref is `refs/remotes/origin/<top headRefName>`, and its SHA must equal the PR's `headRefOid`. When they differ, or the top PR is not open, stop as blocked.
+3. The top PR is the predecessor. A build started with `--spec` is the exception. Its predecessor is the PR `stack` names, even when other layers already sit on it, because a spec's tickets form a tree, and two tickets blocked by the same ticket both stack on its PR. Run `git fetch origin <predecessor headRefName>`. The base ref is `refs/remotes/origin/<predecessor headRefName>`, and its SHA must equal the predecessor's `headRefOid`. When they differ, or the predecessor is not open, stop as blocked.
 
 **Complete when:** the record holds `predecessor_pr`, `base_ref` and a `base_sha` equal to the predecessor's `headRefOid`.
 

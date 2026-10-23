@@ -2,6 +2,8 @@
 
 `/issue-to-pr <n> resume` continues a run that stopped at `published`, `watching`, `awaiting-human` or `blocked`.
 
+A spec's record with `spec_mode: stack` has no branch of its own. For it, run [start what can start](spec.md#start-what-can-start) once, and skip the rest of this page.
+
 1. Work on the recorded branch, in the worktree that has it checked out (`git worktree list`). When `t3_worktree_status` shows this thread in that worktree, continue here. When another worktree has it, call `t3_thread_launch` with `workspaceStrategy` set to `{"type": "existing_worktree", "worktreePath": "<path>", "branch": "<branch>"}` and `message` set to `/issue-to-pr <n> resume`, give the user its link, and stop. When no worktree has it, record `blocked: branch not selectable` and stop, before any repair. Never switch this thread's checkout to the branch. Then `git status` must be clean and `HEAD` must equal the recorded head or the PR's `headRefOid`.
 2. Run the checks in [run record](run-record.md) under "When a record already exists".
 3. Pick the case:

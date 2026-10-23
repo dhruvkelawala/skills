@@ -59,6 +59,16 @@ Run at `<head short sha>` against base `<base short sha>`.
 </details>
 ````
 
+## One PR for a spec
+
+A `--one-pr` build's body covers every ticket in the spec:
+
+- The summary closes each ticket with a keyword of its own, as in `Closes #12. Closes #13.`, because GitHub closes only the issue right after each keyword, and `Closes #12, #13` leaves #13 open.
+- Evidence groups the criteria under one bold `**#<n> <title>**` line per ticket, in the `Tickets:` order.
+- The criteria table keeps each criterion's `#<n>:` prefix.
+
+`spec.mjs body <record> < <body file>` checks the first two before stage 5 publishes the PR.
+
 ## Picking the door
 
 Write `one-way` for a migration, data deletion, a production switch such as a flag flip or a config change that moves live traffic, a public API or schema change that consumers will adopt, and anything else that is hard to roll back once merged and deployed. Write `two-way` when a revert commit fully undoes the change.
