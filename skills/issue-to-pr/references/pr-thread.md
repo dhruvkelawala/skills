@@ -57,6 +57,16 @@ node <issue-to-pr>/scripts/repairs.mjs more <record>
 
 The thread watches its PR with `watch_pull_request` only while the PR waits on someone else, such as a running check, a bot or a person. When it's the user's move, as at a clean PR, a held reply, a spent budget or a question, it calls `unwatch_pull_request`, and the thread sits in the user's inbox.
 
+## On merge
+
+Once GitHub reports the PR merged, whether `ship land` merged it or the thread finds it merged when it next runs, call `unwatch_pull_request`, record `merged`, and clean up. Run the script from the project's main checkout, the first entry in `git worktree list`, because it removes this thread's worktree:
+
+```bash
+cd <main checkout> && node <issue-to-pr>/scripts/after-merge.mjs <PR URL>
+```
+
+It removes the worktree that holds the PR's branch, the local branch and origin's branch, and GitHub retargets any PR stacked on that branch. In the main checkout it switches to the PR's base branch instead. It keeps whatever could lose work, a checkout with uncommitted changes or a branch with commits the PR never had, and prints each with its reason, so name them to the user. T3 then settles the thread.
+
 ## `try`
 
 Run the PR for the user to test by hand. Find the launch recipe and prepare the app as `/pr-review`'s `try` does, but from this thread's checkout, and open it in T3's preview browser (`preview_open`) or, for a mobile app, the device panel (`device_open`). Stop what it started when they move on.
