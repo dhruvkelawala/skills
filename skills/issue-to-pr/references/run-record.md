@@ -54,7 +54,7 @@ The contract lists its criteria under a line that reads `Acceptance criteria:`, 
 
 1. Read the record. If an older record exists at `$(git rev-parse --git-dir)/issue-to-pr/<issue>.md`, read it too and copy its identifiers and reports into the new record. Leave the old file where it is.
 2. Run `git fetch` and compare the record with live state: `base_sha` is still reachable, the branch head exists, and, once a PR exists, `gh pr view <pr> --json state,headRefOid,baseRefName` (REST: `.state`, `.merged`, `.head.sha` and `.base.ref` from `gh api repos/{owner}/{repo}/pulls/<pr>`).
-3. When GitHub reports the PR as MERGED, record `merged` and stop. When it reports CLOSED, record `blocked: PR closed` and stop.
+3. When GitHub reports the PR as MERGED, clean up as [on merge](pr-thread.md#on-merge) says, which records `merged`, and stop. When it reports CLOSED, record `blocked: PR closed` and stop.
 4. When the live head differs from the record, set `stage` back to the last stage whose head still matches, and continue from that stage.
 
 **Complete when:** the record's stage, head and tree match live state.

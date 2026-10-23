@@ -201,13 +201,13 @@ This thread watches its own PR, and T3 wakes it when the PR changes.
 
 Run this stage once stage 6 records anything but `watching`.
 
-1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, record `merged`.
+1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, clean up as [on merge](references/pr-thread.md#on-merge) says.
 2. **Verifier, under rule B.** At `ready` or `awaiting-human`, decide whether rule B covers the PR: it touches authority, stored data, money or a production switch and its proof doesn't cover that, its `**Door:**` line says one-way, or the user said `verify`. When it does, load and follow `/ship verify <n>`: a fresh agent runs the gates, the live behaviour and the blast-radius check at the current head, and records the verdict. On FAIL, fix each finding as a repair, counted against the budget, the way the review case in [resume](references/resume.md) does, then verify again. Otherwise skip it. Append the verdict and the rule B reason, or the skip and why, to the record, for the recap's `Verifier:` line.
 3. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
    1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
    2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
    3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
-   4. Record `merged` with the merge commit, or `ready` with the blocker ship reports.
+   4. Once it merged, record the merge commit and clean up as [on merge](references/pr-thread.md#on-merge) says. Otherwise record `ready` with the blocker ship reports.
 
    Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
 4. Write the handoff block into the record:
@@ -223,8 +223,6 @@ Run this stage once stage 6 records anything but `watching`.
 5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
 6. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
 7. Write the report into the record, and post the [recap](#recap). Its `Next:` line names the user's next move, such as reviewing the PR in this thread, and saying "done" on a draft.
-
-Leave the branch and any worktree for the user to clean up.
 
 ## 8. The user's review
 
