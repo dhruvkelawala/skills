@@ -53,8 +53,8 @@ if (args[0] === "api" && repos[repo] && kind === "pulls") {
 process.stderr.write("gh: Not Found (HTTP 404)\\n");
 process.exit(1);
 `, { mode: 0o755 });
-  return () => {
-    const run = spawnSync(process.execPath, [queuePath], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: join(dir, "bin") + ":" + process.env.PATH } });
+  return (...args) => {
+    const run = spawnSync(process.execPath, [queuePath, ...args], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: join(dir, "bin") + ":" + process.env.PATH } });
     assert.equal(run.status, 0, run.stderr);
     return JSON.parse(run.stdout);
   };
@@ -103,4 +103,13 @@ test("leaves out drafts, the user's own PRs, archived repositories, and a PR rev
     "acme/old": { archived: true, prs: [pr(23, { requested: true })] },
   });
   assert.deepEqual(queue().map((p) => `${p.repo}#${p.number}`), ["acme/app#25", "acme/app#24"]);
+});
+
+test("with --repo, lists only that repository's queue", (t) => {
+  const queue = fixtureGitHub(t, {
+    "acme/app": { archived: false, prs: [pr(30, { requested: true })] },
+    "acme/lib": { archived: false, prs: [pr(31, { requested: true }), pr(32, { requested: true, base: "b31" })] },
+  });
+  assert.deepEqual(queue("--repo", "acme/lib").map((p) => `${p.repo}#${p.number}`), ["acme/lib#31", "acme/lib#32"]);
+  assert.deepEqual(queue().map((p) => `${p.repo}#${p.number}`), ["acme/lib#31", "acme/app#30", "acme/lib#32"]);
 });

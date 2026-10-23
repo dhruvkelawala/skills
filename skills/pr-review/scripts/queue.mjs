@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The PRs waiting on your review, in the order a review sitting walks them, printed as JSON so any
-// skill can ask for the queue:
+// skill can ask for the queue. With --repo, only that repository's PRs; without it, every repository's:
 //
-//   queue.mjs
+//   queue.mjs [--repo owner/name]
 //
 // It reads GitHub through gh's search and REST calls only, so it never spends the GraphQL quota that
 // every agent on the account shares.
@@ -15,12 +15,12 @@ const pages = (endpoint) => json("api", "--paginate", "--slurp", endpoint).flat(
 const same = (a, b) => (a ?? "").toLowerCase() === (b ?? "").toLowerCase();
 
 // Open PRs that ask for the user's review or that the user reviewed before. 1000 is the most a search returns.
-function candidates(me) {
+function candidates(me, only) {
   const search = (filter) => json("search", "prs", filter, "--state", "open", "--json", "number,repository,isDraft,author", "--limit", "1000");
   const requested = search("--review-requested=@me");
   const found = new Map();
   for (const p of [...requested, ...search("--reviewed-by=@me")]) {
-    if (p.isDraft || same(p.author?.login, me)) continue;
+    if (p.isDraft || same(p.author?.login, me) || (only && !same(p.repository.nameWithOwner, only))) continue;
     const key = `${p.repository.nameWithOwner}#${p.number}`;
     found.set(key, { repo: p.repository.nameWithOwner, number: p.number, requested: found.get(key)?.requested || requested.includes(p) });
   }
@@ -63,9 +63,15 @@ const walkOrder = (a, b) =>
   b.returnVisit - a.returnVisit || b.stackBottom - a.stackBottom || b.unblocks - a.unblocks || a.size - b.size ||
   a.repo.localeCompare(b.repo) || a.number - b.number;
 
+const args = process.argv.slice(2);
+const only = args.length === 2 && args[0] === "--repo" ? args[1] : null;
+if (args.length && !only) {
+  process.stderr.write("usage: queue.mjs [--repo owner/name]\n");
+  process.exit(2);
+}
 const me = gh("api", "user", "--jq", ".login");
 const queue = [];
-const wanted = candidates(me);
+const wanted = candidates(me, only);
 for (const repo of new Set(wanted.map((c) => c.repo))) {
   const open = pages(`repos/${repo}/pulls?state=open&per_page=100`);
   // An archived repository is a dropped project, so none of its PRs wait on anyone.
