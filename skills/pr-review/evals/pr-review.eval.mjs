@@ -4,9 +4,9 @@
 // From the repo root: node --test skills/pr-review/evals/pr-review.eval.mjs
 // Needs git, jq, the claude CLI signed in through environment variables (each chain gets its own config dir and
 // HOME), and the outside code-review skill that scripts/sync-skills.mjs installs. Each turn is a live agent run,
-// so results can vary between runs. A third chain, with T3's review guides off, runs only the first visit. A fourth
-// chain is a sitting: PR #7 and a smaller layer #5 stacked on it wait on the user, who runs a bare /pr-review and
-// then says "next".
+// so results can vary between runs. A third chain, with T3's review guides off, runs only the first visit. Two more
+// chains have PR #7 and a smaller layer #5 stacked on it both waiting on the user: in one the user runs
+// /pr-review queue and then says "next", and in the other a bare /pr-review.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -60,7 +60,8 @@ function scratch(kind) {
     git(c.author, "commit", "-qm", commit.message);
   }
   pushPr(c);
-  if (kind === "queue") {
+  const twoPrs = kind === "queue" || kind === "bare";
+  if (twoPrs) {
     git(c.author, "checkout", "-qb", LAYER_BRANCH);
     for (const commit of LAYER_COMMITS) {
       writeFiles(c.author, commit.files);
@@ -71,7 +72,7 @@ function scratch(kind) {
     git(c.author, "checkout", "-q", HEAD_BRANCH);
   }
   git(root, "clone", "-q", c.origin, c.work);
-  writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase: "first", prs: kind === "queue" ? [PR, LAYER] : [PR] }));
+  writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase: "first", prs: twoPrs ? [PR, LAYER] : [PR] }));
 
   cpSync(skillsDir, join(c.config, "skills"), { recursive: true, filter: (src) => basename(src) !== "evals" });
   symlinkSync(realpathSync(codeReview), join(c.config, "skills", "code-review"));
@@ -158,9 +159,10 @@ async function turn(c, name, prompt, session) {
 
 const chains = {};
 function chain(kind) {
-  if (!chains[kind] && kind === "queue") {
+  const opener = { queue: ["sitting", "/pr-review queue"], bare: ["first-visit", "/pr-review"] }[kind];
+  if (!chains[kind] && opener) {
     const c = scratch(kind);
-    const first = turn(c, "sitting", "/pr-review");
+    const first = turn(c, ...opener);
     let next;
     chains[kind] = { first, next: () => (next ??= first.then((visit) => turn(c, "next", "next", visit.sessionId))) };
   }
@@ -299,7 +301,16 @@ describe("pr-review", { concurrency: true }, () => {
     }
   });
 
-  test("with no argument, shows the queue with the stack bottom first and starts on it", async (t) => {
+  test("with no argument, reviews the current branch's PR alone, with no queue", async (t) => {
+    const v = await chain("bare").first;
+    describeVisit(t, v);
+    assert.ok(reviewOf(v, PR_URL), `${v.name}: no review of #${PR}`);
+    assert.ok(!v.texts.some((x) => queueRows(x.text).includes(PR) && queueRows(x.text).includes(LAYER)), `${v.name}: a queue table with #${PR} and #${LAYER}`);
+    assert.ok(!reviewOf(v, LAYER_URL), `${v.name}: a review of #${LAYER}`);
+    assert.deepEqual(v.t3.filter((e) => e.axis === "prep"), [], `${v.name}: a background prep`);
+  });
+
+  test("queue shows the queue with the stack bottom first and starts on it", async (t) => {
     const v = await chain("queue").first;
     describeVisit(t, v);
     const review = reviewOf(v, PR_URL);
