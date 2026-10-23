@@ -24,7 +24,9 @@ const USAGE = [
   "       messages.mjs page <record>... > taste.html",
 ].join("\n");
 const KINDS = { brief: "Brief", recap: "Recap" };
-const RECAP_LINES = ["Built:", "Review:", "Evidence:", "Couldn't check:", "Next:"];
+const RECAP_LINES = ["Built:", "Review:", "Verifier:", "Evidence:", "Couldn't check:", "Next:"];
+// The verifier's verdict, or `skipped`, then why: the rule B reason it ran, or why it didn't.
+const VERIFIER = /^Verifier:\s*(PASS\+NOTES|PASS|FAIL|skipped)?\b[\s,.:;]*(.*)$/i;
 const RECENT_SIGN_OFFS = 10;
 const SIGN_OFF_WORDS = 12;
 // Saved as `## Brief, <ISO time>` with the message in a four-backtick fence, so a message may hold ```.
@@ -78,6 +80,9 @@ function recapProblems(message, record, path) {
   if (present.some(({ at }, i) => i > 0 && at < present[i - 1].at)) {
     problems.push(`the recap's lines go in this order: ${RECAP_LINES.join(" ")}`);
   }
+  const [, verdict, why] = lines.find((line) => line.startsWith("Verifier:"))?.match(VERIFIER) ?? [];
+  if (why && !verdict) problems.push("`Verifier:` starts with its verdict, PASS, PASS+NOTES or FAIL, or `skipped`");
+  else if (verdict && !why) problems.push("`Verifier:` says why: the rule B reason it ran, or why it was skipped");
   if (lines.some((line) => LOCAL_LINK.test(line))) problems.push("links must open in T3: no local paths, file:// or localhost");
   if (/^spec_mode: stack\b/m.test(record)) problems.push(...ticketLineProblems(lines, ticketsOf(record), dirname(path)));
   return problems;

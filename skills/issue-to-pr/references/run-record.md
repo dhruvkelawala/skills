@@ -39,6 +39,7 @@ Stage reports go below the header, appended in order:
 - the build report
 - each review pass: the tree it reviewed, or the skip and its reason, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
 - the evidence links, each with the head it was captured at
+- the verifier's verdict and the rule B reason it ran, or why it was skipped
 - each watch pass: its gate result, its repairs and the stage it left
 - the handoff block
 - the report and the recap, each time the run stops
