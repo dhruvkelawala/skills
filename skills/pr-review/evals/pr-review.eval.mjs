@@ -4,7 +4,7 @@
 // From the repo root: node --test skills/pr-review/evals/pr-review.eval.mjs
 // Needs git, jq, the claude CLI signed in through environment variables (each chain gets its own config dir and
 // HOME), and the outside code-review skill that scripts/sync-skills.mjs installs. Each turn is a live agent run,
-// so results can vary between runs.
+// so results can vary between runs. A third chain, with T3's review guides off, runs only the first visit.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -64,7 +64,7 @@ function scratch(kind) {
   executable(join(c.bin, "gh"), "fake-gh.mjs");
   executable(join(c.home, ".agents", "skills", "autoreview", "scripts", "autoreview"), "fake-autoreview.mjs");
   c.mcp = join(root, "mcp.json");
-  writeFileSync(c.mcp, JSON.stringify({ mcpServers: { "t3-code": { command: process.execPath, args: [join(evalsDir, "fake-t3.mjs")], env: { FAKE_DIR: c.fake, FAKE_MODELS: join(c.config, "skills", "models.json") } } } }));
+  writeFileSync(c.mcp, JSON.stringify({ mcpServers: { "t3-code": { command: process.execPath, args: [join(evalsDir, "fake-t3.mjs")], env: { FAKE_DIR: c.fake, FAKE_MODELS: join(c.config, "skills", "models.json"), FAKE_GUIDES: kind === "off" ? "off" : "on" } } } }));
   c.env = { ...process.env, HOME: c.home, CLAUDE_CONFIG_DIR: c.config, PATH: `${c.bin}:${process.env.PATH}`, FAKE_DIR: c.fake, GH_TOKEN: "eval-invalid", GITHUB_TOKEN: "eval-invalid", GH_PROMPT_DISABLED: "1" };
   // Drop the markers of an enclosing Claude Code session, and the other agents' homes, so each run stands alone.
   for (const key of Object.keys(c.env)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_") || ["AGENTS_HOME", "CODEX_HOME", "PI_CODING_AGENT_DIR"].includes(key)) delete c.env[key];
@@ -134,6 +134,7 @@ async function turn(c, name, prompt, session) {
     transcript,
     texts,
     introAt: intro >= 0 ? texts[intro].at : undefined,
+    intro: intro >= 0 ? texts[intro].text : "",
     reply: texts.slice(Math.max(intro, 0)).map((t) => t.text).join("\n\n"),
     t3: during("t3.jsonl"),
     secondOpinion: during("autoreview.jsonl"),
@@ -175,9 +176,20 @@ const reviewerTasks = (v) => v.t3.filter((e) => e.tool === "delegate_task" && e.
 const reportsOf = (v, tasks) => v.t3.filter((e) => e.tool === "report" && tasks.some((d) => d.taskId === e.taskId));
 const secondOpinionsAt = (v) => v.secondOpinion.filter((e) => e.head === v.head && e.base === v.base);
 const axes = (entries) => [...new Set(entries.map((e) => e.axis))].sort();
-// The tour runs from the intro to the wrap-up's Findings, and each stop is a numbered item that opens with a link to
-// its file and line, as the skill's tour example shows.
-const tourStops = (v) => v.reply.split(/^\s*(?:\d+\.\s+)?\*\*Findings\b/m)[0].split("\n").filter((line) => /^\d+\.\s+\[[^\]]*\]\([^)\s]+:\d+\)/.test(line));
+// A chat tour runs from the intro to the wrap-up's Findings, and each stop is a numbered item that names a file and line.
+const tourStops = (v) => v.reply.split(/^\s*(?:\d+\.\s+)?(?:#+\s*)?(?:\*\*)?Findings\b/m)[0].split("\n").filter((line) => /^\s*\d+[.)]\s.*[\w-]+\.\w+:\d+/.test(line));
+const namesFile = (line, file) => line.includes(`${basename(file)}:`);
+const fileLinks = (v) => [...v.reply.matchAll(/\]\(([^)\s]+)\)/g)].map(([, target]) => target).filter((t) => !/^https?:\/\//.test(t) || /\/(?:blob|tree)\//.test(t));
+const guideWrites = (v) => v.t3.filter((e) => e.tool === "write_pull_request_guides" && e.number === PR && e.head === v.head);
+const guideWritten = (v) => v.t3.filter((e) => e.tool === "read_pull_request_guide" && e.state === "written" && e.guideHead === v.head);
+function assertGuideReady(v) {
+  const writes = guideWrites(v);
+  assert.ok(writes.length, `${v.name}: no write_pull_request_guides for #${PR} at ${v.head}`);
+  const written = guideWritten(v);
+  assert.ok(written.length, `${v.name}: no read_pull_request_guide found the guide written for ${v.head}`);
+  assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
+  assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the intro came before the guide was started and read back written`);
+}
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
@@ -195,19 +207,37 @@ describe("pr-review", { concurrency: true }, () => {
     }
   });
 
-  test("the tour names every file a reviewer flagged", async (t) => {
+  test("starts the PR's guide in prep and reads it written for the head before the intro", async (t) => {
+    for (const v of await firstVisits(t)) assertGuideReady(v);
+  });
+
+  test("with a guide, the intro points at the Guide tab and chat has no tour stops or file links, but names each P1", async (t) => {
     for (const v of await firstVisits(t)) {
-      assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
-      const stops = tourStops(v);
-      for (const { file, priority } of findingsAt("first")) {
-        assert.ok(stops.some((stop) => stop.includes(`/${file}:`) && stop.includes(priority)), `${v.name}: no tour stop links ${file} with its ${priority}`);
+      assert.ok(guideWritten(v).length, `${v.name}: no guide written for ${v.head}`);
+      assert.match(v.intro, /\bGuide\b/, `${v.name}: the intro does not point at the Guide tab`);
+      assert.deepEqual(tourStops(v), [], `${v.name}: tour stops in chat`);
+      assert.deepEqual(fileLinks(v), [], `${v.name}: file links in chat`);
+      for (const { file, priority } of findingsAt("first").filter((f) => /^P[01]$/.test(f.priority))) {
+        assert.ok(v.reply.split("\n").some((line) => namesFile(line, file) && line.includes(priority)), `${v.name}: no line names ${file} with its ${priority}`);
       }
+    }
+  });
+
+  test("with guides off, the chat tour has a stop for every flagged file, with its lines and function or test name", async (t) => {
+    const v = await chain("off").first;
+    describeVisit(t, v);
+    const tried = v.t3.filter((e) => e.tool === "write_pull_request_guides" && e.number === PR && e.off);
+    assert.ok(tried.length, `${v.name}: never tried to start the guide`);
+    assert.ok(v.introAt && tried[0].at < v.introAt, `${v.name}: no intro after the guide failed to start`);
+    const stops = tourStops(v);
+    for (const { file, priority, symbol } of findingsAt("first")) {
+      assert.ok(stops.some((stop) => namesFile(stop, file) && stop.includes(symbol) && stop.includes(priority)), `${v.name}: no tour stop names ${file}:<line>, ${symbol} and its ${priority}`);
     }
   });
 
   test("the review has no Judge line, triage block or diff block", async (t) => {
     for (const v of await firstVisits(t)) {
-      assert.ok(v.introAt && tourStops(v).length, `${v.name}: no intro and tour to check`);
+      assert.ok(v.introAt && /\bverdict\b/i.test(v.reply), `${v.name}: no intro and wrap-up to check`);
       const text = v.texts.map((x) => x.text).join("\n");
       assert.doesNotMatch(text, /\bJudge:/, `${v.name}: a Judge line`);
       assert.doesNotMatch(text, /^#\d+ .*\+\d+ -\d+ in \d+ files/m, `${v.name}: a triage header line`);
@@ -225,6 +255,17 @@ describe("pr-review", { concurrency: true }, () => {
     assert.deepEqual(axes(tasks), ["spec", "standards"], `${v.name}: /code-review's reviewers did not rerun`);
     assert.deepEqual(axes(reportsOf(v, tasks)), ["spec", "standards"], `${v.name}: the agent never read both reviewers' reports`);
     assert.ok(secondOpinionsAt(v).length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
+  });
+
+  test("a return visit rewrites the guide written for the old head before its intro", async (t) => {
+    for (const kind of ["push", "rebase"]) {
+      const first = await chain(kind).first;
+      assert.ok(guideWritten(first).length, `${first.name}: no guide written to go stale`);
+      const v = await chain(kind).back();
+      describeVisit(t, v);
+      assert.notEqual(v.head, first.head, `${v.name}: the head did not move`);
+      assertGuideReady(v);
+    }
   });
 
   test("a return visit after a pure rebase runs no reviewer", async (t) => {
