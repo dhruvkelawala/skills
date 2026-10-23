@@ -1,34 +1,35 @@
 #!/usr/bin/env node
-// A "land" said before the PR is clean, held in the run record until it is. It is tied to the head
-// it was said at through that head's patch, fingerprinted the way ship fingerprints approvals and
+// A "land" said before the PR is clean, held in the run record until it is. It is tied to the PR's
+// head the user saw through that head's patch, fingerprinted the way ship fingerprints approvals and
 // verdicts, so a restack that keeps the patch keeps the land and any other change to the patch drops it.
 //
-//   land.mjs hold <record> [--merge]   hold a "land" said at HEAD, or with --merge, the one given at the build's start
-//   land.mjs check <record>            at a clean HEAD: exit 0 to land, 1 when nothing is held or the land was dropped
+//   land.mjs hold <record> --head <sha>   hold a "land" said while the PR's head was <sha>
+//   land.mjs hold <record> --merge        hold the "land" --merge gave at the build's start
+//   land.mjs check <record>               at a clean HEAD: exit 0 to land, 1 when nothing is held or the land was dropped
 //
-// The patch runs from HEAD's merge-base with the record's `base_ref`, fetched first, to HEAD. The
-// record's `land:` header line keeps the request: `held at <sha>, patch <fingerprint>`, `--merge`, or
-// `dropped at <sha>: <why>`. A failed read exits 2.
+// A commit's patch runs from its merge-base with the record's `base_ref`, fetched first, to the
+// commit. The record's `land:` header line keeps the request: `held at <sha>, patch <fingerprint>`,
+// `--merge`, or `dropped at <sha>: <why>`. A failed read exits 2.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FINGERPRINT_DIFF_FLAGS, patchFingerprint } from "../../ship/scripts/ship.mjs";
 
-const USAGE = ["usage: land.mjs hold <record> [--merge]", "       land.mjs check <record>"].join("\n");
+const USAGE = ["usage: land.mjs hold <record> --head <the PR's head> | --merge", "       land.mjs check <record>"].join("\n");
 const HELD = /^held at ([0-9a-f]{40}), patch ([0-9a-f]{64})$/;
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "pipe"] });
 const short = (sha) => sha.slice(0, 7);
 
-function hold(path, merge) {
+function hold(path, { merge, head: seen }) {
   const record = readFileSync(path, "utf8");
   if (merge) {
     writeFileSync(path, setHeader(record, "land", "--merge"));
     console.log(`"land" held from the build's start (--merge): the PR lands once it is clean`);
     return 0;
   }
-  const { head, patch } = patchAtHead(record);
+  const { head, patch } = patchAt(record, seen);
   writeFileSync(path, setHeader(record, "land", `held at ${head}, patch ${patch}`));
   console.log(`"land" held at ${short(head)}: the PR lands once it is clean with this patch`);
   return 0;
@@ -46,7 +47,7 @@ function check(path) {
     console.log(held ? `no "land" is held; the last one was ${held}` : `no "land" is held`);
     return 1;
   }
-  const now = patchAtHead(record);
+  const now = patchAt(record, "HEAD");
   if (now.patch === patch) {
     console.log(`land: ${short(now.head)} has the patch "land" was said on at ${short(at)}`);
     return 0;
@@ -56,12 +57,12 @@ function check(path) {
   return 1;
 }
 
-function patchAtHead(record) {
+function patchAt(record, commit) {
   const base = header(record, "base_ref");
   const [, remote, branch] = base.match(/^refs\/remotes\/([^/]+)\/(.+)$/) ?? [];
   if (!branch) throw new Error(`the run record's base_ref is ${base || "missing"}, not refs/remotes/<remote>/<branch>`);
   git("fetch", "--quiet", "--no-tags", remote, `+refs/heads/${branch}:${base}`);
-  const head = git("rev-parse", "HEAD").trim();
+  const head = git("rev-parse", "--verify", `${commit}^{commit}`).trim();
   const from = git("merge-base", base, head).trim();
   return { head, patch: patchFingerprint(git("-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, from, head)) };
 }
@@ -79,8 +80,9 @@ function setHeader(record, key, value) {
 
 function main(argv) {
   const [command, path, ...flags] = argv;
-  const merge = flags.includes("--merge");
-  if (!["hold", "check"].includes(command) || !path || flags.some((flag) => flag !== "--merge") || (merge && command !== "hold")) {
+  const merge = flags.length === 1 && flags[0] === "--merge";
+  const head = flags.length === 2 && flags[0] === "--head" && /^[0-9a-f]{7,40}$/i.test(flags[1]) ? flags[1] : null;
+  if (!path || !(command === "check" ? flags.length === 0 : command === "hold" && (merge || head))) {
     console.error(USAGE);
     return 2;
   }
@@ -89,7 +91,7 @@ function main(argv) {
     return 2;
   }
   try {
-    return command === "hold" ? hold(path, merge) : check(path);
+    return command === "hold" ? hold(path, { merge, head }) : check(path);
   } catch (error) {
     console.error(`land: ${String(error?.stderr || error?.message).trim()}`);
     return 2;
