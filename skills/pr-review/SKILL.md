@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a PR or a stack, or the current project's review queue in one sitting, one PR at a time. It owns the review queue, and /pr-review queue starts at its top. /code-review and a second opinion from the other model family find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next or for the review queue.
+description: Review a PR or a stack, or the current project's review queue in one sitting, one PR at a time. It owns the review queue, and /pr-review queue starts at its top. /code-review and a second opinion from the other model family find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, asks what to review next or for the review queue, or asks to walk their own open PRs.
 compatibility: Requires git and gh.
 ---
 
@@ -8,7 +8,7 @@ compatibility: Requires git and gh.
 
 The reviewers find the problems, and you explain them. On every PR, `/code-review` and a second opinion from the other model family read the change before you write about it. You read everything too, implementation included, and sort what they found. T3 writes the tour as the PR's review guide, which the user reads in the PR panel's Guide tab with each stop's lines in place, and your message in chat is the intro and the wrap-up. The user decides, and nothing reaches GitHub until they say so.
 
-Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue]`.
+Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue [--mine]]`.
 
 | Argument | What it reviews |
 | --- | --- |
@@ -17,19 +17,21 @@ Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue]`.
 | a PR in a stack | The whole stack, bottom up |
 | `<base>..<head>` | The changes in that range |
 | `queue` | A sitting over the current project's queue, from its top |
+| `queue --mine` | A sitting over the user's own open PRs in the current project |
 
 ## The queue
 
 The queue is every open PR waiting on the user's review. `node <this skill's folder>/scripts/queue.mjs --repo <owner>/<repo>` prints one repository's queue as a JSON list in the order to walk it, and without `--repo` it covers every repository. Another skill that needs the queue runs the same command.
 
 - **In the queue:** PRs that ask for the user's review, and PRs the user reviewed before that have moved since. Drafts, the user's own PRs and archived repositories stay out.
+- **With `--mine`:** the user's own open PRs instead, every one of them, in the same order and with the same entries. Drafts and archived repositories still stay out.
 - **The order:** return visits first, then stack bottoms (PRs that don't sit on another open PR), then the PR that unblocks the most (the open PRs stacked on it), then the smallest.
 
 Each entry has `repo`, `number`, `url`, `title`, `author`, `base`, `head`, `size`, `files`, `returnVisit`, `stackBottom` and `unblocks`.
 
-A **sitting** is `/pr-review queue`, over the current project's queue. It runs in one thread, with no time cap.
+A **sitting** is `/pr-review queue`, over the current project's queue, or `/pr-review queue --mine`, over the user's own open PRs there. It runs in one thread, with no time cap.
 
-1. Read the queue with `--repo` set to the current checkout's repository, from `gh api repos/{owner}/{repo} --jq .full_name`. When it is empty, say so in one line and stop.
+1. Read the queue with `--repo` set to the current checkout's repository, from `gh api repos/{owner}/{repo} --jq .full_name`, and with `--mine` for `queue --mine`. When it is empty, say so in one line and stop.
 2. Walk it from the top, one PR at a time, until the user says `stop` or the queue runs out.
 3. The user doesn't see the script's output, so the first PR's review opens with the queue: one table in the queue's order, with a row per PR giving the PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
 
