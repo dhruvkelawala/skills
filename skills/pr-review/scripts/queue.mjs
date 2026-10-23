@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 // The PRs waiting on your review, in the order a review sitting walks them, printed as JSON so any
-// skill can ask for the queue. With --repo, only that repository's PRs; without it, every repository's:
+// skill can ask for the queue. With --repo, only that repository's PRs; without it, every repository's.
+// With --mine, the user's own open PRs instead, which the review queue never holds:
 //
-//   queue.mjs [--repo owner/name]
+//   queue.mjs [--repo owner/name] [--mine]
 //
 // It reads GitHub through gh's search and REST calls only, so it never spends the GraphQL quota that
 // every agent on the account shares.
 
 import { execFileSync } from "node:child_process";
+import { parseArgs } from "node:util";
 
 const gh = (...args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 1 << 28 }).trim();
 const json = (...args) => JSON.parse(gh(...args));
 const pages = (endpoint) => json("api", "--paginate", "--slurp", endpoint).flat();
 const same = (a, b) => (a ?? "").toLowerCase() === (b ?? "").toLowerCase();
+// 1000 is the most a search returns.
+const search = (filter) => json("search", "prs", filter, "--state", "open", "--json", "number,repository,isDraft,author", "--limit", "1000");
 
-// Open PRs that ask for the user's review or that the user reviewed before. 1000 is the most a search returns.
+// Open PRs that ask for the user's review or that the user reviewed before.
 function candidates(me, only) {
-  const search = (filter) => json("search", "prs", filter, "--state", "open", "--json", "number,repository,isDraft,author", "--limit", "1000");
   const requested = search("--review-requested=@me");
   const found = new Map();
   for (const p of [...requested, ...search("--reviewed-by=@me")]) {
@@ -25,6 +28,13 @@ function candidates(me, only) {
     found.set(key, { repo: p.repository.nameWithOwner, number: p.number, requested: found.get(key)?.requested || requested.includes(p) });
   }
   return [...found.values()];
+}
+
+// The user's open PRs. Each one waits on the user however they reviewed it, so it counts as requested.
+function own(only) {
+  return search("--author=@me")
+    .filter((p) => !p.isDraft && (!only || same(p.repository.nameWithOwner, only)))
+    .map((p) => ({ repo: p.repository.nameWithOwner, number: p.number, requested: true }));
 }
 
 // How each of a repository's open PRs sits in its stacks. A fork's head branch lives in the fork, so
@@ -63,15 +73,17 @@ const walkOrder = (a, b) =>
   b.returnVisit - a.returnVisit || b.stackBottom - a.stackBottom || b.unblocks - a.unblocks || a.size - b.size ||
   a.repo.localeCompare(b.repo) || a.number - b.number;
 
-const args = process.argv.slice(2);
-const only = args.length === 2 && args[0] === "--repo" ? args[1] : null;
-if (args.length && !only) {
-  process.stderr.write("usage: queue.mjs [--repo owner/name]\n");
+let args;
+try {
+  args = parseArgs({ options: { repo: { type: "string" }, mine: { type: "boolean" } } }).values;
+} catch {
+  process.stderr.write("usage: queue.mjs [--repo owner/name] [--mine]\n");
   process.exit(2);
 }
+const only = args.repo;
 const me = gh("api", "user", "--jq", ".login");
 const queue = [];
-const wanted = candidates(me, only);
+const wanted = args.mine ? own(only) : candidates(me, only);
 for (const repo of new Set(wanted.map((c) => c.repo))) {
   const open = pages(`repos/${repo}/pulls?state=open&per_page=100`);
   // An archived repository is a dropped project, so none of its PRs wait on anyone.

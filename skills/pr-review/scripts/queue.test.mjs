@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 const queuePath = fileURLToPath(new URL("./queue.mjs", import.meta.url));
 
 // A GitHub world for the gh on PATH: each repository's open PRs, which of them ask for the user's
-// review, and the reviews on each. Search answers as GitHub does for `--review-requested=@me` and
-// `--reviewed-by=@me`, archived repositories included. REST's pull list has no size, so only a PR's
-// own GET carries its additions and deletions.
+// review, and the reviews on each. Search answers as GitHub does for `--review-requested=@me`,
+// `--reviewed-by=@me` and `--author=@me`, archived repositories included. REST's pull list has no
+// size, so only a PR's own GET carries its additions and deletions.
 function fixtureGitHub(t, repos) {
   const dir = mkdtempSync(join(tmpdir(), "pr-review-queue-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -35,7 +35,8 @@ if (args[0] === "search" && args[1] === "prs") {
   if (flag("--state") !== "open") throw new Error("the fake models open PRs only");
   const hits = Object.entries(repos)
     .flatMap(([repo, r]) => r.prs.map((p) => [repo, p]))
-    .filter(([, p]) => (flag("--review-requested") === "@me" && p.requested) || (flag("--reviewed-by") === "@me" && (p.reviews ?? []).some((v) => v.user === me)));
+    .filter(([, p]) => (flag("--review-requested") === "@me" && p.requested) || (flag("--reviewed-by") === "@me" && (p.reviews ?? []).some((v) => v.user === me)) ||
+      (flag("--author") === "@me" && p.author === me));
   answer(hits.map(([repo, p]) => ({
     number: p.number, title: p.title, url: "https://github.com/" + repo + "/pull/" + p.number, author: { login: p.author },
     isDraft: p.draft ?? false, repository: { name: repo.split("/")[1], nameWithOwner: repo },
@@ -112,4 +113,23 @@ test("with --repo, lists only that repository's queue", (t) => {
   });
   assert.deepEqual(queue("--repo", "acme/lib").map((p) => `${p.repo}#${p.number}`), ["acme/lib#31", "acme/lib#32"]);
   assert.deepEqual(queue().map((p) => `${p.repo}#${p.number}`), ["acme/lib#31", "acme/app#30", "acme/lib#32"]);
+});
+
+test("with --mine, lists the user's own open PRs instead, even one they reviewed at its head", (t) => {
+  const queue = fixtureGitHub(t, {
+    "acme/app": {
+      archived: false,
+      prs: [
+        pr(40, { requested: true }),
+        pr(41, { author: "reviewer", additions: 300 }),
+        pr(42, { author: "reviewer", base: "b41" }),
+        pr(43, { author: "reviewer", reviews: [reviewed("h43")] }),
+        pr(44, { author: "reviewer", draft: true }),
+      ],
+    },
+    "acme/lib": { archived: false, prs: [pr(45, { author: "reviewer", additions: 50 })] },
+    "acme/old": { archived: true, prs: [pr(46, { author: "reviewer" })] },
+  });
+  assert.deepEqual(queue("--mine").map((p) => `${p.repo}#${p.number}`), ["acme/app#43", "acme/app#41", "acme/lib#45", "acme/app#42"]);
+  assert.deepEqual(queue("--mine", "--repo", "acme/lib").map((p) => `${p.repo}#${p.number}`), ["acme/lib#45"]);
 });
