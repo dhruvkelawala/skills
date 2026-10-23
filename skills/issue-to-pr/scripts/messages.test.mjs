@@ -188,7 +188,7 @@ test("the taste-check page shows each record's latest brief and recap, in the or
   const [first, second] = [record(1), record(2)];
   saved("brief", first, brief({ signOff: "🥚 The first draft of the brief" }));
   saved("brief", first, brief({ building: "Building #1: Show the <score> on screen", signOff: "🐣 The brief that replaced it" }));
-  saved("recap", first, recap({ signOff: "🐥 Hatched and shipped" }));
+  saved("recap", first, recap({ result: "#1 is ready for your review: https://github.com/o/r/pull/9. The tour is in the Guide tab.", signOff: "🐥 Hatched and shipped" }));
   saved("brief", second, brief({ signOff: "🚧 Still building this one" }));
   const third = record(3);
   saved("brief", third, brief({ building: "Building #3: [x](https://a/(https://autofocus/onfocus=globalThis.pwned=1//)", signOff: "🧨 A title that tries its luck" }));
@@ -203,4 +203,5 @@ test("the taste-check page shows each record's latest brief and recap, in the or
   assert.ok(html.includes("Show the &lt;score&gt; on screen"), "message text is escaped");
   const tags = [...html.matchAll(/<a\b[^>]*>/g)].map(([tag]) => tag);
   assert.deepEqual(tags.filter((tag) => !/^<a href="[^"]*">$/.test(tag)), [], "a link in message text becomes an anchor with an href and nothing else");
+  assert.ok(html.includes('<a href="https://github.com/o/r/pull/9">https://github.com/o/r/pull/9</a>. The tour'), "a full stop after a link ends the sentence, not the link");
 });
