@@ -26,6 +26,7 @@ tree: <git rev-parse HEAD^{tree} at that head>
 repairs: <used>/<budget>
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
 pr: <URL or none>
+guide: written for <head> | none: <reason>   (once stage 7 checked it)
 ```
 
 Stage reports go below the header, appended in order:

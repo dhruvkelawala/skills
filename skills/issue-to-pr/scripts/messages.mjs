@@ -7,8 +7,9 @@
 //   messages.mjs page <record>...   print the taste-check page: each record's latest brief and recap
 //
 // A message with problems is not saved: each problem prints on its own line and the exit code is 1.
-// The brief's plan is checked against the record's `Acceptance criteria:` list. Sign-offs must not
-// repeat any of the last 10 saved in the run records beside this one, which are this repo's runs.
+// The brief's plan is checked against the record's `Acceptance criteria:` list, and a recap against
+// the record's `pr:`, `head:` and `guide:` lines. Sign-offs must not repeat any of the last 10 saved
+// in the run records beside this one, which are this repo's runs.
 
 import { appendFileSync, existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -50,9 +51,10 @@ function briefProblems(lines, record) {
   return problems;
 }
 
-function recapProblems(message) {
+function recapProblems(message, record) {
   const problems = [];
   const lines = message.map((line) => line.replace(/^[-*] /, ""));
+  problems.push(...reviewIntroProblems(lines[0], record));
   if (!lines[0].trim() || RECAP_LINES.some((label) => lines[0].startsWith(label))) {
     problems.push("the recap starts with the result on its first line");
   }
@@ -68,6 +70,27 @@ function recapProblems(message) {
   if (lines.some((line) => LOCAL_LINK.test(line))) problems.push("links must open in T3: no local paths, file:// or localhost");
   return problems;
 }
+
+// Once the run has a PR, the recap is the intro to the user's review of it: the first line links the
+// PR and points at its guide, which must be written for the head the record names.
+function reviewIntroProblems(first, record) {
+  const pr = header(record, "pr").match(/^https?:\/\/\S+\/pull\/\d+/)?.[0];
+  if (!pr) return [];
+  const problems = first.includes(pr) ? [] : [`the recap's first line links the PR, ${pr}`];
+  const guide = header(record, "guide");
+  const written = guide.match(/^written for ([0-9a-f]{7,40})\b/i)?.[1];
+  const head = header(record, "head");
+  if (written && !sameCommit(written, head)) {
+    problems.push(`the guide is written for ${written.slice(0, 7)}, but the head is ${head.slice(0, 7) || "not recorded"}: write it again for the head and wait for it`);
+  } else if (written && !/\bGuide tab\b/i.test(first)) {
+    problems.push("the recap's first line points at the Guide tab, where the PR's tour is");
+  } else if (!written && !/^none\b/i.test(guide)) {
+    problems.push("the run record has no `guide:` line: check the guide before the recap, then record `guide: written for <head>` or `guide: none: <why>`");
+  }
+  return problems;
+}
+
+const sameCommit = (a, b) => b.length >= 7 && (a.toLowerCase().startsWith(b.toLowerCase()) || b.toLowerCase().startsWith(a.toLowerCase()));
 
 function signOffProblems(lines, recent) {
   const problems = [];
@@ -123,6 +146,8 @@ function stackedOnMismatch(value, record) {
   return new RegExp(`(?:#|/pull/)${predecessor}\\b`).test(value) ? [] : [`\`Stacked on:\` names the predecessor, #${predecessor}`];
 }
 
+const header = (record, key) => record.match(new RegExp(`^${key}: (.+)$`, "m"))?.[1].trim() ?? "";
+
 function criteriaOf(record) {
   const lines = record.split("\n");
   const from = lines.findIndex((line) => /^Acceptance criteria:\s*$/.test(line));
@@ -156,10 +181,9 @@ const sameSignOff = (a, b) => normalize(a) === normalize(b);
 function page(records) {
   const runs = records.map((record, i) => {
     const text = readFileSync(record, "utf8");
-    const header = (key) => text.match(new RegExp(`^${key}: (.+)$`, "m"))?.[1] ?? "";
     const latest = (kind) => savedMessages(text).filter((saved) => saved.kind === kind).at(-1)?.message;
-    const issue = header("issue");
-    const meta = [header("mode").match(/^(?:stacked|standalone)/)?.[0], header("lane").match(/^(?:light|full)/)?.[0]?.concat(" lane")];
+    const issue = header(text, "issue");
+    const meta = [header(text, "mode").match(/^(?:stacked|standalone)/)?.[0], header(text, "lane").match(/^(?:light|full)/)?.[0]?.concat(" lane")];
     return `<section class="run">
   <h2>${i + 1}. ${issueLink(issue)}<span class="meta">${meta.filter(Boolean).map((part) => `, ${part}`).join("")}</span></h2>
   ${bubble("Brief", latest("Brief"))}
@@ -218,7 +242,7 @@ function save(kind, record) {
   const text = readFileSync(0, "utf8").replace(/\s+$/, "");
   const lines = text.split("\n");
   const problems = [
-    ...(kind === "brief" ? briefProblems(lines, readFileSync(record, "utf8")) : recapProblems(lines)),
+    ...(kind === "brief" ? briefProblems : recapProblems)(lines, readFileSync(record, "utf8")),
     ...signOffProblems(lines, recentSignOffs(record)),
   ];
   if (problems.length) {
