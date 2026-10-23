@@ -1,0 +1,7 @@
+ref: 53eed00 (ac1)
+
+# no script for ac1 at 53eed00. What the skill text says instead:
+8:Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stack [<PR>]] [--merge] [--max-repairs N]`, or `/issue-to-pr <n> resume`.
+12:- `--merge` lands the PR in stage 7 through `ship land`, after the verifier when rule B covers the PR. A stacked layer lands only once it is the bottom of its stack.
+206:3. With `--merge` and the stage at `ready`, land the PR through the ship skill:
+209:   3. Load and follow `/ship land <n>`. On the caller's own PR, `--merge` is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.

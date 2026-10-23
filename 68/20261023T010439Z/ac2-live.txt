@@ -1,0 +1,7 @@
+This run's own record, ~/.agent/issue-to-pr/skills/68.md, after stage 4: every repair went in through repairs.mjs
+
+repairs: 4/10
+- fix 0567f23, repair 1 of 10: pass 1 Standards P1 / Spec P2 at 36940df: SKILL.md still had every stage update repairs by hand, so a hand edit and repairs.mjs would both count
+- fix 15f36bd, repair 2 of 10: pass 1 autoreview P1 at 36940df: git worktree remove deleted ignored files such as a .env along with the merged worktree
+- fix 312d18f, repair 3 of 10: pass 1 Spec P2, rated P1, at 36940df: land.mjs hold fingerprinted the local HEAD, so an unpushed fix could land on a land said at the PR's older head
+- fix fcd7ba1, repair 4 of 10: review-ready simplification at 312d18f: the run record's header was parsed three ways (land, repairs, messages), now one run-record.mjs; wording, names and one comment from the deferred P2/P3s

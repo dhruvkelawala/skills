@@ -1,0 +1,82 @@
+ref: fcd7ba1 (ac2)
+
+# three repairs in the build's review passes
+$ node scripts/repairs.mjs add 7.md --commit 0000001aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix review finding 1
+Fixed: review finding 1 (0000001). Repair 1 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000002aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix review finding 2
+Fixed: review finding 2 (0000002). Repair 2 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix review finding 3
+Fixed: review finding 3 (0000003). Repair 3 of 10.
+[exit 0]
+
+# the user asks for a fix in their review of the PR
+$ node scripts/repairs.mjs add 7.md --commit 0000040aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix the flag renamed, as the user asked --asked
+Fixed: the flag renamed, as the user asked (0000040), as asked, so it doesn't count. Repairs: 3 of 10.
+[exit 0]
+
+# seven more from the watch: failed checks, a conflict and bot findings
+$ node scripts/repairs.mjs add 7.md --commit 0000004aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 4
+Fixed: watch fix 4 (0000004). Repair 4 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000005aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 5
+Fixed: watch fix 5 (0000005). Repair 5 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000006aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 6
+Fixed: watch fix 6 (0000006). Repair 6 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 7
+Fixed: watch fix 7 (0000007). Repair 7 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000008aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 8
+Fixed: watch fix 8 (0000008). Repair 8 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000009aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 9
+Fixed: watch fix 9 (0000009). Repair 9 of 10.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000010aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix watch fix 10
+Fixed: watch fix 10 (0000010). Repair 10 of 10. That spends the budget, so the PR comes back to you, and "more" adds 10.
+[exit 0]
+
+# an eleventh
+$ node scripts/repairs.mjs add 7.md --commit 0000011aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix the lint check
+Not recorded: the repair budget is spent (10 of 10), so 0000011 waits unpushed until "more".
+[exit 1]
+
+# a human reviewer's clear request, with the budget spent
+$ node scripts/repairs.mjs add 7.md --commit 0000012aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix the reviewer's null check --asked
+Fixed: the reviewer's null check (0000012), as asked, so it doesn't count. Repairs: 10 of 10.
+[exit 0]
+
+# the user says "more"
+$ node scripts/repairs.mjs more 7.md
+"more": 10 of 20 repairs left.
+[exit 0]
+$ node scripts/repairs.mjs add 7.md --commit 0000011aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --fix the lint check
+Fixed: the lint check (0000011). Repair 11 of 20.
+[exit 0]
+
+# the record
+$ cat 7.md
+issue: https://github.com/o/r/issues/7
+stage: contract
+repairs: 11/20
+pr: none
+
+## Contract
+- fix 0000001, repair 1 of 10: review finding 1
+- fix 0000002, repair 2 of 10: review finding 2
+- fix 0000003, repair 3 of 10: review finding 3
+- fix 0000040, asked for, not counted: the flag renamed, as the user asked
+- fix 0000004, repair 4 of 10: watch fix 4
+- fix 0000005, repair 5 of 10: watch fix 5
+- fix 0000006, repair 6 of 10: watch fix 6
+- fix 0000007, repair 7 of 10: watch fix 7
+- fix 0000008, repair 8 of 10: watch fix 8
+- fix 0000009, repair 9 of 10: watch fix 9
+- fix 0000010, repair 10 of 10: watch fix 10
+- fix 0000012, asked for, not counted: the reviewer's null check
+- more: the budget is 20
+- fix 0000011, repair 11 of 20: the lint check
+[exit 0]

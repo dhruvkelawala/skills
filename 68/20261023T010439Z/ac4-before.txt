@@ -1,0 +1,5 @@
+ref: 53eed00, skills/apr/SKILL.md
+$ apr-link-check.sh   # does apr link to an issue-to-pr page with a row for each word?
+apr/SKILL.md links to no issue-to-pr reference
+$ grep -n 'land\|more\|go on' skills/apr/SKILL.md
+(no match)

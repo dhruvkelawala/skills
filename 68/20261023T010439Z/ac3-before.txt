@@ -1,0 +1,6 @@
+ref: 53eed00 (ac3)
+
+# no script for ac3 at 53eed00. What the skill text says instead:
+204:1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, record `merged`.
+210:   4. Record `merged` with the merge commit, or `ready` with the blocker ship reports.
+227:Leave the branch and any worktree for the user to clean up.

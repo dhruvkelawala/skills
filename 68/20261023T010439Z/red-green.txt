@@ -1,0 +1,47 @@
+== c1 red
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+  AssertionError [ERR_ASSERTION]: a push that changes the patch must not land: 
+  AssertionError [ERR_ASSERTION]: nothing held, nothing lands
+== c1 green
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+== c2 red
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: a fix the user asked for doesn't count
+== c2 green
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+== c3 red
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+  AssertionError [ERR_ASSERTION]: the build's worktree is removed
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+== c3 green
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+== r2 red
+ℹ tests 2
+ℹ pass 1
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: removed the worktree <tmp>
+== r2 green
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+== r3 red
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: a commit the user never saw must not land: land: ab1d64c has the patch "land" was said on at ab1d64c
+== r3 green
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0

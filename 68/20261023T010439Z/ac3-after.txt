@@ -1,0 +1,62 @@
+ref: fcd7ba1 (ac3)
+
+# before: #7 merged (its worktree has node_modules), #9 open, #10, #11 and #12 merged
+--- worktrees:
+<scratch>/skills-main 3d0856a [main]
+<scratch>/worktrees/feat-10-change 0f45301 [feat/10-change]
+<scratch>/worktrees/feat-11-change a4638b7 [feat/11-change]
+<scratch>/worktrees/feat-12-change 2b7c3b3 [feat/12-change]
+<scratch>/worktrees/feat-7-change e66c43c [feat/7-change]
+<scratch>/worktrees/feat-9-change 78b119e [feat/9-change]
+--- local branches: feat/10-change feat/11-change feat/12-change feat/7-change feat/9-change main 
+--- origin branches: feat/10-change feat/11-change feat/12-change feat/7-change feat/9-change main 
+
+# #7 merged: the build's thread cleans up from the main checkout
+$ node scripts/after-merge.mjs https://github.com/o/r/pull/7
+removed the worktree <scratch>/worktrees/feat-7-change
+deleted the branch feat/7-change
+deleted origin/feat/7-change
+[exit 0]
+
+# #9 is still open
+$ node scripts/after-merge.mjs https://github.com/o/r/pull/9
+after-merge: https://github.com/o/r/pull/9 is open, not merged, so nothing was removed
+[exit 2]
+
+# #10 merged, with an uncommitted file in its worktree
+$ node scripts/after-merge.mjs https://github.com/o/r/pull/10
+deleted origin/feat/10-change
+kept <scratch>/worktrees/feat-10-change: it has uncommitted changes
+[exit 1]
+
+# #11 merged, with a commit the PR never had
+$ node scripts/after-merge.mjs https://github.com/o/r/pull/11
+deleted origin/feat/11-change
+kept the branch feat/11-change: it is at a4638b7, with commits the merged PR (acd419f) never had
+[exit 1]
+
+# #12 merged, with an ignored .env in its worktree
+$ node scripts/after-merge.mjs https://github.com/o/r/pull/12
+deleted origin/feat/12-change
+kept <scratch>/worktrees/feat-12-change: removing it would delete ignored files Git doesn't keep: .env
+[exit 1]
+
+# #8, an /apr branch published from the main checkout, merged
+$ node scripts/after-merge.mjs https://github.com/o/r/pull/8
+switched the main checkout, <scratch>/skills-main, to main
+deleted the branch feat/8-change
+deleted origin/feat/8-change
+[exit 0]
+$ git branch --show-current
+main
+[exit 0]
+
+# after
+--- worktrees:
+<scratch>/skills-main 3d0856a [main]
+<scratch>/worktrees/feat-10-change 0f45301 [feat/10-change]
+<scratch>/worktrees/feat-11-change a4638b7 [feat/11-change]
+<scratch>/worktrees/feat-12-change 2b7c3b3 [feat/12-change]
+<scratch>/worktrees/feat-9-change 78b119e [feat/9-change]
+--- local branches: feat/10-change feat/11-change feat/12-change feat/9-change main 
+--- origin branches: feat/9-change main 

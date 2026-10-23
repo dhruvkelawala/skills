@@ -1,0 +1,49 @@
+ref: fcd7ba1 (ac1)
+
+# the user says "land" while the PR's head is d8b017f and its checks still run
+$ node scripts/land.mjs hold ../7.md --head d8b017fd8bcd5c8be4aac6bbdab3f086d3edfb6f
+"land" held at d8b017f: the PR lands once it is clean with this patch
+[exit 0]
+$ grep ^land: ../7.md
+land: held at d8b017fd8bcd5c8be4aac6bbdab3f086d3edfb6f, patch 2b8fd24899a551ab04bf30f42b2341c8d5598be537cc3c305022781a8180d2fa
+[exit 0]
+
+# the PR turns clean at that head
+$ node scripts/land.mjs check ../7.md
+land: d8b017f has the patch "land" was said on at d8b017f
+[exit 0]
+
+# someone else's change lands on main, and the branch is restacked onto it with its patch unchanged
+$ git rev-parse --short HEAD
+5398ca8
+[exit 0]
+$ node scripts/land.mjs check ../7.md
+land: 5398ca8 has the patch "land" was said on at d8b017f
+[exit 0]
+
+# a push changes the patch
+$ node scripts/land.mjs check ../7.md
+"land" dropped: 8e9def6 changes the patch "land" was said on at d8b017f, so the PR waits for "land" again
+[exit 1]
+$ grep ^land: ../7.md
+land: dropped at 8e9def6c7874063e373e1851d376abacd8efdedf: the patch changed since "land" was said at d8b017fd8bcd5c8be4aac6bbdab3f086d3edfb6f
+[exit 0]
+$ node scripts/land.mjs check ../7.md
+no "land" is held; the last one was dropped at 8e9def6c7874063e373e1851d376abacd8efdedf: the patch changed since "land" was said at d8b017fd8bcd5c8be4aac6bbdab3f086d3edfb6f
+[exit 1]
+
+# a land held at the PR's head, with a local commit the thread hasn't pushed
+$ node scripts/land.mjs hold ../7.md --head 8e9def6c7874063e373e1851d376abacd8efdedf
+"land" held at 8e9def6: the PR lands once it is clean with this patch
+[exit 0]
+$ node scripts/land.mjs check ../7.md
+"land" dropped: 6d2f9e9 changes the patch "land" was said on at 8e9def6, so the PR waits for "land" again
+[exit 1]
+
+# --merge, given at the build's start, lands whatever patch is clean
+$ node scripts/land.mjs hold ../7.md --merge
+"land" held from the build's start (--merge): the PR lands once it is clean
+[exit 0]
+$ node scripts/land.mjs check ../7.md
+land: --merge was given at the build's start
+[exit 0]
