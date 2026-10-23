@@ -14,7 +14,7 @@ Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue]`.
 | --- | --- |
 | none | The current branch's PR, or the branch changes when there is no PR |
 | a PR in a stack | The whole stack, bottom up |
-| `queue` | Every open PR waiting on the user: `gh search prs --review-requested=@me --state open`. If the `ship` skill is installed, take the order from `ship queue` instead. |
+| `queue` | Every open PR waiting on the user: `gh search prs --review-requested=@me --state open`. |
 
 ## 1. Pin each PR
 

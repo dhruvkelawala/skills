@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // ship: planning for landing PRs, plus two writes: posting a verdict comment and a pinned merge.
 //
-//   ship.mjs queue   [--repo o/r] [--me <login>] [--json]
 //   ship.mjs verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes <file>] [--repo o/r]
 //   ship.mjs verdict check  <pr> [--trusted a,b] [--repo o/r] [--me <login>] [--json]
 //   ship.mjs run     <bottom-pr> [--rule-b <pr,pr>] [--force] [--trusted a,b] [--repo o/r] [--me <login>] [--json]
@@ -18,7 +17,6 @@ import { fileURLToPath } from "node:url";
 export const MARKER = "ship-verdict:v1";
 const PASSING = new Set(["PASS", "PASS+NOTES"]);
 const BOOLEAN_FLAGS = new Set(["json", "force"]);
-const MERGEABLE = new Set(["CLEAN", "HAS_HOOKS"]);
 
 // ---------- pure ----------
 
@@ -54,26 +52,6 @@ export function actor(login) {
   return (login ?? "").toLowerCase().replace(/^app\//, "").replace(/\[bot\]$/, "");
 }
 
-// Stack edges are same-repository only: a fork PR's head branch lives in the fork, so it can never be
-// another PR's base, even when the names match (a fork's `main` into upstream `main`).
-export function indexStacks(prs) {
-  const local = prs.filter((p) => !p.isCrossRepository);
-  const byHead = new Map(local.map((p) => [p.headRefName, p]));
-  const children = new Map();
-  for (const p of prs) {
-    if (!children.has(p.baseRefName)) children.set(p.baseRefName, []);
-    children.get(p.baseRefName).push(p);
-  }
-  const childrenOf = (p) => (p.isCrossRepository ? [] : (children.get(p.headRefName) ?? []).filter((c) => c !== p));
-  const downstream = (p) => {
-    const seen = new Set([p.number]);
-    const todo = [p];
-    while (todo.length) for (const c of childrenOf(todo.pop())) if (!seen.has(c.number)) seen.add(c.number), todo.push(c);
-    return seen.size - 1;
-  };
-  return { byHead, childrenOf, downstream };
-}
-
 // A human approval is an APPROVED review from a GitHub "User" account (not a Bot or app) that is not
 // the PR author, still standing as that reviewer's latest decisive review, given on the PR's current
 // patch, on a PR whose overall review decision is APPROVED. Takes REST reviews (`user.login`,
@@ -89,27 +67,6 @@ export function humanApprovers(reviews, { prAuthor, reviewDecision, patchId }) {
   return [...last.values()]
     .filter((r) => r.state === "APPROVED" && r.patchId === patchId && r.user?.type === "User" && actor(r.user.login) !== actor(prAuthor))
     .map((r) => r.user.login);
-}
-
-export function planQueue(prs, { me, defaultBranch }) {
-  const { byHead, downstream } = indexStacks(prs);
-  const size = (p) => (p.additions ?? 0) + (p.deletions ?? 0);
-  const row = (p) => ({ number: p.number, title: p.title, author: p.author?.login, size: size(p), unblocks: downstream(p), door: parseDoor(p.body), mergeState: p.mergeStateStatus, review: p.reviewDecision || "NONE" });
-  const plan = { mergeNow: [], review: [], waitingOnParent: [], mine: [] };
-  for (const p of prs) {
-    if (p.isDraft) continue;
-    const parent = byHead.get(p.baseRefName);
-    const approved = p.reviewDecision === "APPROVED";
-    if (approved && p.baseRefName === defaultBranch && MERGEABLE.has(p.mergeStateStatus)) plan.mergeNow.push(row(p));
-    else if (actor(p.author?.login) === actor(me)) plan.mine.push(row(p));
-    else if (approved) continue;
-    else if (parent && parent.reviewDecision !== "APPROVED") plan.waitingOnParent.push(row(p));
-    else plan.review.push(row(p));
-  }
-  plan.mergeNow.sort((a, b) => b.unblocks - a.unblocks);
-  plan.review.sort((a, b) => b.unblocks - a.unblocks || a.size - b.size);
-  plan.mine.sort((a, b) => b.unblocks - a.unblocks);
-  return plan;
 }
 
 export function formatVerdict(v) {
@@ -152,8 +109,10 @@ export function verdictStatus(verdict, current) {
   return { status: "current", verdict: verdict.verdict, by: verdict.by, recordedBy: verdict.recordedBy, head: current.head };
 }
 
+// Stack edges are same-repository only: a fork PR's head branch lives in the fork, so it can never be
+// another PR's base, even when the names match (a fork's `main` into upstream `main`).
 export function walkStack(prs, bottomNumber) {
-  const { childrenOf } = indexStacks(prs);
+  const childrenOf = (p) => (p.isCrossRepository ? [] : prs.filter((c) => c !== p && c.baseRefName === p.headRefName));
   const bottom = prs.find((p) => p.number === bottomNumber);
   if (!bottom) return { stack: [], stop: `PR #${bottomNumber} is not open` };
   const stack = [bottom];
@@ -279,7 +238,7 @@ function graphqlOrRest(graphql, viaRest) {
 // Whole-repository, unfiltered diff: no relative paths, conversion filters, external drivers, or
 // ignored submodules, so local git config cannot hide a change from the fingerprint.
 export const FINGERPRINT_DIFF_FLAGS = ["--no-relative", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--no-color", "--binary", "--full-index", "-U3"];
-const PR_FIELDS = "number,title,author,body,baseRefName,headRefName,headRefOid,isCrossRepository,additions,deletions,isDraft,reviewDecision,mergeStateStatus";
+const PR_FIELDS = "number,author,body,baseRefName,headRefName,headRefOid,isCrossRepository,reviewDecision";
 
 function openPrs(repo) {
   return graphqlOrRest(
@@ -288,14 +247,14 @@ function openPrs(repo) {
   );
 }
 
-// REST's PR list has what a stack walk and a verdict need, but no review decision, merge state or
-// size. Without a decision humanApprovers finds no approval, so a PR that needs one waits.
+// REST's PR list has what a stack walk and a verdict need, but no review decision. Without a decision
+// humanApprovers finds no approval, so a PR that needs one waits.
 function fromRestPr(p) {
   return {
-    number: p.number, title: p.title, author: { login: p.user?.login }, body: p.body ?? "",
+    number: p.number, author: { login: p.user?.login }, body: p.body ?? "",
     baseRefName: p.base?.ref, headRefName: p.head?.ref, headRefOid: p.head?.sha,
     isCrossRepository: p.head?.repo?.full_name !== p.base?.repo?.full_name,
-    isDraft: p.draft, reviewDecision: null,
+    reviewDecision: null,
   };
 }
 
@@ -499,17 +458,7 @@ function print(obj, json, text) {
   process.stdout.write(json ? JSON.stringify(obj, null, 2) + "\n" : text(obj) + "\n");
 }
 
-function textQueue(q) {
-  const line = (r, extra = "") => `  #${String(r.number).padEnd(5)}${extra}unblocks ${String(r.unblocks).padEnd(3)}${String(r.size).padStart(6)} lines  ${r.door.padEnd(8)} ${r.title.slice(0, 64)}`;
-  return [
-    `MERGE NOW (${q.mergeNow.length})`, ...q.mergeNow.map((r) => line(r)),
-    `REVIEW (${q.review.length}), highest unblock first, then smallest`, ...q.review.map((r) => line(r, `@${(r.author ?? "").padEnd(14)} `)),
-    `WAITING ON PARENT (${q.waitingOnParent.length})`, ...q.waitingOnParent.map((r) => line(r)),
-    `YOURS, NOT MERGED (${q.mine.length})`, ...q.mine.map((r) => line(r, `${r.review.padEnd(18)}`)),
-  ].join("\n");
-}
-
-const USAGE = "usage: ship.mjs queue | verdict record|check | run <bottom-pr> | merge <pr> --head <sha>";
+const USAGE = "usage: ship.mjs verdict record|check | run <bottom-pr> | merge <pr> --head <sha>";
 // A flag ship does not know, such as a misspelt or removed one, could loosen a rule if ignored.
 const FLAGS = ["json", "repo", "me", "trusted", "rule-b", "force", "head", "by", "notes"];
 
@@ -520,25 +469,19 @@ async function main() {
   const [cmd, sub, ...rest] = a._;
   const repo = a.repo;
   // A stray PR number, such as a second one after --rule-b, is refused rather than ignored.
-  if (a._.length !== { queue: 1, run: 2, merge: 2, verdict: sub === "record" ? 4 : 3 }[cmd]) throw new Error(USAGE);
+  if (a._.length !== { run: 2, merge: 2, verdict: sub === "record" ? 4 : 3 }[cmd]) throw new Error(USAGE);
   // An archived repository is a dropped project: none of its PRs reach ship's output.
   if (repository(repo).archived) throw new Error(`${nameWithOwner(repo)} is archived, and ship skips archived repositories`);
   const trusted = a.trusted ? a.trusted.split(",").map((s) => s.trim()).filter(Boolean) : [];
   const ruleB = a["rule-b"] ? a["rule-b"].split(",").map(Number) : [];
   if (!ruleB.every(Number.isInteger)) throw new Error("usage: --rule-b <pr>[,<pr>...], the PRs rule B covers");
-  const authenticated = () => sh("gh", ["api", "user", "--jq", ".login"]);
   // verdict check and run grant the own-PR rules to the caller, so the caller is always the
-  // authenticated account; --me may only repeat it. queue uses --me just to sort the list.
+  // authenticated account; --me may only repeat it.
   const caller = () => {
-    const login = authenticated();
+    const login = sh("gh", ["api", "user", "--jq", ".login"]);
     if (a.me && actor(a.me) !== actor(login)) throw new Error(`--me ${a.me} does not match the authenticated GitHub account ${login}`);
     return login;
   };
-  if (cmd === "queue") {
-    const me = a.me ?? authenticated();
-    const q = planQueue(openPrs(repo), { me, defaultBranch: repository(repo).defaultBranch });
-    return print(q, a.json, textQueue);
-  }
   if (cmd === "verdict" && sub === "record") {
     const [n, verdict] = rest;
     if (!n || !["PASS", "PASS+NOTES", "FAIL"].includes(verdict) || !a.by || !a.head) throw new Error("usage: verdict record <pr> <PASS|PASS+NOTES|FAIL> --head <tested-sha> --by <who> [--notes file]");

@@ -195,9 +195,8 @@ fail("", "gh: Not Found (HTTP 404)");
   return { dir, git, head, ship, cli, state, setState };
 }
 
-test("GraphQL quota spent: queue, verdict and run read and post through REST", (t) => {
+test("GraphQL quota spent: verdict and run read and post through REST", (t) => {
   const { head, cli, state } = fixtureGitHub(t);
-  assert.deepEqual(cli("queue").mine.map((r) => r.number), [7]);
   cli("verdict", "record", "7", "PASS", "--head", head, "--by", "verifier");
   assert.equal(state().comments.length, 1, "the verdict comment went through REST");
   assert.equal(cli("verdict", "check", "7").status, "current");
@@ -339,7 +338,7 @@ test("run: an approval counts for the patch it was given on, through a rebase th
 
 test("an archived repository's PRs never appear in ship output: every command refuses it before reading them", (t) => {
   const { head, ship, state, setState } = fixtureGitHub(t, { graphql: true, archived: true });
-  const commands = [["queue"], ["verdict", "record", "7", "PASS", "--head", head, "--by", "verifier"], ["verdict", "check", "7"], ["run", "7"], ["merge", "7", "--head", head]];
+  const commands = [["verdict", "record", "7", "PASS", "--head", head, "--by", "verifier"], ["verdict", "check", "7"], ["run", "7"], ["merge", "7", "--head", head]];
   for (const args of commands) {
     const out = ship(...args, "--json");
     assert.deepEqual([out.status, out.stdout], [2, ""], args.join(" "));
@@ -347,7 +346,7 @@ test("an archived repository's PRs never appear in ship output: every command re
   }
   assert.deepEqual(state().calls.filter((c) => c[0] !== "repo"), [], "nothing past the repository was read or written");
   setState({ graphql: false });
-  assert.match(ship("queue").stderr, /fixture\/repo is archived/, "the REST fallback reads the archive flag too");
+  assert.match(ship("verdict", "check", "7").stderr, /fixture\/repo is archived/, "the REST fallback reads the archive flag too");
 });
 
 test("run: an approval given while the PR sat on its parent survives the restack after the parent squash-merges", (t) => {
