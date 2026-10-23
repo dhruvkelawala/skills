@@ -1,5 +1,6 @@
 // Runs day's morning report in headless Claude Code, with gh, T3's t3-code MCP server and the disk and memory
-// readings faked at the outer boundary, in the world fixture.mjs describes: one turn, `/day morning`.
+// readings faked at the outer boundary, in the world fixture.mjs describes. One chain of two turns: `/day morning`,
+// then the user's reply "start 1 and 3".
 // From the repo root: node --test skills/day/evals/day.eval.mjs
 // Needs the claude CLI signed in through environment variables (the chain gets its own config dir and HOME), plus
 // git and jq. Each turn is a live agent run, so results can vary between runs.
@@ -10,7 +11,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, st
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { OLD_STOP, PR, PR_HEAD, REPO, REPO_URL, RESTARTED, STOPPED, nightRecords, world } from "./fixture.mjs";
+import { BUILDS, OLD_STOP, PR, PR_HEAD, PROJECT, REPO, REPO_URL, RESTARTED, STOPPED, nightRecords, world } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
@@ -83,7 +84,9 @@ let chain;
 function morning() {
   if (!chain) {
     const c = scratch();
-    chain = { c, report: turn(c, "morning", "/day morning") };
+    const report = turn(c, "morning", "/day morning");
+    let reply;
+    chain = { c, report, reply: () => (reply ??= report.then((r) => turn(c, "reply", "start 1 and 3", r.sessionId))) };
   }
   return chain;
 }
@@ -98,6 +101,8 @@ const sectionText = (text, name) => {
   const ends = SECTIONS.map((s) => sectionAt(text, s)).filter((i) => i > start);
   return text.slice(start, ends.length ? Math.min(...ends) : undefined);
 };
+// The issue a numbered line of the report links to.
+const issueOnLine = (text, n) => Number(new RegExp(`^\\s*${n}[.)]\\s.*?${REPO_URL}/issues/(\\d+)`, "m").exec(text)?.[1]);
 
 const reported = new Set();
 function describeTurn(t, r) {
@@ -122,6 +127,31 @@ describe("day morning", { concurrency: true }, () => {
     const stopped = sectionText(report.text, "Stopped last night");
     assert.ok(stopped.includes(`t3-thread://v1/${STOPPED.threadId}`), `${r.name}: the run still stopped is not listed`);
     for (const gone of [RESTARTED, OLD_STOP]) assert.ok(!stopped.includes(gone.threadId), `${r.name}: lists ${gone.threadId}, restarted or from an older night`);
+  });
+
+  test("the report starts no build; the reply starts one /issue-to-pr thread per build it names", async (t) => {
+    const r = await morning().report;
+    describeTurn(t, r);
+    assert.deepEqual(r.t3.filter((e) => e.tool === "t3_thread_launch"), [], `${r.name}: a thread was launched before any reply`);
+    const report = reportOf(r);
+    assert.ok(report, `${r.name}: no report`);
+    const named = [1, 3].map((n) => issueOnLine(report.text, n));
+    assert.ok(named.every((n) => BUILDS.includes(n)), `${r.name}: lines 1 and 3 are not builds to start: ${named}`);
+
+    const v = await morning().reply();
+    describeTurn(t, v);
+    const launches = v.t3.filter((e) => e.tool === "t3_thread_launch");
+    assert.equal(launches.length, 2, `${v.name}: ${launches.length} launches for two builds`);
+    for (const n of named) {
+      const url = `${REPO_URL}/issues/${n}`;
+      const launch = launches.find((e) => e.message?.includes(url));
+      assert.ok(launch, `${v.name}: no thread launched for ${url}`);
+      assert.match(launch.message, new RegExp(`^/issue-to-pr ${url}\\b`), `${v.name}: #${n}'s thread does not start with /issue-to-pr`);
+      assert.equal(launch.projectId, PROJECT.id, `${v.name}: #${n}'s thread is not in the project whose checkout is ${REPO}`);
+      const w = launch.workspaceStrategy ?? {};
+      assert.deepEqual([w.type, w.baseRef, w.startFromOrigin], ["worktree", "main", true], `${v.name}: #${n}'s thread is not in a new worktree from origin's main`);
+      assert.match(w.branch ?? "", new RegExp(`^[a-z]+/${n}-[a-z0-9-]+$`), `${v.name}: #${n}'s branch is not <type>/${n}-<description>`);
+    }
   });
 
   test("the first PR in the review queue has its prep and its guide ready when the report posts", async (t) => {

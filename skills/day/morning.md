@@ -72,6 +72,24 @@ Then end the turn. The report starts nothing: a build starts only when the user'
 
 **Complete when:** the first PR's prep record names its head, its guide is written for that head or its line says why it has none, and the report is posted with no thread started.
 
+## 4. Start the builds the reply names
+
+Read the reply against the report's numbers:
+
+- Line numbers or issue numbers from **Builds to start**, as in "start 1 and 3", "1, 3" or "#31", start those builds. "all" starts every listed build.
+- A line from another section starts nothing, and the reply says so. "go on" with a stopped line restarts it, as ["go on"](SKILL.md#go-on) says.
+- When the reply leaves a line unclear, ask about that line once, and start nothing until the answer comes.
+
+For each build:
+
+1. **Find its project.** Call `t3_project_list` and follow `nextCursor` until it is null. The build's project is the one whose `workspaceRoot` is a checkout of the issue's repository, which `git -C <workspaceRoot> remote get-url origin` names. With no such project, its reply line says so and nothing starts for it.
+2. **Check it hasn't started.** When `t3_thread_list` in that project with `titleContains: "Build #<n>:"` finds a thread, the build has started since the report, so link that thread and launch nothing.
+3. **Launch its thread** as [issue-to-pr's step 3](../issue-to-pr/SKILL.md#1-pin-the-contract) does. Call `t3_thread_launch` with the project's `projectId`, `title` set to `Build #<n>: <short title>`, `message` set to `/issue-to-pr <issue URL>`, and `workspaceStrategy` set to `{"type": "worktree", "baseRef": "<default branch>", "branch": "<type>/<n>-<short-description>", "startFromOrigin": true}`, with a conventional-commit type and the repository's default branch from `gh api repos/<owner>/<repo> --jq .default_branch`. The launch has no retry key, so after an error or a lost response, check `t3_thread_list` before calling it again.
+
+Then reply with one line per build: its thread as `[Build #<n>: <short title>](t3-thread://v1/<threadId>)`, or why it has none.
+
+**Complete when:** each build the reply named has exactly one thread running `/issue-to-pr`, or a reply line saying why it has none.
+
 ## Schedule the 10:00 report
 
 A scheduled task runs on the T3 server of the thread that creates it, and each run posts into that thread. Make one thread for the reports on the machine where T3 runs new threads, and from it call `schedule_task` with:
