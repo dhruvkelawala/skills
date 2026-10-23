@@ -14,25 +14,25 @@ import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const RULES = "query($o:String!,$n:String!,$q:String!){repository(owner:$o,name:$n){ref(qualifiedName:$q){refUpdateRule{requiredApprovingReviewCount} rules(first:100){nodes{type parameters{... on PullRequestParameters{requiredApprovingReviewCount}}}}}}}";
+const RULES_QUERY = "query($o:String!,$n:String!,$q:String!){repository(owner:$o,name:$n){ref(qualifiedName:$q){refUpdateRule{requiredApprovingReviewCount} rules(first:100){nodes{type parameters{... on PullRequestParameters{requiredApprovingReviewCount}}}}}}}";
 
 const gh = (args) => JSON.parse(execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
 const rateLimited = (error) => /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
-const most = (counts) => Math.max(0, ...counts.filter(Number.isInteger));
+const highest = (counts) => Math.max(0, ...counts.filter(Number.isInteger));
 
 function approvals(repo, branch) {
   const [owner, name] = repo.split("/");
   try {
-    const { ref } = gh(["api", "graphql", "-f", `query=${RULES}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `q=refs/heads/${branch}`]).data.repository;
+    const { ref } = gh(["api", "graphql", "-f", `query=${RULES_QUERY}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `q=refs/heads/${branch}`]).data.repository;
     const rulesets = (ref?.rules?.nodes ?? []).filter((rule) => rule.type === "PULL_REQUEST");
-    return most([ref?.refUpdateRule?.requiredApprovingReviewCount, ...rulesets.map((rule) => rule.parameters?.requiredApprovingReviewCount)]);
+    return highest([ref?.refUpdateRule?.requiredApprovingReviewCount, ...rulesets.map((rule) => rule.parameters?.requiredApprovingReviewCount)]);
   } catch (error) {
     if (!rateLimited(error)) throw error;
   }
   process.stderr.write("required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review\n");
   const rulesets = restRulesets(repo, branch).filter((rule) => rule.type === "pull_request");
   const isProtected = gh(["api", `repos/${repo}/branches/${branch}`]).protected === true;
-  return most([isProtected ? 1 : 0, ...rulesets.map((rule) => rule.parameters?.required_approving_review_count)]);
+  return highest([isProtected ? 1 : 0, ...rulesets.map((rule) => rule.parameters?.required_approving_review_count)]);
 }
 
 function restRulesets(repo, branch) {
