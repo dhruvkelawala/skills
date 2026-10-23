@@ -9,7 +9,7 @@ Invoke as `/issue-to-pr [<issue number | URL | Linear ticket | plan file>] [stac
 
 - Without a work item, the build starts from this conversation. A plan file, such as one `improve` wrote, starts it from that plan. Stage 1 files either one as an issue through `ticket`, then builds that issue.
 - `stack` publishes the work as a new layer on an open stack. [Stacks](references/stacks.md) covers finding the stack, the branch and publishing. Without `stack`, the work branches from the default branch.
-- `--merge` lands the PR in stage 7 through `ship land`, after the verifier when rule B covers the PR. A stacked layer lands only once it is the bottom of its stack.
+- `--merge` is "land" given at the build's start: the PR lands in stage 7 through `ship land` once it is clean, after the verifier when rule B covers the PR. Only the user adds it. A stacked layer lands only once it is the bottom of its stack.
 - `--max-repairs` sets the repair budget. The default is 10.
 - `resume` continues a stopped run. Follow [resume](references/resume.md).
 
@@ -109,7 +109,7 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 5. Look for a `/product-description` output (`README.md`, `goal.md` and `glossary.md`) through paths named in `AGENTS.md` or `EVIDENCE.md` and in sibling directories. When one exists for this product, read it and the touched feature documents, use their setup, action and expected result to make vague issue text concrete, and record their paths and source commit. Flag claims that conflict with the issue or the code.
 6. Read enough code to state the contract: in-scope paths, out-of-scope items, acceptance criteria, any human gate the work item names, and for each criterion the surface it lands on and the capture that will prove it.
 7. Run `/review-ready` in preflight mode against the contract. The test seam it names becomes `test_seam`.
-8. Append the contract to the run record, post the [brief](#brief), and continue. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
+8. Append the contract to the run record, post the [brief](#brief), and continue. With `--merge`, hold it as ["land"](references/pr-thread.md#land) says. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
 9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt, so leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
 
 **Complete when:** this thread is in the build's worktree, the run record holds the work item, mode, base ref and SHA, branch, contract and brief, the brief is posted, and the branch is checked out at `base_sha`.
@@ -203,10 +203,10 @@ Run this stage once stage 6 records anything but `watching`.
 
 1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, record `merged`.
 2. **Verifier, under rule B.** At `ready` or `awaiting-human`, decide whether rule B covers the PR: it touches authority, stored data, money or a production switch and its proof doesn't cover that, its `**Door:**` line says one-way, or the user said `verify`. When it does, load and follow `/ship verify <n>`: a fresh agent runs the gates, the live behaviour and the blast-radius check at the current head, and records the verdict. On FAIL, fix each finding as a repair, counted against the budget, the way the review case in [resume](references/resume.md) does, then verify again. Otherwise skip it. Append the verdict and the rule B reason, or the skip and why, to the record, for the recap's `Verifier:` line.
-3. With `--merge` and the stage at `ready`, land the PR through the ship skill:
+3. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
    1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
    2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
-   3. Load and follow `/ship land <n>`. On the caller's own PR, `--merge` is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
+   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
    4. Record `merged` with the merge commit, or `ready` with the blocker ship reports.
 
    Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
@@ -235,7 +235,7 @@ After the recap, the user reviews the PR in this thread, the way `/pr-review` re
 3. Run stages 6 and 7 again. The recap they end with covers only what changed since the last one: its `Built:` line gives each comment's fix.
 4. Only the user's "done" marks a draft ready. When they say it and the record says `draft: yes`, run `gh pr ready <n>`. It has no REST call, so when the GraphQL quota is spent, wait for it to reset. Record `draft: no`, then run stage 6 again, where the approval GitHub requires comes from someone else.
 
-When the user says `try`, run the PR for them to test by hand. Find the launch recipe and prepare the app as `/pr-review`'s `try` does, but from this build's worktree, and open it in T3's preview browser (`preview_open`) or, for a mobile app, the device panel (`device_open`). Stop what it started when they move on.
+`try` and the other words the user says here work as [the PR's thread](references/pr-thread.md#words) says.
 
 **Complete when:** each of the user's comments is fixed or answered, and a draft turned ready only on their "done".
 

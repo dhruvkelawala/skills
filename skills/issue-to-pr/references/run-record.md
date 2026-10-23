@@ -28,6 +28,7 @@ autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reaso
 pr: <URL or none>
 draft: yes | no   (from stage 5; yes until the user's "done" in stage 8)
 guide: written for <head> | none: <reason>   (once stage 7 checked it)
+land: held at <head>, patch <fingerprint> | --merge | dropped at <head>: <reason>   (only land.mjs writes it)
 ```
 
 Stage reports go below the header, appended in order:
