@@ -15,6 +15,7 @@
 import { appendFileSync, existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { header } from "./run-record.mjs";
 
 import { STATES, ticketsOf } from "./spec.mjs";
 
@@ -169,12 +170,10 @@ function planMismatch(plan, criteria, noun) {
 }
 
 function stackedOnMismatch(value, record) {
-  const predecessor = record.match(/^predecessor_pr: .*\/pull\/(\d+)/m)?.[1];
+  const predecessor = header(record, "predecessor_pr").match(/\/pull\/(\d+)/)?.[1];
   if (!predecessor) return value === "none" ? [] : ["`Stacked on:` is `none` for a run that isn't stacked"];
   return new RegExp(`(?:#|/pull/)${predecessor}\\b`).test(value) ? [] : [`\`Stacked on:\` names the predecessor, #${predecessor}`];
 }
-
-const header = (record, key) => record.match(new RegExp(`^${key}: (.+)$`, "m"))?.[1].trim() ?? "";
 
 function criteriaOf(record) {
   const lines = record.split("\n");

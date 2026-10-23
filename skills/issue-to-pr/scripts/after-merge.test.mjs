@@ -88,59 +88,59 @@ fail("gh: Not Found (HTTP 404)");
 }
 
 test("once a PR merged, its worktree, its local branch and origin's branch are gone, read through GraphQL or, with its quota spent, REST", (t) => {
-  const p = project(t);
-  const built = p.build(7);
-  p.pr(7, built, "MERGED");
+  const repo = project(t);
+  const built = repo.build(7);
+  repo.pr(7, built, "MERGED");
   mkdirSync(join(built.checkout, "node_modules", "left-pad"), { recursive: true });
   writeFileSync(join(built.checkout, "node_modules", "left-pad", "index.js"), "// installed by the project's setup\n");
-  const run = p.afterMerge(7, built.checkout);
+  const run = repo.afterMerge(7, built.checkout);
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.equal(existsSync(built.checkout), false, "the build's worktree is removed");
-  assert.deepEqual(p.branches(), ["main"]);
-  assert.equal(p.onOrigin(built.branch), false, "origin's branch is deleted");
-  assert.doesNotMatch(p.git(p.main, "worktree", "list"), /feat-7/);
+  assert.deepEqual(repo.branches(), ["main"]);
+  assert.equal(repo.onOrigin(built.branch), false, "origin's branch is deleted");
+  assert.doesNotMatch(repo.git(repo.main, "worktree", "list"), /feat-7/);
 
   // An /apr thread publishes from the project's main checkout, which stays and goes back to main.
-  const published = p.build(8, { inMainCheckout: true });
-  p.pr(8, published, "MERGED", { graphql: false });
-  const fromMain = p.afterMerge(8, p.main);
+  const published = repo.build(8, { inMainCheckout: true });
+  repo.pr(8, published, "MERGED", { graphql: false });
+  const fromMain = repo.afterMerge(8, repo.main);
   assert.equal(fromMain.status, 0, fromMain.stdout + fromMain.stderr);
-  assert.equal(p.git(p.main, "branch", "--show-current"), "main");
-  assert.deepEqual(p.branches(), ["main"]);
-  assert.equal(p.onOrigin(published.branch), false);
+  assert.equal(repo.git(repo.main, "branch", "--show-current"), "main");
+  assert.deepEqual(repo.branches(), ["main"]);
+  assert.equal(repo.onOrigin(published.branch), false);
 });
 
 test("nothing goes before the PR merges, and a merged PR keeps whatever could lose work", (t) => {
-  const p = project(t);
-  const open = p.build(9);
-  p.pr(9, open, "OPEN");
-  const notMerged = p.afterMerge(9, open.checkout);
+  const repo = project(t);
+  const open = repo.build(9);
+  repo.pr(9, open, "OPEN");
+  const notMerged = repo.afterMerge(9, open.checkout);
   assert.equal(notMerged.status, 2, notMerged.stdout);
   assert.equal(existsSync(open.checkout), true);
-  assert.equal(p.onOrigin(open.branch), true);
+  assert.equal(repo.onOrigin(open.branch), true);
 
-  const dirty = p.build(10);
-  p.pr(10, dirty, "MERGED");
+  const dirty = repo.build(10);
+  repo.pr(10, dirty, "MERGED");
   writeFileSync(join(dirty.checkout, "notes.txt"), "not committed\n");
-  const keptDirty = p.afterMerge(10, p.main);
+  const keptDirty = repo.afterMerge(10, repo.main);
   assert.equal(keptDirty.status, 1, keptDirty.stdout + keptDirty.stderr);
   assert.match(keptDirty.stdout, /kept .*feat-10-change.*uncommitted/);
   assert.equal(existsSync(join(dirty.checkout, "notes.txt")), true, "the uncommitted file is still there");
-  assert.ok(p.branches().includes(dirty.branch));
+  assert.ok(repo.branches().includes(dirty.branch));
 
-  const ahead = p.build(11);
-  p.pr(11, ahead, "MERGED");
-  p.commit(ahead.checkout, "follow-up.txt", "never pushed\n");
-  const keptAhead = p.afterMerge(11, p.main);
+  const ahead = repo.build(11);
+  repo.pr(11, ahead, "MERGED");
+  repo.commit(ahead.checkout, "follow-up.txt", "never pushed\n");
+  const keptAhead = repo.afterMerge(11, repo.main);
   assert.equal(keptAhead.status, 1, keptAhead.stdout + keptAhead.stderr);
   assert.match(keptAhead.stdout, /kept .*feat\/11-change.*never had/);
   assert.equal(existsSync(ahead.checkout), true);
-  assert.ok(p.branches().includes(ahead.branch));
+  assert.ok(repo.branches().includes(ahead.branch));
 
-  const withEnv = p.build(12);
-  p.pr(12, withEnv, "MERGED");
+  const withEnv = repo.build(12);
+  repo.pr(12, withEnv, "MERGED");
   writeFileSync(join(withEnv.checkout, ".env"), "API_TOKEN=only-here\n");
-  const keptEnv = p.afterMerge(12, p.main);
+  const keptEnv = repo.afterMerge(12, repo.main);
   assert.equal(keptEnv.status, 1, keptEnv.stdout + keptEnv.stderr);
   assert.match(keptEnv.stdout, /kept .*feat-12-change.*\.env/);
   assert.equal(existsSync(join(withEnv.checkout, ".env")), true, "an ignored file Git doesn't keep is still there");

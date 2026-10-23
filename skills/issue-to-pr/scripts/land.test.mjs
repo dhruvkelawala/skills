@@ -19,8 +19,8 @@ const GIT_ENV = {
 
 // A build's worktree: a branch with one commit on origin's main, and a run record whose `base_ref`
 // is origin's main, as stage 1 writes it. `restack` lands someone else's change on main and rebases
-// the branch onto it, which keeps the branch's patch. `push` commits a change to the branch's patch.
-function build(t) {
+// the branch onto it, which keeps the branch's patch. `change` commits a change to the branch's patch.
+function worktree(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-land-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const origin = join(dir, "origin.git");
@@ -64,46 +64,47 @@ function build(t) {
       git("rebase", "--quiet", "main");
       return git("rev-parse", "HEAD");
     },
-    push: (text) => commit("score.txt", text, "fix: the score"),
+    change: (text) => commit("score.txt", text, "fix: the score"),
   };
 }
 
 test("a land said before the PR is clean lands at a clean head with the same patch, a restack included, and is dropped after a push that changes the patch", (t) => {
-  const pr = build(t);
-  const hold = pr.land("hold", pr.record, "--head", pr.head);
+  const build = worktree(t);
+  const hold = build.land("hold", build.record, "--head", build.head);
   assert.equal(hold.status, 0, hold.stderr);
-  assert.match(pr.held(), new RegExp(`^held at ${pr.head}, patch [0-9a-f]{64}$`));
+  assert.match(build.held(), new RegExp(`^held at ${build.head}, patch [0-9a-f]{64}$`));
 
-  const atTheHead = pr.land("check", pr.record);
+  const atTheHead = build.land("check", build.record);
   assert.equal(atTheHead.status, 0, `the head "land" was said at: ${atTheHead.stdout}${atTheHead.stderr}`);
 
-  const restacked = pr.restack();
-  assert.notEqual(restacked, pr.head);
-  const afterRestack = pr.land("check", pr.record);
+  const restacked = build.restack();
+  assert.notEqual(restacked, build.head);
+  const afterRestack = build.land("check", build.record);
   assert.equal(afterRestack.status, 0, `a restack keeps the patch: ${afterRestack.stdout}${afterRestack.stderr}`);
 
-  pr.push("round\nscore: 12 points\ntotal\n");
-  const afterPush = pr.land("check", pr.record);
+  build.change("round\nscore: 12 points\ntotal\n");
+  const afterPush = build.land("check", build.record);
   assert.equal(afterPush.status, 1, `a push that changes the patch must not land: ${afterPush.stdout}`);
   assert.match(afterPush.stdout, /dropped/);
-  assert.match(pr.held(), /^dropped\b/);
-  assert.equal(pr.land("check", pr.record).status, 1, "a dropped land stays dropped");
+  assert.match(build.held(), /^dropped\b/);
+  assert.equal(build.land("check", build.record).status, 1, "a dropped land stays dropped");
 });
 
 test("a land is tied to the PR's head the user saw, not to a commit the thread hasn't pushed yet", (t) => {
-  const pr = build(t);
-  pr.push("round\nscore: 12, unpushed\ntotal\n");
-  assert.equal(pr.land("hold", pr.record, "--head", pr.head).status, 0);
-  const check = pr.land("check", pr.record);
+  const build = worktree(t);
+  build.change("round\nscore: 12, unpushed\ntotal\n");
+  const hold = build.land("hold", build.record, "--head", build.head);
+  assert.equal(hold.status, 0, hold.stderr);
+  const check = build.land("check", build.record);
   assert.equal(check.status, 1, `a commit the user never saw must not land: ${check.stdout}`);
-  assert.match(pr.held(), /^dropped\b/);
+  assert.match(build.held(), /^dropped\b/);
 });
 
 test("--merge from the build's start lands whatever patch the PR has once it is clean", (t) => {
-  const pr = build(t);
-  assert.equal(pr.land("check", pr.record).status, 1, "nothing held, nothing lands");
-  assert.equal(pr.land("hold", pr.record, "--merge").status, 0);
-  pr.push("round\nscore: 12 points\ntotal\n");
-  const check = pr.land("check", pr.record);
+  const build = worktree(t);
+  assert.equal(build.land("check", build.record).status, 1, "nothing held, nothing lands");
+  assert.equal(build.land("hold", build.record, "--merge").status, 0);
+  build.change("round\nscore: 12 points\ntotal\n");
+  const check = build.land("check", build.record);
   assert.equal(check.status, 0, check.stdout + check.stderr);
 });
