@@ -1,4 +1,4 @@
 interface:
   display_name: "Issue to PR"
   short_description: "Ship one GitHub issue or Linear ticket as a reviewed, proven PR"
-  default_prompt: "Use $issue-to-pr to take this issue through a test-first build, review, captured evidence, a PR, a watch through T3 and your review of the PR in its thread."
+  default_prompt: "Use $issue-to-pr to take this issue through a test-first build, review, captured evidence, a PR, a watch through T3 and my review of the PR in its thread."

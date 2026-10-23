@@ -67,10 +67,10 @@ function briefProblems(lines, record) {
 function recapProblems(message, record, path) {
   const problems = [];
   const lines = message.map((line) => line.replace(/^[-*] /, ""));
-  problems.push(...reviewIntroProblems(lines[0], record));
   if (!lines[0].trim() || RECAP_LINES.some((label) => lines[0].startsWith(label))) {
     problems.push("the recap starts with the result on its first line");
   }
+  problems.push(...reviewIntroProblems(lines[0], record));
   const found = RECAP_LINES.map((label) => ({ label, at: lines.findIndex((line) => line.startsWith(label)) }));
   for (const { label, at } of found) {
     if (at < 0) problems.push(`the recap has no \`${label}\` line`);
