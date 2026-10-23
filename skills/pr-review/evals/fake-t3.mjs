@@ -107,7 +107,7 @@ const TOOLS = {
       const text = `${input.title ?? ""}\n${input.task}`;
       const mentions = openPrs().filter((n) => new RegExp(`(?:#|/pull/|\\bPR )${n}\\b`).test(text));
       if (input.target?.model === prepModel) {
-        const number = mentions.includes(LAYER) ? LAYER : mentions[0];
+        const number = [...text.matchAll(/\/pull\/(\d+)\b/g)].map(([, n]) => Number(n)).find((n) => openPrs().includes(n)) ?? mentions[0];
         tasks.set(taskId, { axis: "prep", summary: number ? prepare(number) : "No PR named to prep.", delivered: false });
         log({ tool: "delegate_task", taskId, axis: "prep", number: number ?? null, mentions, target: input.target, mode: input.mode ?? "async", title: input.title ?? null });
       } else {

@@ -19,14 +19,14 @@ Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head>]`.
 
 ## The queue
 
-The queue is every open PR waiting on the user's review, across their repositories. `node <this skill's folder>/scripts/queue.mjs` prints it as a JSON list in the order to walk it. Another skill that needs the queue, such as `day`, runs the same command.
+The queue is every open PR waiting on the user's review, across their repositories. `node <this skill's folder>/scripts/queue.mjs` prints it as a JSON list in the order to walk it. Another skill that needs the queue runs the same command.
 
 - **In the queue:** PRs that ask for the user's review, and PRs the user reviewed before that have moved since. Drafts, the user's own PRs and archived repositories stay out.
 - **The order:** return visits first, then stack bottoms (PRs that don't sit on another open PR), then the PR that unblocks the most (the open PRs stacked on it), then the smallest.
 
 Each entry has `repo`, `number`, `url`, `title`, `author`, `base`, `head`, `size`, `files`, `returnVisit`, `stackBottom` and `unblocks`.
 
-A **sitting** is a bare `/pr-review`: one thread, with no time cap.
+A **sitting** is a bare `/pr-review`. It runs in one thread, with no time cap.
 
 1. Read the queue. When it is empty, say so in one line and stop.
 2. Walk it from the top, one PR at a time, until the user says `stop` or the queue runs out.
@@ -62,7 +62,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 ## 2. Prep
 
-Prep comes before the PR's review (step 3), on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill such as `day`, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
+Prep comes before the PR's review (step 3), on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
 
 1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
@@ -84,11 +84,12 @@ For a stack, start with one table, from the bottom: order, PR, title, author, si
 
 Send each PR's review as one message: the intro, then the wrap-up. In a sitting, the first one opens with the queue table. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
 
-**The next PR's prep runs while the user reads.** In a sitting or a stack, when you start a PR's review, start the next PR's prep in the background, unless its prep record is already written for its head:
+**The next PR's prep runs while the user reads.** In a sitting or a stack, when the walk reaches a PR, start the next PR's prep in the background, unless its prep record is already written for its head:
 
 - Give it to one `delegate_task` child, async, on the `teammate-prep` job in the models file for someone else's PR, or on the thread's model for the user's own. When the job's model can't run, do what its `ifUnavailable` says.
 - Its task names the PR's URL and head. The child loads this skill, runs step 1 and prep for that PR only (step 2, or step 4's for a return visit), the reviewers included, and adds a draft of the review message to the prep record. It sends the user nothing, posts nothing, and leaves the `seen` ref alone.
-- On `next`, wait for the child if it is still running, then start the next PR from its prep record and draft. When it failed, prep the PR yourself.
+- On `next`, wait for the child if it is still running, then start the next PR from its prep record, and from its draft when it has one. When it failed, prep the PR yourself.
+- A background prep still running at `stop` finishes on its own, and its record lets the next sitting start that PR without rerunning its reviewers.
 
 **Intro.**
 

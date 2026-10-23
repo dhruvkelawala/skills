@@ -10,8 +10,8 @@ const queuePath = fileURLToPath(new URL("./queue.mjs", import.meta.url));
 
 // A GitHub world for the gh on PATH: each repository's open PRs, which of them ask for the user's
 // review, and the reviews on each. Search answers as GitHub does for `--review-requested=@me` and
-// `--reviewed-by=@me`, and `--archived=false` drops archived repositories. REST's pull list has no
-// size, so only a PR's own GET carries its additions and deletions.
+// `--reviewed-by=@me`, archived repositories included. REST's pull list has no size, so only a PR's
+// own GET carries its additions and deletions.
 function fixtureGitHub(t, repos) {
   const dir = mkdtempSync(join(tmpdir(), "pr-review-queue-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -34,7 +34,6 @@ if (args[0] === "api" && args[1] === "user") answer(flag("--jq") === ".login" ? 
 if (args[0] === "search" && args[1] === "prs") {
   if (flag("--state") !== "open") throw new Error("the fake models open PRs only");
   const hits = Object.entries(repos)
-    .filter(([, r]) => flag("--archived") !== "false" || !r.archived)
     .flatMap(([repo, r]) => r.prs.map((p) => [repo, p]))
     .filter(([, p]) => (flag("--review-requested") === "@me" && p.requested) || (flag("--reviewed-by") === "@me" && (p.reviews ?? []).some((v) => v.user === me)));
   answer(hits.map(([repo, p]) => ({

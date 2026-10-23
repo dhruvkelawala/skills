@@ -14,9 +14,9 @@ const json = (...args) => JSON.parse(gh(...args));
 const pages = (endpoint) => json("api", "--paginate", "--slurp", endpoint).flat();
 const same = (a, b) => (a ?? "").toLowerCase() === (b ?? "").toLowerCase();
 
-// Open PRs, outside archived repositories, that ask for the user's review or that the user reviewed before.
+// Open PRs that ask for the user's review or that the user reviewed before. 1000 is the most a search returns.
 function candidates(me) {
-  const search = (filter) => json("search", "prs", filter, "--state", "open", "--archived=false", "--json", "number,repository,isDraft,author", "--limit", "200");
+  const search = (filter) => json("search", "prs", filter, "--state", "open", "--json", "number,repository,isDraft,author", "--limit", "1000");
   const requested = search("--review-requested=@me");
   const found = new Map();
   for (const p of [...requested, ...search("--reviewed-by=@me")]) {
@@ -59,7 +59,6 @@ function queueEntry(c, open, shape, me) {
   };
 }
 
-// Return visits, then stack bottoms, then what unblocks the most, then the smallest.
 const walkOrder = (a, b) =>
   b.returnVisit - a.returnVisit || b.stackBottom - a.stackBottom || b.unblocks - a.unblocks || a.size - b.size ||
   a.repo.localeCompare(b.repo) || a.number - b.number;
@@ -69,6 +68,8 @@ const queue = [];
 const wanted = candidates(me);
 for (const repo of new Set(wanted.map((c) => c.repo))) {
   const open = pages(`repos/${repo}/pulls?state=open&per_page=100`);
+  // An archived repository is a dropped project, so none of its PRs wait on anyone.
+  if (open.some((p) => p.base.repo?.archived)) continue;
   const shape = stacks(open);
   for (const c of wanted.filter((w) => w.repo === repo)) queue.push(queueEntry(c, open, shape, me));
 }
