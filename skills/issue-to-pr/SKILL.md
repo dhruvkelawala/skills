@@ -21,7 +21,7 @@ The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the reposito
 
 ## The PR's thread
 
-This thread owns its PR until the PR merges. [The PR's thread](references/pr-thread.md) says what that means, here and in an `/apr` thread: the words the user says, such as "land" and "more", the fixes the thread makes on its own, the repair budget for the PR's whole life, when it watches, and the cleanup on merge. Each "repair" in the stages below is one its [repair budget](references/pr-thread.md#repair-budget) defines, recorded with `repairs.mjs add` right after its commit.
+This thread owns its PR until the PR merges. [The PR's thread](references/pr-thread.md) says what that means, here and in an `/apr` thread: the words the user says, such as "land" and "more", the fixes the thread makes on its own, the repair budget for the PR's whole life, when it watches, and the cleanup on merge. Each "repair" in the stages below is one its [repair budget](references/pr-thread.md#repair-budget) defines, and goes in the record the way it says.
 
 ## GitHub quota
 

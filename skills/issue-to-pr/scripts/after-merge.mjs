@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 // The cleanup once a PR has merged: the worktree that holds its branch, the local branch, and
 // origin's branch. Nothing goes until GitHub says the PR merged, and whatever could lose work stays,
-// with the reason: a checkout with uncommitted changes, a worktree with ignored files Git doesn't keep,
-// such as a `.env`, or a branch with commits the PR never had.
+// with the reason: a checkout with uncommitted changes, a worktree with ignored files Git doesn't
+// keep, such as a `.env`, or a branch with commits the PR never had.
 //
 //   after-merge.mjs <PR URL>
 //
-// Run it from any checkout of the repository. A linked worktree goes through `git worktree remove`,
-// never forced. The main checkout stays and switches to the PR's base branch. Origin's branch is
-// deleted only while it still points at the merged head, and GitHub then retargets any PR stacked
-// on it. Exit 0 when everything went, 1 when something was kept, 2 when the PR hasn't merged or a
-// command failed. GitHub is read through GraphQL or, with its quota spent, REST.
+// It works from any checkout of the repository, the one it removes included. A linked worktree
+// goes through `git worktree remove`, never forced. The main checkout stays and switches to the
+// PR's base branch. Origin's branch is deleted only while it still points at the merged head, and
+// GitHub then retargets any PR stacked on it. Exit 0 when everything went, 1 when something was
+// kept, 2 when the PR hasn't merged or a command failed. GitHub is read through GraphQL or, with its
+// quota spent, REST.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";

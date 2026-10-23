@@ -17,7 +17,7 @@ The user says these in the thread, and only the user's word starts each one.
 
 ## "land"
 
-When the user says "land", hold it first, tied to the head they saw: the PR's head on GitHub, from `gh pr view <n> --json headRefOid` (REST: `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<n>`), not a local commit the thread hasn't pushed.
+When the user says "land", hold it first, tied to the head they saw. That is the PR's head on GitHub, from `gh pr view <n> --json headRefOid` (REST: `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<n>`), and never a local commit the thread hasn't pushed.
 
 ```bash
 node <issue-to-pr>/scripts/land.mjs hold <record> --head <the PR's head>
@@ -59,13 +59,13 @@ The thread watches its PR with `watch_pull_request` only while the PR waits on s
 
 ## On merge
 
-Once GitHub reports the PR merged, whether `ship land` merged it or the thread finds it merged when it next runs, call `unwatch_pull_request`, record `merged`, and clean up. Run the script from the project's main checkout, the first entry in `git worktree list`, because it removes this thread's worktree:
+Once GitHub reports the PR merged, whether `ship land` merged it or the thread finds it merged when it next runs, call `unwatch_pull_request`, record `merged`, and clean up. Run the script from the project's main checkout, the first entry in `git worktree list`. It removes this thread's worktree, which would leave the shell in a folder that is gone:
 
 ```bash
 cd <main checkout> && node <issue-to-pr>/scripts/after-merge.mjs <PR URL>
 ```
 
-It removes the worktree that holds the PR's branch, the local branch and origin's branch, and GitHub retargets any PR stacked on that branch. In the main checkout it switches to the PR's base branch instead. It keeps whatever could lose work, and prints each with its reason, so name them to the user: a checkout with uncommitted changes, a worktree with ignored files Git doesn't keep, such as a `.env`, or a branch with commits the PR never had. Dependencies and build output, such as `node_modules`, go with the worktree. T3 then settles the thread.
+It removes the worktree that holds the PR's branch, the local branch and origin's branch, and GitHub retargets any PR stacked on that branch. In the main checkout it switches to the PR's base branch instead. It keeps whatever could lose work, and prints each with its reason, so name them to the user: a checkout with uncommitted changes, a worktree with ignored files Git doesn't keep, such as a `.env`, or a branch with commits the PR never had. The build output the cleanup skill deletes, `node_modules`, `target`, `.next` and `.turbo`, goes with the worktree. T3 then settles the thread.
 
 ## `try`
 

@@ -97,7 +97,7 @@ Skip with `--no-watch`. Otherwise load and follow `/pr-watch <PR URL> --max-repa
 
 This thread owns the PR it published until the PR merges. The words the user says here ("land", "post", "more", "go on", `try` and `verify`), the fixes it makes on its own, the repair budget, the watch and the cleanup on merge follow [the PR's thread](../issue-to-pr/references/pr-thread.md), as in a build's thread.
 
-When `/issue-to-pr` calls apr, the build's run record holds them. Otherwise the run record is pr-watch's, `~/.agent/pr-watch/<owner>/<repo>/<pr>.md`. Once the PR exists, start it with this header and a blank line, for the scripts that page names:
+When `/issue-to-pr` calls apr, the build's run record holds them. Otherwise the run record is pr-watch's, `~/.agent/pr-watch/<owner>/<repo>/<pr>.md`. Once the PR exists, start the record with this header and a blank line, unless it already has one, for the scripts that page names:
 
 ```md
 pr: <PR URL>

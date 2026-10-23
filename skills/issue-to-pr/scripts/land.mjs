@@ -15,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FINGERPRINT_DIFF_FLAGS, patchFingerprint } from "../../ship/scripts/ship.mjs";
+import { header, setHeader } from "./run-record.mjs";
 
 const USAGE = ["usage: land.mjs hold <record> --head <the PR's head> | --merge", "       land.mjs check <record>"].join("\n");
 const HELD = /^held at ([0-9a-f]{40}), patch ([0-9a-f]{64})$/;
@@ -65,17 +66,6 @@ function patchAt(record, commit) {
   const head = git("rev-parse", "--verify", `${commit}^{commit}`).trim();
   const from = git("merge-base", base, head).trim();
   return { head, patch: patchFingerprint(git("-c", "diff.relative=false", "diff", ...FINGERPRINT_DIFF_FLAGS, from, head)) };
-}
-
-// The header is the record's lines before its first blank line, rewritten in place.
-const headerOf = (record) => record.split("\n\n")[0];
-const header = (record, key) => headerOf(record).match(new RegExp(`^${key}: (.+)$`, "m"))?.[1].trim() ?? "";
-
-function setHeader(record, key, value) {
-  const top = headerOf(record);
-  const line = new RegExp(`^${key}: .*$`, "m");
-  const updated = line.test(top) ? top.replace(line, () => `${key}: ${value}`) : `${top.replace(/\n$/, "")}\n${key}: ${value}`;
-  return updated + record.slice(top.length);
 }
 
 function main(argv) {

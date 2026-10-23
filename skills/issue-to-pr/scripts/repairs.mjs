@@ -13,13 +13,13 @@
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { header, setHeader } from "./run-record.mjs";
 
 const USAGE = [
   'usage: repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--asked]',
   "       repairs.mjs more <record>",
 ].join("\n");
 const MORE = 10;
-const COUNTER = /^repairs: (\d+)\/(\d+)\b.*$/m;
 
 function add(path, { commit, fix, asked }) {
   const record = readFileSync(path, "utf8");
@@ -35,7 +35,7 @@ function add(path, { commit, fix, asked }) {
     return 1;
   }
   const now = used + 1;
-  writeFileSync(path, withLine(withCounter(record, now, budget), `- fix ${sha}, repair ${now} of ${budget}: ${fix}`));
+  writeFileSync(path, withLine(setHeader(record, "repairs", `${now}/${budget}`), `- fix ${sha}, repair ${now} of ${budget}: ${fix}`));
   const spent = now === budget ? ` That spends the budget, so the PR comes back to you, and "more" adds ${MORE}.` : "";
   console.log(`Fixed: ${fix} (${sha}). Repair ${now} of ${budget}.${spent}`);
   return 0;
@@ -44,19 +44,17 @@ function add(path, { commit, fix, asked }) {
 function more(path) {
   const record = readFileSync(path, "utf8");
   const { used, budget } = counter(record);
-  writeFileSync(path, withLine(withCounter(record, used, budget + MORE), `- more: the budget is ${budget + MORE}`));
+  writeFileSync(path, withLine(setHeader(record, "repairs", `${used}/${budget + MORE}`), `- more: the budget is ${budget + MORE}`));
   console.log(`"more": ${budget + MORE - used} of ${budget + MORE} repairs left.`);
   return 0;
 }
 
-// The counter is the header's line, the record's lines before its first blank line.
 function counter(record) {
-  const [, used, budget] = record.split("\n\n")[0].match(COUNTER) ?? [];
+  const [, used, budget] = header(record, "repairs").match(/^(\d+)\/(\d+)\b/) ?? [];
   if (!budget) throw new Error("the run record has no `repairs: <used>/<budget>` line in its header");
   return { used: Number(used), budget: Number(budget) };
 }
 
-const withCounter = (record, used, budget) => record.replace(COUNTER, () => `repairs: ${used}/${budget}`);
 const withLine = (record, line) => `${record.replace(/\n*$/, "\n")}${line}\n`;
 
 function parse(argv) {
