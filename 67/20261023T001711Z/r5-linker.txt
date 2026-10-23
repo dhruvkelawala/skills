@@ -1,0 +1,10 @@
+# taste page linker, before (a831213) and after (53eed00)
+$ node --test --test-name-pattern "taste-check page" skills/issue-to-pr/scripts/messages.test.mjs
+## at a831213 (the new case added first)
+ℹ pass 0
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: a full stop after a link ends the sentence, not the link
+## at 53eed00
+ℹ tests 13
+ℹ pass 13
+ℹ fail 0
