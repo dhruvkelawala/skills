@@ -17,10 +17,10 @@ The user says these in the thread, and only the user's word starts each one.
 
 ## "land"
 
-When the user says "land", hold it first, tied to the head they saw:
+When the user says "land", hold it first, tied to the head they saw: the PR's head on GitHub, from `gh pr view <n> --json headRefOid` (REST: `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<n>`), not a local commit the thread hasn't pushed.
 
 ```bash
-node <issue-to-pr>/scripts/land.mjs hold <record>
+node <issue-to-pr>/scripts/land.mjs hold <record> --head <the PR's head>
 ```
 
 Then check the PR the way the thread's watch does: stage 6 in a build's thread, one pass of the pr-watch loop in an `/apr` thread. Once the PR is clean, which in a build's thread is stage 7 at `ready`, check the held land:

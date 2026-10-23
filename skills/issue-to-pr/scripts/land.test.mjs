@@ -70,7 +70,7 @@ function build(t) {
 
 test("a land said before the PR is clean lands at a clean head with the same patch, a restack included, and is dropped after a push that changes the patch", (t) => {
   const pr = build(t);
-  const hold = pr.land("hold", pr.record);
+  const hold = pr.land("hold", pr.record, "--head", pr.head);
   assert.equal(hold.status, 0, hold.stderr);
   assert.match(pr.held(), new RegExp(`^held at ${pr.head}, patch [0-9a-f]{64}$`));
 
@@ -88,6 +88,15 @@ test("a land said before the PR is clean lands at a clean head with the same pat
   assert.match(afterPush.stdout, /dropped/);
   assert.match(pr.held(), /^dropped\b/);
   assert.equal(pr.land("check", pr.record).status, 1, "a dropped land stays dropped");
+});
+
+test("a land is tied to the PR's head the user saw, not to a commit the thread hasn't pushed yet", (t) => {
+  const pr = build(t);
+  pr.push("round\nscore: 12, unpushed\ntotal\n");
+  assert.equal(pr.land("hold", pr.record, "--head", pr.head).status, 0);
+  const check = pr.land("check", pr.record);
+  assert.equal(check.status, 1, `a commit the user never saw must not land: ${check.stdout}`);
+  assert.match(pr.held(), /^dropped\b/);
 });
 
 test("--merge from the build's start lands whatever patch the PR has once it is clean", (t) => {
