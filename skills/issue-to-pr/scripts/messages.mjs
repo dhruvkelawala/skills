@@ -257,7 +257,10 @@ function inline(message) {
     const [whole, text, url, bare, code] = match;
     html += escape(message.slice(from, match.index));
     if (url) html += `<a href="${escape(url)}">${escape(text)}</a>`;
-    else if (bare) html += `<a href="${escape(bare)}">${escape(bare)}</a>`;
+    else if (bare) {
+      const url = bare.replace(/[.,;:!?]+$/, "");
+      html += `<a href="${escape(url)}">${escape(url)}</a>${escape(bare.slice(url.length))}`;
+    }
     else html += `<code>${escape(code)}</code>`;
     from = match.index + whole.length;
   }
