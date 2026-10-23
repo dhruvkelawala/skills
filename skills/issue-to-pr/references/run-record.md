@@ -23,7 +23,7 @@ branch: <name>
 stage: contract | implemented | reviewed | verified | published | watching | awaiting-human | ready | merged | blocked: <reason>
 head: <sha the stage was proven on>
 tree: <git rev-parse HEAD^{tree} at that head>
-repairs: <used>/<budget>
+repairs: <used>/<budget>   (only repairs.mjs changes it)
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
 pr: <URL or none>
 spec_mode: stack | one-pr   (a spec's own record)
