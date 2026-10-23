@@ -1,4 +1,4 @@
 interface:
   display_name: "PR review"
-  short_description: "Reviewers find the problems, then an intro and a wrap-up, with the tour in T3's Guide tab"
-  default_prompt: "Use $pr-review on the current PR. For a stack, start from its bottom PR."
+  short_description: "A sitting over your review queue: reviewers find the problems, then an intro and a wrap-up per PR"
+  default_prompt: "Use $pr-review to start a review sitting at the top of my review queue."

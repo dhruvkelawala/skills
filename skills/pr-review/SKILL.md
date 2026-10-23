@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a pull request, a stack, or the PRs waiting on the user, one PR at a time. /code-review and a second opinion from the other model family find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next.
+description: Review the PRs waiting on the user in one sitting, or one PR or stack, one PR at a time. It owns the review queue, and a bare /pr-review starts at its top. /code-review and a second opinion from the other model family find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, or asks what to review next or for the review queue.
 compatibility: Requires git and gh.
 ---
 
@@ -8,13 +8,25 @@ compatibility: Requires git and gh.
 
 The reviewers find the problems, and you explain them. On every PR, `/code-review` and a second opinion from the other model family read the change before you write about it. You read everything too, implementation included, and sort what they found. T3 writes the tour as the PR's review guide, which the user reads in the PR panel's Guide tab with each stop's lines in place, and your message in chat is the intro and the wrap-up. The user decides, and nothing reaches GitHub until they say so.
 
-Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue]`.
+Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head>]`.
 
 | Argument | What it reviews |
 | --- | --- |
-| none | The current branch's PR, or the branch changes when there is no PR |
+| none | A sitting over the queue, from its top |
+| a PR | That PR |
 | a PR in a stack | The whole stack, bottom up |
-| `queue` | Every open PR waiting on the user: `gh search prs --review-requested=@me --state open`. |
+| `<base>..<head>` | The changes in that range |
+
+## The queue
+
+The queue is every open PR waiting on the user's review, across their repositories. `node <this skill's folder>/scripts/queue.mjs` prints it as a JSON list in the order to walk it. Another skill that needs the queue, such as `day`, runs the same command.
+
+- **In the queue:** PRs that ask for the user's review, and PRs the user reviewed before that have moved since. Drafts, the user's own PRs and archived repositories stay out.
+- **The order:** return visits first, then stack bottoms (PRs that don't sit on another open PR), then the PR that unblocks the most (the open PRs stacked on it), then the smallest.
+
+Each entry has `repo`, `number`, `url`, `title`, `author`, `base`, `head`, `size`, `files`, `returnVisit`, `stackBottom` and `unblocks`.
+
+A **sitting** is a bare `/pr-review`: one thread, with no time cap. Read the queue, show it as the table in step 2, and walk it from the top until the user says `stop` or it runs out. When the queue is empty, say so in one line and stop.
 
 ## 1. Pin each PR
 
@@ -27,6 +39,8 @@ git update-ref refs/pr-review/<n>-head <headRefOid>
 ```
 
 Review the range `refs/pr-review/<n>-base...refs/pr-review/<n>-head`. For a plain range, resolve both ends to commit IDs the same way.
+
+A PR in another repository than the current checkout's needs a clone of it. Make one at `$HOME/.agent/pr-review/<repo>/clone` the first time, with `gh repo clone <owner>/<repo> <that path> -- --filter=blob:none`, and run this step's git commands there.
 
 Then give each PR a read-only checkout of its head, for the reviewers and `try` to run from:
 
@@ -46,7 +60,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 Prep comes before anything you write about the PR, on every PR.
 
-1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a queue, name every PR in scope that needs a guide in one call, so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
+1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
    - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
    - **The second opinion,** on the `second-opinion` job, from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
@@ -58,7 +72,7 @@ Prep comes before anything you write about the PR, on every PR.
 6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
 7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
 
-For a stack or a queue, start with one table: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. Order a stack from the bottom. Order a queue so the PR that unblocks the most other PRs comes first, then the smallest. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
+For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk. A sitting starts with the queue as one table, in its order: PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
 
 **Complete when** both reviewers have reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide.
 
@@ -71,6 +85,7 @@ Send each PR's review as one message: the intro, then the wrap-up. The tour is t
 1. The PR link, `https://github.com/<owner>/<repo>/pull/<n>`, first. In T3 it opens the PR panel beside the thread. Then say that the tour is in that panel's Guide tab or, when the PR has no guide, why the tour is in chat.
 2. What the PR is and why, in a short paragraph of plain English, with one real example that uses real names and values.
 3. One extra line only when something changes how you review: red CI, a claim backed by tests only, a one-way door or no `**Door:**` line, or review churn on an agent-written PR.
+4. When the PR changes something a user sees or does and shows no recording of it, only tests, one line suggesting `try`.
 
 When the change can't be followed from the intro and the diff, such as a new subsystem, a flow across several parts or a PR over about 2,000 changed lines, follow the message with an `/eli25` page.
 
@@ -129,8 +144,8 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 1. Find the launch recipe, in this order: the repo's `verify-<app>` skill (`.agents/skills/verify-*/`) and its launch and doctor steps, then `EVIDENCE.md`, then the README and package scripts.
 2. Prepare the review checkout: install dependencies with the repo's own package manager and lockfile, and copy the ignored env files the app needs (such as `.env` and `.env.local`) from the user's own checkout. Never print their values.
-3. Start the app in the background on a free port, so it does not clash with anything the user is already running, and wait for its ready signal. Over ssh (`SSH_CONNECTION` set), put a web app on the tailnet with `tailscale serve` and give that URL. A mobile or desktop app builds and opens on the simulator or device the recipe names.
-4. Hand over the URL, or how to open the app, and two to four things worth trying in this PR, taken from its tour and its claims, each with the expected result.
+3. Start the app in the background on a free port, so it does not clash with anything the user is already running, and wait for its ready signal. Open a web app in T3's preview browser (`preview_open`), and a mobile app in T3's device panel (`device_open`) on the simulator or emulator the recipe names. A desktop app opens on this machine. When the change is motion the user should feel on a phone, also put the app on the tailnet with `tailscale serve` and give that link. Never hand over a `localhost` link.
+4. Say where the app is open, and give two to four things worth trying in this PR, taken from its tour and its claims, each with the expected result.
 5. Keep it running while the user tests. When they say `next`, `approve`, `stop`, or `try` on another PR, stop only the processes this review started. Add anything they report to the PR's ledger.
 
 **Complete for a PR when** the user has given their word and the `seen` ref points at the head they reviewed.
@@ -168,4 +183,4 @@ What happens next depends on whose PR it is:
 First remove the review checkouts of PRs that were approved, merged or closed: `git worktree remove "$HOME/.agent/pr-review/<repo>/<n>"`. Keep the checkout of a PR still waiting on changes, for the return visit.
 
 - For each PR: the decision, the posted review URL or "not posted", and the findings still open.
-- For a stack or a queue: how many PRs are done, and what is left.
+- For a stack or a sitting: how many PRs are done, and what is left.
