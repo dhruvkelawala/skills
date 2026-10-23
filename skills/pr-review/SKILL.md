@@ -58,7 +58,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 ## 2. Prep
 
-Prep comes before anything you write about the PR, on every PR.
+Prep comes before anything you write about the PR, on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill such as `day`, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
 
 1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
@@ -70,7 +70,7 @@ Prep comes before anything you write about the PR, on every PR.
 4. Once both reviewers have reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
 6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
-7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
+7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
 
 For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk. A sitting starts with the queue as one table, in its order: PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
 
@@ -79,6 +79,12 @@ For a stack, start with one table, from the bottom: order, PR, title, author, si
 ## 3. Walk one PR at a time
 
 Send each PR's review as one message: the intro, then the wrap-up. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
+
+**The next PR's prep runs while the user reads.** In a sitting or a stack, when you start a PR's review, start the next PR's prep in the background, unless its prep record is already written for its head:
+
+- Give it to one `delegate_task` child, async, on the `teammate-prep` job in the models file for someone else's PR, or on the thread's model for the user's own. When the job's model can't run, do what its `ifUnavailable` says.
+- Its task names the PR's URL and head. The child loads this skill, runs step 1 and prep for that PR only (step 2, or step 4's for a return visit), the reviewers included, and adds a draft of the review message to the prep record. It sends the user nothing, posts nothing, and leaves the `seen` ref alone.
+- On `next`, wait for the child if it is still running, then start the next PR from its prep record and draft. When it failed, prep the PR yourself.
 
 **Intro.**
 
@@ -131,7 +137,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 | Word | What you do |
 | --- | --- |
-| `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR. Nothing is posted. |
+| `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR from its background prep. Nothing is posted. |
 | "post", "approve and post" or "request changes and post" | Post the review as in step 5, then do the same as `next` |
 | `what else` | List the style and smell notes that were only counted |
 | `verify` | Run the verifier on this PR and add its result to the wrap-up |

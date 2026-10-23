@@ -5,7 +5,8 @@
 // Needs git, jq, the claude CLI signed in through environment variables (each chain gets its own config dir and
 // HOME), and the outside code-review skill that scripts/sync-skills.mjs installs. Each turn is a live agent run,
 // so results can vary between runs. A third chain, with T3's review guides off, runs only the first visit. A fourth
-// chain is a sitting: PR #7 and a smaller layer #5 stacked on it wait on the user, who runs a bare /pr-review.
+// chain is a sitting: PR #7 and a smaller layer #5 stacked on it wait on the user, who runs a bare /pr-review and
+// then says "next".
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -13,12 +14,13 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, LAYER, LAYER_BRANCH, LAYER_COMMITS, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, findingsAt } from "./fixture.mjs";
+import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, LAYER, LAYER_BRANCH, LAYER_COMMITS, LAYER_FINDING, LAYER_URL, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, findingsAt } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
 const { jobs } = JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8"));
 const reviewersModel = jobs.reviewers.use.model;
+const prepModel = jobs["teammate-prep"].use.model;
 const codeReview = join(homedir(), ".agents", "skills", "code-review");
 const TOOLS = "Bash,Read,Write,Edit,Glob,Grep,Skill,ToolSearch,mcp__t3-code";
 
@@ -158,7 +160,9 @@ const chains = {};
 function chain(kind) {
   if (!chains[kind] && kind === "queue") {
     const c = scratch(kind);
-    chains[kind] = { first: turn(c, "sitting", "/pr-review") };
+    const first = turn(c, "sitting", "/pr-review");
+    let next;
+    chains[kind] = { first, next: () => (next ??= first.then((visit) => turn(c, "next", "next", visit.sessionId))) };
   }
   if (!chains[kind]) {
     const c = scratch(kind);
@@ -305,6 +309,19 @@ describe("pr-review", { concurrency: true }, () => {
     }
   });
 
+  test("while the user reads the first PR, the next one's prep runs in the background, so next needs no reviewer", async (t) => {
+    const first = await chain("queue").first;
+    const preps = first.t3.filter((e) => e.tool === "delegate_task" && e.axis === "prep" && e.number === LAYER && e.target?.model === prepModel);
+    assert.ok(preps.length, `${first.name}: no background prep of #${LAYER} on the teammate-prep job while #${PR} was read`);
+    const v = await chain("queue").next();
+    describeVisit(t, v);
+    const review = reviewOf(v, LAYER_URL);
+    assert.ok(review, `${v.name}: no review of #${LAYER} after "next"`);
+    assert.deepEqual(v.t3.filter((e) => e.tool === "delegate_task"), [], `${v.name}: "next" started a reviewer or a prep`);
+    assert.deepEqual(v.secondOpinion, [], `${v.name}: "next" ran the second opinion`);
+    const { file, priority } = LAYER_FINDING;
+    assert.ok(review.text.split("\n").some((line) => namesFile(line, file) && line.includes(priority)), `${v.name}: no line names ${file} with its ${priority} from the prep`);
+  });
 
   test("a return visit after a pure rebase runs no reviewer", async (t) => {
     const v = await chain("rebase").back();

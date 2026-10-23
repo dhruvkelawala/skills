@@ -100,7 +100,7 @@ test("retries: 0 makes one call", async () => {
 };
 
 // The queue chain's second PR: a layer stacked on PR #7, smaller and with a lower number, so only the queue's
-// stack-bottom rule puts #7 first.
+// stack-bottom rule puts #7 first. Its background prep is faked, and finds one P1.
 export const LAYER = 5;
 export const LAYER_BRANCH = "retry-log";
 export const LAYER_URL = `https://github.com/${OWNER}/${REPO}/pull/${LAYER}`;
@@ -151,6 +151,15 @@ export async function fetchJson(url, { fetchImpl = fetch } = {}) {
     },
   },
 ];
+export const LAYER_FINDING = {
+  priority: "P1",
+  file: "src/log.js",
+  line: 3,
+  symbol: "logRetry",
+  reviewer: "second opinion",
+  title: "Logs the whole URL, query string included",
+  body: "A token passed as `?token=` lands in the logs on every retry.",
+};
 
 // Lands on main before the author rebases the PR onto it, in a file the PR does not touch.
 export const MAIN_COMMIT = {
