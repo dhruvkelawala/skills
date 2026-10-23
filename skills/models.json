@@ -1,9 +1,9 @@
 {
   "how": [
     "Each job below runs on a fixed model. A skill names the job, as in the `verifier` job, and never a model. A helper with no job runs on the thread's model.",
-    "Take the job's `use` entry. A job with no `use` entry has `onCodexThread` for a thread on a GPT model and `onClaudeThread` for any other thread. On a PR someone else wrote, `onTeammatePr` wins when the job has one.",
+    "Take the job's `use` entry. A job with no `use` entry has `onCodexThread` for a thread on a GPT model and `onClaudeThread` for any other thread. On a PR someone else wrote, `onTeammatePr` wins when the job has one. A job with `members` runs every member, each as its own entry, and `name` labels that member in titles and reports.",
     "An entry with `engine` runs through the autoreview script as `--engine <engine> --model <model>`, plus `--thinking <effort>`. Any other entry goes through `delegate_task`: `target.model` is `model`, `target.providerInstanceId` is a provider instance from `orchestrator_capabilities` whose `driverKind` is `driver` and that lists the model, and `effort` goes in `target.options` under that model's effort option.",
-    "`ifUnavailable` says what happens when the model can't run. `thread` runs the job on the thread's model, and the run record or the report says so. `wait` runs nothing in its place and tells the user."
+    "`ifUnavailable` says what happens when the model can't run. `thread` runs the job on the thread's model, and the run record or the report says so. `wait` runs nothing in its place and tells the user. `skip` runs the job without that member, and the report says so."
   ],
   "jobs": {
     "reviewers": {
@@ -23,6 +23,16 @@
       "onCodexThread": { "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "xhigh" },
       "onTeammatePr": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
       "ifUnavailable": "wait"
+    },
+    "council": {
+      "for": "the council's members, two models from each of two labs",
+      "members": [
+        { "name": "Opus", "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "xhigh" },
+        { "name": "Fable", "driver": "claudeAgent", "model": "claude-fable-5-1", "effort": "xhigh" },
+        { "name": "Sol", "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+        { "name": "Astra", "driver": "codex", "model": "gpt-6-astra", "effort": "xhigh" }
+      ],
+      "ifUnavailable": "skip"
     },
     "teammate-prep": {
       "for": "preparing the review of a teammate's PR",
