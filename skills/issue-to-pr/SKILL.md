@@ -1,6 +1,6 @@
 ---
 name: issue-to-pr
-description: Use when the user invokes /issue-to-pr with a GitHub issue, spec, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, or runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format, a watch through T3 and the user's own review of the PR in the same thread, standalone or as a stacked layer, and builds a spec's tickets as a stack of PRs or as one PR.
+description: Use when the user invokes /issue-to-pr with a GitHub issue, spec, Linear ticket or plan file, or with none after a thread discussed a change, asks to ship an issue, runs /issue-to-pr <n> resume after a review came in or a predecessor PR moved, or says "land", "more" or "go on" in a thread that owns a PR. Takes one work item, in its own T3 thread and worktree, through a test-first build, at most two review passes, captured evidence, a PR in the `pr` format, a watch through T3 and the user's own review of the PR in the same thread, standalone or as a stacked layer, and builds a spec's tickets as a stack of PRs or as one PR.
 ---
 
 # Issue to PR
