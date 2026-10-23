@@ -21,6 +21,7 @@ const GIT_ENV = {
 // in `github`: GraphQL's `gh pr view` while the PR has `graphql: true`, and otherwise the rate-limit
 // error GitHub gives once the account's quota is spent, which leaves REST's `gh api` to answer.
 // `build(n)` makes PR n's branch in a worktree of its own, the way T3 makes a build's, and pushes it.
+// The repository ignores `.env` and `node_modules/`, as most projects do.
 function project(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-after-merge-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -39,6 +40,7 @@ function project(t) {
   git(main, "init", "--quiet", "--initial-branch=main");
   git(main, "remote", "add", "origin", origin);
   commit(main, "README.md", "skills\n");
+  commit(main, ".gitignore", ".env\nnode_modules/\n");
   git(main, "push", "--quiet", "-u", "origin", "main");
   mkdirSync(join(dir, "bin"));
   writeFileSync(join(dir, "bin", "gh"), `#!/usr/bin/env node
@@ -89,6 +91,8 @@ test("once a PR merged, its worktree, its local branch and origin's branch are g
   const p = project(t);
   const built = p.build(7);
   p.pr(7, built, "MERGED");
+  mkdirSync(join(built.checkout, "node_modules", "left-pad"), { recursive: true });
+  writeFileSync(join(built.checkout, "node_modules", "left-pad", "index.js"), "// installed by the project's setup\n");
   const run = p.afterMerge(7, built.checkout);
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.equal(existsSync(built.checkout), false, "the build's worktree is removed");
@@ -132,4 +136,12 @@ test("nothing goes before the PR merges, and a merged PR keeps whatever could lo
   assert.match(keptAhead.stdout, /kept .*feat\/11-change.*never had/);
   assert.equal(existsSync(ahead.checkout), true);
   assert.ok(p.branches().includes(ahead.branch));
+
+  const withEnv = p.build(12);
+  p.pr(12, withEnv, "MERGED");
+  writeFileSync(join(withEnv.checkout, ".env"), "API_TOKEN=only-here\n");
+  const keptEnv = p.afterMerge(12, p.main);
+  assert.equal(keptEnv.status, 1, keptEnv.stdout + keptEnv.stderr);
+  assert.match(keptEnv.stdout, /kept .*feat-12-change.*\.env/);
+  assert.equal(existsSync(join(withEnv.checkout, ".env")), true, "an ignored file Git doesn't keep is still there");
 });
