@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FINGERPRINT_DIFF_FLAGS, actor, bypassBlockers, formatVerdict, humanApprovers, landableRun, latestVerdict, parseArgs, parseDoor, patchFingerprint, planQueue, verdictStatus, walkStack } from "./ship.mjs";
+import { FINGERPRINT_DIFF_FLAGS, actor, bypassBlockers, formatVerdict, humanApprovers, landableRun, latestVerdict, parseArgs, parseDoor, patchFingerprint, verdictStatus, walkStack } from "./ship.mjs";
 
 const TWO = "## Merge Danger\n\n**Door:** two-way\n\n**Blast Radius:** local";
 const ONE = "## Merge Danger\n\n**Door:** one-way\n\n**Blast Radius:** every user";
@@ -21,39 +21,6 @@ test("parseDoor reads the pr skill's Merge Danger line", () => {
   assert.equal(parseDoor(ONE), "one-way");
   assert.equal(parseDoor("no section"), "unknown");
   assert.equal(parseDoor(null), "unknown");
-});
-
-test("planQueue: approved and clean on the default branch is merge-now, ranked by what it unblocks", () => {
-  const prs = [
-    pr(1, "main", "a", { reviewDecision: "APPROVED", mergeStateStatus: "CLEAN" }),
-    pr(2, "a", "b"),
-    pr(3, "main", "c", { reviewDecision: "APPROVED", mergeStateStatus: "CLEAN" }),
-  ];
-  const q = planQueue(prs, { me: "dhruv", defaultBranch: "main" });
-  assert.deepEqual(q.mergeNow.map((r) => [r.number, r.unblocks]), [[1, 1], [3, 0]]);
-});
-
-test("planQueue: unstable or dirty approved PRs are not merge-now", () => {
-  const q = planQueue([pr(1, "main", "a", { reviewDecision: "APPROVED", mergeStateStatus: "UNSTABLE", author: { login: "dhruv" } })], { me: "dhruv", defaultBranch: "main" });
-  assert.equal(q.mergeNow.length, 0);
-  assert.equal(q.mine[0].number, 1);
-});
-
-test("planQueue: review is ranked by unblock count, then smallest first; children of unapproved parents wait", () => {
-  const prs = [
-    pr(1, "main", "a", { additions: 900 }),
-    pr(2, "a", "b"),
-    pr(3, "main", "c", { additions: 5 }),
-    pr(4, "main", "d", { additions: 50 }),
-  ];
-  const q = planQueue(prs, { me: "dhruv", defaultBranch: "main" });
-  assert.deepEqual(q.review.map((r) => r.number), [1, 3, 4]);
-  assert.deepEqual(q.waitingOnParent.map((r) => r.number), [2]);
-});
-
-test("planQueue: drafts are ignored and the caller's own PRs never land in review", () => {
-  const q = planQueue([pr(1, "main", "a", { isDraft: true }), pr(2, "main", "b", { author: { login: "dhruv" } })], { me: "dhruv", defaultBranch: "main" });
-  assert.deepEqual([q.review.length, q.mine.map((r) => r.number)], [0, [2]]);
 });
 
 const V = { verdict: "FAIL", by: "verifier", at: "2026-10-05T10:00:00Z", head: "a".repeat(40), base: "b".repeat(40), patchId: "p1" };
@@ -141,8 +108,6 @@ test("verdictStatus: a rebase that keeps the patch keeps the verdict", () => {
 test("fork PRs never form stack edges, so a fork's main into main cannot loop", () => {
   const fork = pr(1, "main", "main", { isCrossRepository: true });
   const prs = [fork, pr(2, "main", "a"), pr(3, "a", "b")];
-  const q = planQueue(prs, { me: "dhruv", defaultBranch: "main" });
-  assert.deepEqual(q.review.map((r) => [r.number, r.unblocks]), [[2, 1], [1, 0]]);
   assert.deepEqual(walkStack(prs, 1).stack.map((p) => p.number), [1]);
   assert.deepEqual(walkStack(prs, 2).stack.map((p) => p.number), [2, 3]);
 });

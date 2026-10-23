@@ -1,19 +1,19 @@
 ---
 name: ship
-description: Order the PR review queue, get an independent verdict on a risky PR, and land a PR or a stack bottom up, one PR at a time, pinned to the checked head. Use when the user invokes /ship, says "land" or `verify` on a PR, asks what to review or merge next, or wants a PR or stack landed.
+description: Get an independent verdict on a risky PR, and land a PR or a stack bottom up, one PR at a time, pinned to the checked head. Use when the user invokes /ship, says "land" or `verify` on a PR, or wants a PR or stack landed.
 ---
 
 # Ship
 
-This skill picks up where `apr` and `pr-watch` stop: once a PR is green, it decides what to review first, who verifies it, and what can land. It is the part behind the words "land" and `verify`.
+This skill picks up where `apr` and `pr-watch` stop: once a PR is green, it decides who verifies it and what can land. It is the part behind the words "land" and `verify`. The review queue belongs to `pr-review`.
 
-Invoke as `/ship [queue | verify <pr> | land <bottom-pr> [--force]] [--trusted login,login] [--repo owner/name]`. With no subcommand, run `queue`.
+Invoke as `/ship verify <pr>` or `/ship land <bottom-pr> [--force]`, adding `--trusted login,login` and `--repo owner/name` when needed.
 
 Choose `--trusted` and `--repo` once at the start, as `$FLAGS`, and pass the same `$FLAGS` to every `run` and `verdict check` in this invocation. A later check with fewer flags trusts more people than the first one did.
 
 `$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans, and makes two writes: the verdict comment that `verdict record` posts, and the pinned merge that `merge` makes. Every rebase and retarget is yours to do, and you merge one PR at a time. It refuses a flag it does not know, a flag with no value and a stray argument, and it refuses an archived repository before reading any PR, so a dropped project's PRs never show up.
 
-Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved. REST also shows a classic protection rule's details only to admins, so a protected default branch counts as asking for a review. A PR that needs a human approval waits, and the queue's merge-now list is empty. A PR on an unprotected default branch still lands on the request to land, and `merge --force` refuses until the quota resets.
+Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved. REST also shows a classic protection rule's details only to admins, so a protected default branch counts as asking for a review. A PR that needs a human approval waits. A PR on an unprotected default branch still lands on the request to land, and `merge --force` refuses until the quota resets.
 
 ## Rules
 
@@ -30,16 +30,6 @@ Each GitHub call in the script tries GraphQL first. When the GraphQL quota that 
 - **One-way doors.** The door is read from the PR body's `**Door:**` line, which the `pr` skill writes, and a PR with no door line counts as one-way. Confirm a one-way door with the user in chat before each merge, even when an approval exists.
 - **Land from the bottom.** Only the contiguous landable run starting at the lowest unmerged PR can land. A landable PR above a blocked one waits.
 - **Never** force-push a shared branch, merge with failing required checks, or approve on GitHub on anyone's behalf.
-
-## queue
-
-1. Run `node "$SHIP" queue`. It returns four groups:
-   - **merge now:** approved, mergeable PRs on the default branch, ranked by how many stacked PRs each one unblocks;
-   - **review:** PRs waiting on the caller, ranked by unblock count and then by size, smallest first;
-   - **waiting on parent:** PRs whose parent isn't approved yet;
-   - **yours:** the caller's own unmerged PRs.
-2. Report the merge-now list first. Then report a review session no longer than 30 minutes, taken from the top of the review list. For each review PR, give its door and blast radius as read from its body. Flag a review PR that has no door line, because its author should add one with the `pr` skill.
-3. Suggest whose review would free the most of the caller's own PRs: the bottom of the deepest "yours" chain that is waiting for review.
 
 ## verify
 
@@ -76,7 +66,6 @@ Landing requires an explicit request to land.
 
 ## Report
 
-- **queue:** merge-now list, the review session with door and blast radius per PR, missing door lines, and the review to ask for.
 - **verify:** the verdict, the lanes with evidence, findings, and the recorded comment URL.
 - **land:** which PRs rule B covered and why, what merged with its merge SHA, any approval `--force` skipped, the ceiling and its blocker, and anything that went stale.
 
@@ -84,4 +73,4 @@ Landing requires an explicit request to land.
 
 Upstream license and copyright notice: [LICENSE](LICENSE).
 
-Adapted from pstack by Lauren Tan (MIT), cursor/plugins@4e5b1cf: the shipping, babysit, and blast-radius playbooks, reworked into a queue, a patch-pinned verdict, and a bottom-up landing gate for GitHub stacks.
+Adapted from pstack by Lauren Tan (MIT), cursor/plugins@4e5b1cf: the shipping, babysit, and blast-radius playbooks, reworked into a patch-pinned verdict and a bottom-up landing gate for GitHub stacks.

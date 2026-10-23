@@ -4,7 +4,9 @@
 // From the repo root: node --test skills/pr-review/evals/pr-review.eval.mjs
 // Needs git, jq, the claude CLI signed in through environment variables (each chain gets its own config dir and
 // HOME), and the outside code-review skill that scripts/sync-skills.mjs installs. Each turn is a live agent run,
-// so results can vary between runs. A third chain, with T3's review guides off, runs only the first visit.
+// so results can vary between runs. A third chain, with T3's review guides off, runs only the first visit. Two more
+// chains have PR #7 and a smaller layer #5 stacked on it both waiting on the user: in one the user runs
+// /pr-review queue and then says "next", and in the other a bare /pr-review.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -12,11 +14,13 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, findingsAt } from "./fixture.mjs";
+import { BASE_FILES, FIX_COMMIT, HEAD_BRANCH, LAYER, LAYER_BRANCH, LAYER_COMMITS, LAYER_FINDING, LAYER_URL, MAIN_COMMIT, PR, PR_COMMITS, PR_URL, findingsAt } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
-const reviewersModel = JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.reviewers.use.model;
+const { jobs } = JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8"));
+const reviewersModel = jobs.reviewers.use.model;
+const prepModel = jobs["teammate-prep"].use.model;
 const codeReview = join(homedir(), ".agents", "skills", "code-review");
 const TOOLS = "Bash,Read,Write,Edit,Glob,Grep,Skill,ToolSearch,mcp__t3-code";
 
@@ -56,15 +60,26 @@ function scratch(kind) {
     git(c.author, "commit", "-qm", commit.message);
   }
   pushPr(c);
+  const twoPrs = kind === "queue" || kind === "bare";
+  if (twoPrs) {
+    git(c.author, "checkout", "-qb", LAYER_BRANCH);
+    for (const commit of LAYER_COMMITS) {
+      writeFiles(c.author, commit.files);
+      git(c.author, "add", ".");
+      git(c.author, "commit", "-qm", commit.message);
+    }
+    git(c.author, "push", "-q", "origin", `HEAD:refs/heads/${LAYER_BRANCH}`, `HEAD:refs/pull/${LAYER}/head`);
+    git(c.author, "checkout", "-q", HEAD_BRANCH);
+  }
   git(root, "clone", "-q", c.origin, c.work);
-  writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase: "first" }));
+  writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase: "first", prs: twoPrs ? [PR, LAYER] : [PR] }));
 
   cpSync(skillsDir, join(c.config, "skills"), { recursive: true, filter: (src) => basename(src) !== "evals" });
   symlinkSync(realpathSync(codeReview), join(c.config, "skills", "code-review"));
   executable(join(c.bin, "gh"), "fake-gh.mjs");
   executable(join(c.home, ".agents", "skills", "autoreview", "scripts", "autoreview"), "fake-autoreview.mjs");
   c.mcp = join(root, "mcp.json");
-  writeFileSync(c.mcp, JSON.stringify({ mcpServers: { "t3-code": { command: process.execPath, args: [join(evalsDir, "fake-t3.mjs")], env: { FAKE_DIR: c.fake, FAKE_MODELS: join(c.config, "skills", "models.json"), FAKE_GUIDES: kind === "off" ? "off" : "on" } } } }));
+  writeFileSync(c.mcp, JSON.stringify({ mcpServers: { "t3-code": { command: process.execPath, args: [join(evalsDir, "fake-t3.mjs")], env: { FAKE_DIR: c.fake, FAKE_HOME: c.home, FAKE_MODELS: join(c.config, "skills", "models.json"), FAKE_GUIDES: kind === "off" ? "off" : "on" } } } }));
   c.env = { ...process.env, HOME: c.home, CLAUDE_CONFIG_DIR: c.config, PATH: `${c.bin}:${process.env.PATH}`, FAKE_DIR: c.fake, GH_TOKEN: "eval-invalid", GITHUB_TOKEN: "eval-invalid", GH_PROMPT_DISABLED: "1" };
   // Drop the markers of an enclosing Claude Code session, and the other agents' homes, so each run stands alone.
   for (const key of Object.keys(c.env)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_") || ["AGENTS_HOME", "CODEX_HOME", "PI_CODING_AGENT_DIR"].includes(key)) delete c.env[key];
@@ -76,7 +91,8 @@ function pushPr(c, force = false) {
 }
 
 function setPhase(c, phase) {
-  writeFileSync(join(c.fake, "state.json"), JSON.stringify({ origin: c.origin, phase }));
+  const file = join(c.fake, "state.json");
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), phase }));
 }
 
 // The author's next move after the first review: a push that fixes the findings, or a rebase that keeps the patch.
@@ -143,6 +159,13 @@ async function turn(c, name, prompt, session) {
 
 const chains = {};
 function chain(kind) {
+  const opener = { queue: ["sitting", "/pr-review queue"], bare: ["first-visit", "/pr-review"] }[kind];
+  if (!chains[kind] && opener) {
+    const c = scratch(kind);
+    const first = turn(c, ...opener);
+    let next;
+    chains[kind] = { first, next: () => (next ??= first.then((visit) => turn(c, "next", "next", visit.sessionId))) };
+  }
   if (!chains[kind]) {
     const c = scratch(kind);
     const first = turn(c, "first-visit", `/pr-review ${PR}`);
@@ -190,6 +213,16 @@ function assertGuideReady(v) {
   assert.ok(v.introAt, `${v.name}: no intro opening with ${PR_URL}`);
   assert.ok(writes[0].at < v.introAt && written[0].at < v.introAt, `${v.name}: the intro came before the guide was started and read back written`);
 }
+// A PR's review in chat: the message that holds its link and the wrap-up's suggested verdict.
+const reviewOf = (v, url) => v.texts.find((x) => x.text.includes(url) && /\bverdict\b/i.test(x.text));
+const mentionAt = (text, n) => text.search(new RegExp(`(?:#|/pull/)${n}\\b`));
+// The queue as shown: a table or list with one row per PR. A row belongs to the PR it names first, since #5's row
+// may say it sits on #7.
+const queueRows = (text) =>
+  text.split("\n").filter((l) => /^\s*(?:\||\d+[.)]\s|[-*]\s)/.test(l)).map((row) => {
+    const [a, b] = [mentionAt(row, PR), mentionAt(row, LAYER)];
+    return a < 0 && b < 0 ? null : b < 0 || (a >= 0 && a < b) ? PR : LAYER;
+  }).filter(Boolean);
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
@@ -266,6 +299,47 @@ describe("pr-review", { concurrency: true }, () => {
       assert.notEqual(v.head, first.head, `${v.name}: the head did not move`);
       assertGuideReady(v);
     }
+  });
+
+  test("with no argument, reviews the current branch's PR alone, with no queue", async (t) => {
+    const v = await chain("bare").first;
+    describeVisit(t, v);
+    assert.ok(reviewOf(v, PR_URL), `${v.name}: no review of #${PR}`);
+    assert.ok(!v.texts.some((x) => queueRows(x.text).includes(PR) && queueRows(x.text).includes(LAYER)), `${v.name}: a queue table with #${PR} and #${LAYER}`);
+    assert.ok(!reviewOf(v, LAYER_URL), `${v.name}: a review of #${LAYER}`);
+    assert.deepEqual(v.t3.filter((e) => e.axis === "prep"), [], `${v.name}: a background prep`);
+  });
+
+  test("queue shows the queue with the stack bottom first and starts on it", async (t) => {
+    const v = await chain("queue").first;
+    describeVisit(t, v);
+    const review = reviewOf(v, PR_URL);
+    assert.ok(review, `${v.name}: no review of #${PR}`);
+    const listed = v.texts.find((x) => queueRows(x.text).includes(PR) && queueRows(x.text).includes(LAYER));
+    assert.ok(listed && listed.at <= review.at, `${v.name}: no queue table with a row for #${PR} and for #${LAYER} before the first review`);
+    const rows = queueRows(listed.text);
+    assert.ok(rows.indexOf(PR) < rows.indexOf(LAYER), `${v.name}: the queue puts #${LAYER} before #${PR}, the stack bottom it sits on`);
+    const reports = reportsOf(v, reviewerTasks(v));
+    assert.deepEqual(axes(reports), ["spec", "standards"], `${v.name}: /code-review's two reviewers did not report on #${PR}`);
+    assert.ok(secondOpinionsAt(v).length, `${v.name}: no second opinion on ${v.base}...${v.head}`);
+    assert.ok(Math.max(...reports.map((e) => e.at)) < review.at, `${v.name}: the review of #${PR} came before its reviewers reported`);
+    for (const { file, priority } of findingsAt("first").filter((f) => /^P[01]$/.test(f.priority))) {
+      assert.ok(review.text.split("\n").some((line) => namesFile(line, file) && line.includes(priority)), `${v.name}: no line names ${file} with its ${priority}`);
+    }
+  });
+
+  test("while the user reads the first PR, the next one's prep runs in the background, so next needs no reviewer", async (t) => {
+    const first = await chain("queue").first;
+    const preps = first.t3.filter((e) => e.tool === "delegate_task" && e.axis === "prep" && e.number === LAYER && e.target?.model === prepModel);
+    assert.ok(preps.length, `${first.name}: no background prep of #${LAYER} on the teammate-prep job while #${PR} was read`);
+    const v = await chain("queue").next();
+    describeVisit(t, v);
+    const review = reviewOf(v, LAYER_URL);
+    assert.ok(review, `${v.name}: no review of #${LAYER} after "next"`);
+    assert.deepEqual(v.t3.filter((e) => e.tool === "delegate_task"), [], `${v.name}: "next" started a reviewer or a prep`);
+    assert.deepEqual(v.secondOpinion, [], `${v.name}: "next" ran the second opinion`);
+    const { file, priority } = LAYER_FINDING;
+    assert.ok(review.text.split("\n").some((line) => namesFile(line, file) && line.includes(priority)), `${v.name}: no line names ${file} with its ${priority} from the prep`);
   });
 
   test("a return visit after a pure rebase runs no reviewer", async (t) => {

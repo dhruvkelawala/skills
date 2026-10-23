@@ -99,6 +99,68 @@ test("retries: 0 makes one call", async () => {
   },
 };
 
+// The queue chain's second PR: a layer stacked on PR #7, smaller and with a lower number, so only the queue's
+// stack-bottom rule puts #7 first. Its background prep is faked, and finds one P1.
+export const LAYER = 5;
+export const LAYER_BRANCH = "retry-log";
+export const LAYER_URL = `https://github.com/${OWNER}/${REPO}/pull/${LAYER}`;
+export const LAYER_TITLE = "Log each retry";
+export const LAYER_BODY = `Stacked on #${PR}.
+
+Each retry of a GET now writes one warning line, so a flaky dependency shows up in the logs.
+
+**Door:** two-way. Reverting the PR removes the log line.
+`;
+export const LAYER_COMMITS = [
+  {
+    message: "feat: log each retry",
+    files: {
+      "src/log.js": `// One warning line per retry, so a flaky dependency shows up in the logs.
+export function logRetry(url) {
+  return (err, attempt) => console.warn(\`retry \${attempt + 1} of GET \${url}: \${err.message}\`);
+}
+`,
+      "src/retry.js": `const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Calls fn until it succeeds, waiting delayMs before the first retry and twice as long before each next one.
+export async function withRetry(fn, { retries, delayMs, onRetry }) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt + 1 === retries) throw err;
+      onRetry?.(err, attempt);
+      await sleep(delayMs * 2 ** attempt);
+    }
+  }
+}
+`,
+      "src/client.js": `// Thin HTTP client for the demo service.
+import { retryCfg } from "./config.js";
+import { logRetry } from "./log.js";
+import { withRetry } from "./retry.js";
+
+export async function fetchJson(url, { fetchImpl = fetch } = {}) {
+  return withRetry(async () => {
+    const res = await fetchImpl(url);
+    if (!res.ok) throw new Error(\`GET \${url}: \${res.status}\`);
+    return res.json();
+  }, { retries: retryCfg.ms, delayMs: retryCfg.n, onRetry: logRetry(url) });
+}
+`,
+    },
+  },
+];
+export const LAYER_FINDING = {
+  priority: "P1",
+  file: "src/log.js",
+  line: 3,
+  symbol: "logRetry",
+  reviewer: "second opinion",
+  title: "Logs the whole URL, query string included",
+  body: "A token passed as `?token=` lands in the logs on every retry.",
+};
+
 // Lands on main before the author rebases the PR onto it, in a file the PR does not touch.
 export const MAIN_COMMIT = {
   message: "docs: name the service URL",
