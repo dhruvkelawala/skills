@@ -6,9 +6,9 @@ Run it from a thread on the machine where T3 runs new threads, since the T3 tool
 
 ## 1. Start the first review's prep
 
-The report posts with the review queue's first PR already prepped, so the sitting can start on it at once. Its reviewers and its guide take minutes, so start them before anything else.
+The report posts with the review queue's first PR already prepped, so its review can start at once. Its reviewers and its guide take minutes, so start them before anything else.
 
-1. Run `node <skills-dir>/pr-review/scripts/queue.mjs`. It prints pr-review's queue as JSON, in the order a sitting walks it. When the queue is empty, go to step 2.
+1. Run `node <skills-dir>/pr-review/scripts/queue.mjs` without `--repo`, so it covers every repository. It prints pr-review's queue as JSON, in the order to review it. When the queue is empty, go to step 2.
 2. Take the first entry. Its prep record is `$HOME/.agent/pr-review/<repository name>/<number>.md`. When that record names the entry's `head`, the PR is already prepped.
 3. Otherwise start its prep exactly as pr-review's background prep starts the next PR's ([pr-review step 3](../pr-review/SKILL.md#3-walk-one-pr-at-a-time), "The next PR's prep runs while the user reads"): one async `delegate_task` child on the `teammate-prep` job in `<skills-dir>/models.json`, since the queue holds none of the user's own PRs. Keep its `taskId`.
 
@@ -58,13 +58,13 @@ Stopped last night
 
 Strain: 38 GB free on disk, biggest ~/Library (300 GB, of which ~/Library/Developer 120 GB).
 
-Reply with the builds to start, such as "start 1 and 3". `/pr-review` starts the sitting at line 5, and "go on 9" restarts a stopped run.
+Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, and "go on 9" restarts a stopped run.
 ````
 
 - The sections come in this order, under these names. Leave out a section with nothing in it, and its count in the first line.
 - Number every line in one sequence, so a reply can name any line.
 - **Builds to start** and **Going stale** list their first 10 in the script's order, then count the rest in one line.
-- **Review queue** lists every PR in the queue's order. The first one's line gives its prep: the findings by priority and where its tour is, or why it has no guide. If that PR changes before the sitting, pr-review preps it again, because its prep record no longer names the PR's head.
+- **Review queue** lists every PR in the queue's order. The first one's line gives its prep: the findings by priority and where its tour is, or why it has no guide. If that PR changes before its review, pr-review preps it again, because its prep record no longer names the PR's head. The last line offers `/pr-review <its URL>`, which reviews it from its prep in this thread. A bare `/pr-review` reviews this thread's own branch, and `/pr-review queue` walks only this project's queue, so the report offers neither.
 - Link each issue and PR by its GitHub URL, which for a PR opens T3's PR panel beside the thread, and each thread as `[title](t3-thread://v1/<threadId>)` with the `threadId` exactly as T3 returns it. Never link a local file or localhost.
 - The last line names only the replies that apply to this report.
 
