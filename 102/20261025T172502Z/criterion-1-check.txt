@@ -1,0 +1,39 @@
+# Criterion 1: the body check refuses each rule's break, naming the line, and passes a T3 Code body (at 7dc20a6)
+
+$ node skills/issue-to-pr/scripts/pr-body.mjs < skills/issue-to-pr/scripts/fixtures/t3code-24832.txt
+the body passes: 219 words in a body with no <details>
+(exit 0)
+
+$ gh pr view 24835 -R pingdotgg/t3code --json body --jq .body | node skills/issue-to-pr/scripts/pr-body.mjs
+the body passes: 199 words in a body with no <details>
+(exit 0)
+
+$ gh pr view 24749 -R pingdotgg/t3code --json body --jq .body | node skills/issue-to-pr/scripts/pr-body.mjs
+the body passes: 180 words in a body with no <details>
+(exit 0)
+
+# pingdotgg/t3code#24832 with 182 words added to its last line, a SHA in a sentence, and file-name alt texts
+
+$ node skills/issue-to-pr/scripts/pr-body.mjs < too-long.md
+body refused:
+- line 21: the top tier reaches 401 words here; it has 401 words in a body with no <details>, not counting images and URLs. Keep it to 400 by moving the rest into <details>
+(exit 1)
+
+$ node skills/issue-to-pr/scripts/pr-body.mjs < sha.md
+body refused:
+- line 5: `1fa6265` is a commit SHA above the first <details>; name commits in Verification, inside <details>
+(exit 1)
+
+$ node skills/issue-to-pr/scripts/pr-body.mjs < alt-text.md
+body refused:
+- line 9: the image's alt text "queue-steer-before-crop-6c52bffe.png" is its file name; say what the reader sees in it
+- line 9: the image's alt text "Screenshot 2026-10-25 at 10.00.00.png" is its file name; say what the reader sees in it
+- line 13: the image's alt text "queue-steer-near-miss.png @ 1fa6265" is a file name and a commit; say what the reader sees in it
+(exit 1)
+
+$ node --test skills/issue-to-pr/scripts/pr-body.test.mjs 2>&1 | grep -E '^(ok|not ok|ℹ (tests|pass|fail))'
+ℹ tests 12
+ℹ pass 12
+ℹ fail 0
+(exit 0)
+

@@ -1,0 +1,17 @@
+# Criterion 3: the pr skill's worked example passes with under 250 words above <details> (at 7dc20a6)
+
+$ sed -n '/^## Worked example/,$p' skills/pr/SKILL.md | sed -n '/^````markdown$/,/^````$/p' | sed '1d;$d' | node skills/issue-to-pr/scripts/pr-body.mjs
+the body passes: 127 words above the first <details>
+(exit 0)
+
+$ node --test --test-name-pattern='worked example' skills/issue-to-pr/scripts/pr-body.test.mjs 2>&1 | grep -E '^(ok|not ok|ℹ (tests|pass|fail))'
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+(exit 0)
+
+# On the base, before the template changed:
+
+$ git show 2e34c11:skills/pr/SKILL.md | grep -c '^## Worked example'
+0
+

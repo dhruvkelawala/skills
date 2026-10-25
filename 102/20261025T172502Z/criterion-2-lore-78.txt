@@ -1,0 +1,16 @@
+# Criterion 2: Lore #78's body, rewritten to the new template, passes the check (at 7dc20a6)
+
+Lore is private, so its original body is not quoted here. Run on it, the check printed 29 problems:
+the 401st word at line 27 of 1146 above <details>, 9 backticked commit SHAs above <details>,
+and 19 images whose alt text was '<file> @ <sha>'.
+
+$ node skills/issue-to-pr/scripts/pr-body.mjs < skills/issue-to-pr/scripts/fixtures/lore-78.md
+the body passes: 193 words above the first <details>
+(exit 0)
+
+$ node --test --test-name-pattern='Lore #78' skills/issue-to-pr/scripts/pr-body.test.mjs 2>&1 | grep -E '^(ok|not ok|ℹ (tests|pass|fail))'
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+(exit 0)
+

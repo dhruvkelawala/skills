@@ -1,0 +1,26 @@
+# Criterion 4: every step where issue-to-pr publishes or refreshes a PR body runs the check first
+
+A scan of skills/issue-to-pr/SKILL.md and references/*.md: each line that hands a body to /apr --body-file,
+runs gh pr create or gh pr edit --body-file, and whether that step or an earlier one in its section runs pr-body.mjs.
+
+$ node check-body-steps.mjs 2e34c11   # the base, main
+UNCHECKED SKILL.md:179  3. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-fi
+UNCHECKED SKILL.md:191  1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record pa
+UNCHECKED SKILL.md:236  2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --
+UNCHECKED references/pr-body.md:82  - The head in Verification equals the PR head. After every push, refresh the body for the 
+UNCHECKED references/resume.md:23  5. Record the new `base_ref`, `base_sha`, `head` and `tree`. Run the base and file-count c
+UNCHECKED references/resume.md:37  7. Refresh the PR body for the new head with `gh pr edit --body-file` (REST: as in the pre
+checked   references/stacks.md:21  Pass `stack <predecessor PR URL>` to `/apr`. It opens the PR with `gh pr create --base <pr
+6 body publish or refresh step(s) with no body check before them
+
+$ node check-body-steps.mjs 7dc20a6   # this PR
+checked   SKILL.md:179  3. Load and follow `/apr --no-watch --base <base_sha> --run-record <record path> --body-fi
+checked   SKILL.md:191  1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record pa
+checked   SKILL.md:236  2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --
+checked   references/pr-body.md:83  Before `gh pr create` and before every `gh pr edit --body-file`, check the body file:
+checked   references/pr-body.md:97  - The head in Verification equals the PR head. After every push, refresh the body for the 
+checked   references/resume.md:23  5. Record the new `base_ref`, `base_sha`, `head` and `tree`. Run the base and file-count c
+checked   references/resume.md:37  7. Refresh the PR body for the new head, listing the repairs as not re-reviewed, [check it
+checked   references/stacks.md:21  Pass `stack <predecessor PR URL>` to `/apr`. It opens the PR with `gh pr create --base <pr
+0 body publish or refresh step(s) with no body check before them
+
