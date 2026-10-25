@@ -61,4 +61,6 @@ Report one outcome, with per-feature coverage, the entry points driven, capture 
 - `changed` with the proven corrections as one local diff, or as one PR through `/apr` when the user asked to ship.
 - `blocked` with the feature, the route tried and what is missing.
 
+Changes to this skill are measured with [its eval](evals/README.md).
+
 Adapted from pstack's create-verification-skill and maintain-verification-skill by Lauren Tan (MIT), cursor/plugins@e5a8186.
