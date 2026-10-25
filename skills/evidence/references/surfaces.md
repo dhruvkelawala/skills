@@ -26,11 +26,7 @@ npx playwright screenshot --viewport-size=1280,800 http://localhost:3000/<route>
 
 In T3 Code, open the route with `preview_open`, take a still with `preview_snapshot` and `save: true`, and record a flow between `preview_recording_start` and `preview_recording_stop`. Both return a file path; copy that file into `.evidence/` under the slug name. In Claude Code with the Chrome extension, take a `claude-in-chrome` screenshot. Otherwise use Playwright.
 
-For before and after, capture the same route with the same viewport at `base_sha`, in a second worktree, and at HEAD. Then place them side by side:
-
-```bash
-ffmpeg -i .evidence/<slug>-before.png -i .evidence/<slug>-after.png -filter_complex hstack .evidence/<slug>-compare.png
-```
+For before and after, capture the same route with the same viewport at `base_sha`, in a second worktree, and at HEAD. Then mark the pair, as [marking a pair](#marking-a-before-and-after-pair) shows.
 
 ## Mobile (Expo, React Native or native iOS)
 
@@ -121,6 +117,38 @@ Add one real, trimmed transcript of the changed behaviour, with the prompt or tr
 ## Observability change
 
 For a change to tracing, metrics or dashboards, the evidence is the signal arriving. Take a screenshot of the trace or panel in the local Grafana or its equivalent, with the identifying field, such as a run ID or trace ID, visible and matching the transcript of the action that triggered it.
+
+## Marking a before and after pair
+
+`scripts/mark.mjs` turns two PNG captures of the same screen into one image. Both are cropped to the same region and shown side by side or stacked under their labels, with a numbered circle and arrow on each difference and a legend under them, one line per number. It renders headless in `agent-browser` and needs no npm package.
+
+Write a spec beside the captures. Each point is in its own capture's pixels, as an image viewer reports them. `null` leaves a pane unmarked, such as the before pane of an element that is new.
+
+```json
+{
+  "layout": "side",
+  "crop": [0, 120, 600, 400],
+  "panes": [
+    { "file": "<slug>-before.png", "label": "Before" },
+    { "file": "<slug>-after.png", "label": "After" }
+  ],
+  "marks": [
+    { "n": 1, "text": "The title uses the 60 px token", "at": [[455, 190], [505, 322]] },
+    { "n": 2, "text": "Receipts get a Share action", "at": [null, [140, 470]] }
+  ]
+}
+```
+
+```bash
+node <skill-dir>/scripts/mark.mjs .evidence/<slug>-mark.json .evidence/<slug>-marked.png
+```
+
+- `layout` is `side` for tall captures, such as phone screens, and `stack` for wide ones, such as desktop pages, so neither shrinks far.
+- `crop` is `[x, y, width, height]`, cut from every pane alike. Crop to the region that holds all the differences, or leave it out to show the whole capture.
+- Each legend line says what the reader sees changed, in a few words.
+- The image is at most 1200 px wide. A point outside its pane after the crop, or a mark without one point or `null` per pane, is refused, naming the mark, and nothing is written.
+
+Publish the marked image and the full captures together. The `pr` skill says where each goes in the PR body.
 
 ## Publishing
 
