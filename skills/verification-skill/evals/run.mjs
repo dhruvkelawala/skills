@@ -43,21 +43,30 @@ async function runCase(kase) {
   try {
     console.log(`${kase.name}: create is running`);
     const create = await agent(run, "create", "/verification-skill create");
-    const createLeft = await sweep(run, create);
+    const createLeft = await sweep(run);
     changed = keepChanges(run);
     console.log(`${kase.name}: grading ${changed.length} changed files`);
     const grade = await agent(run, "grade", gradePrompt(kase, changed), GRADE_SCHEMA);
-    const gradeLeft = await sweep(run, grade);
+    const gradeLeft = await sweep(run);
     writeFileSync(join(run.dir, "grade.json"), `${JSON.stringify(grade.output, null, 2)}\n`);
     const result = scored(kase, grade.output);
     appendResult(kase, result, { create, grade, createLeft, gradeLeft });
     console.log(`${kase.name}: ${result.score} at skill ${skillCommit()}. Results in ${resultsFile}`);
   } finally {
-    await sweep(run);
+    await cleanUp(run, changed);
+  }
+}
+
+// Every step runs even when an earlier one fails, so a process that won't stop can't keep the checkout on disk. A
+// failure here is printed rather than thrown, so it can't hide the error that ended the run.
+async function cleanUp(run, changed) {
+  const steps = { "stop its processes": () => sweep(run), "keep what create wrote": () => changed ?? keepChanges(run), "delete the temp folder": () => removeWork(run) };
+  for (const [step, action] of Object.entries(steps)) {
     try {
-      if (!changed) keepChanges(run);
-    } finally {
-      removeWork(run);
+      await action();
+    } catch (error) {
+      console.error(`${run.id}: could not ${step}: ${error.message}`);
+      process.exitCode = 1;
     }
   }
 }
@@ -148,7 +157,7 @@ function prepare(kase) {
     for (const key of Object.keys(vars)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_")) delete vars[key];
     return vars;
   };
-  return { id, dir, work, checkout, env, simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
+  return { id, dir, work, checkout, env, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
 }
 
 // The skill without its evals, which hold the answers, plus each file outside it that it links to, at the same
@@ -227,7 +236,8 @@ function agent(run, phase, prompt, schema) {
       running = null;
       closeSync(out);
       closeSync(err);
-      const events = readFileSync(transcript, "utf8").split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
+      const events = readEvents(transcript);
+      run.trail.push(simulatorTrail(events));
       const result = events.findLast((e) => e.type === "result");
       if (!result || result.is_error) {
         const why = interrupted ? `, stopped by ${interrupted}` : timedOut ? `, stopped after ${MINUTES[phase]} min` : "";
@@ -237,11 +247,23 @@ function agent(run, phase, prompt, schema) {
       resolvePhase({
         model: events.find((e) => e.type === "system" && e.subtype === "init")?.model ?? "an unknown model",
         minutes: Math.round((Date.now() - started) / 60_000),
-        said: simulatorTrail(events),
         output: result.structured_output,
       });
     });
   });
+}
+
+// A hard kill can cut the last line short, so a line that doesn't parse is skipped.
+function readEvents(transcript) {
+  return readFileSync(transcript, "utf8")
+    .split("\n")
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
 }
 
 // The agent's shell commands, plus what each `simctl create` printed, which is the new simulator's UDID.
@@ -297,9 +319,9 @@ const GRADE_SCHEMA = {
 // --- what the run left behind
 
 // Stops each process this run started: one that carries the run's marker, works inside the temp folder or names it on
-// its command line, and every child of those. Then shuts down each simulator the phase booted. The run folder doesn't
+// its command line, and every child of those. Then shuts down each simulator the run booted. The run folder doesn't
 // count, so a `tail -f` on one of its transcripts survives.
-async function sweep(run, phase) {
+async function sweep(run) {
   const ancestors = new Set();
   const procs = processes();
   for (let pid = process.pid; pid > 1 && !ancestors.has(pid); pid = procs.get(pid)?.ppid ?? 1) ancestors.add(pid);
@@ -318,7 +340,7 @@ async function sweep(run, phase) {
   for (const pid of ancestors) ours.delete(pid);
   await stop([...ours]);
   const left = [...ours].map((pid) => basename(procs.get(pid).command.split(" ")[0]));
-  return phase ? [...left, ...stopSimulators(run, phase.said)] : left;
+  return [...left, ...stopSimulators(run)];
 }
 
 function processes() {
@@ -352,7 +374,16 @@ async function stop(pids) {
       return error.code === "EPERM";
     }
   };
-  const signal = (sig) => pids.filter(alive).forEach((pid) => process.kill(pid, sig));
+  const signal = (sig) => {
+    for (const pid of pids.filter(alive)) {
+      try {
+        process.kill(pid, sig);
+      } catch (error) {
+        // A parent that passes the signal on can stop its child before the child's turn comes.
+        if (error.code !== "ESRCH") throw error;
+      }
+    }
+  };
   const gone = async (seconds) => {
     for (let i = 0; i < seconds * 10 && pids.some(alive); i++) await new Promise((r) => setTimeout(r, 100));
   };
@@ -365,13 +396,13 @@ async function stop(pids) {
 }
 
 function simulators() {
-  if (process.platform !== "darwin") return [];
   const list = spawnSync("xcrun", ["simctl", "list", "devices", "--json"], { encoding: "utf8", maxBuffer: 64 << 20 });
   return list.status === 0 ? Object.values(JSON.parse(list.stdout).devices).flat() : [];
 }
 
 // A simulator counts as the run's only when one of its commands named it, because other agents may boot their own.
-function stopSimulators(run, said) {
+function stopSimulators(run) {
+  const said = run.trail.join("\n");
   const booted = simulators().filter((d) => d.state === "Booted" && run.simulators.get(d.udid) !== "Booted" && said.includes(d.udid));
   for (const d of booted) spawnSync("xcrun", ["simctl", "shutdown", d.udid]);
   return booted.map((d) => `simulator ${d.name}`);

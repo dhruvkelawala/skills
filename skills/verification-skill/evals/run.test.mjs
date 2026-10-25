@@ -35,8 +35,9 @@ function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base =
   );
 }
 
-// One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill.
-function runDemo() {
+// One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
+// create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
+function runDemo(create = "succeeds") {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -59,11 +60,23 @@ function runDemo() {
   const bin = join(root, "bin");
   mkdirSync(home);
   mkdirSync(bin);
-  writeFileSync(join(bin, "claude"), `#!/bin/sh\nexec "${process.execPath}" "${join(evalsDir, "fake-claude.mjs")}" "$@"\n`);
-  chmodSync(join(bin, "claude"), 0o755);
+  for (const [name, script] of [["claude", "fake-claude.mjs"], ["xcrun", "fake-xcrun.mjs"]]) {
+    writeFileSync(join(bin, name), `#!/bin/sh\nexec "${process.execPath}" "${join(evalsDir, script)}" "$@"\n`);
+    chmodSync(join(bin, name), 0o755);
+  }
+  const simulators = join(root, "simulators.json");
+  writeFileSync(simulators, JSON.stringify({ "DEMO-UDID": "Shutdown" }));
   const log = join(root, "claude.log");
   const refs = git(repo, "for-each-ref");
-  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, FAKE_CLAUDE_LOG: log, FAKE_VERDICTS: "covered,partly,missing" };
+  const env = {
+    ...process.env,
+    HOME: home,
+    PATH: `${bin}:${process.env.PATH}`,
+    FAKE_CLAUDE_LOG: log,
+    FAKE_CREATE: create,
+    FAKE_VERDICTS: "covered,partly,missing",
+    FAKE_XCRUN_STATE: simulators,
+  };
   const { status, stdout, stderr } = runner(evals, ["demo"], env);
   const results = existsSync(join(evals, "results.md")) ? readFileSync(join(evals, "results.md"), "utf8") : "";
   const runs = join(home, ".cache", "verification-skill-evals");
@@ -78,6 +91,7 @@ function runDemo() {
     base,
     later: git(repo, "rev-parse", "HEAD"),
     refs,
+    simulators: JSON.parse(readFileSync(simulators, "utf8")),
   };
 }
 
@@ -133,5 +147,22 @@ describe("a run", () => {
     assert.ok(existsSync(join(demo.runDir, "changes", ".agents", "skills", "verify-demo", "SKILL.md")), "the skill create wrote is gone");
     assert.equal(git(demo.repo, "for-each-ref"), demo.refs);
     assert.equal(git(demo.repo, "status", "--porcelain"), "");
+  });
+});
+
+describe("a run whose create agent dies", () => {
+  let demo;
+  before(() => {
+    demo = runDemo("fails");
+  });
+
+  test("still shuts down the simulator it booted, stops its processes and removes the checkout, and scores nothing", () => {
+    assert.equal(demo.simulators["DEMO-UDID"], "Shutdown", demo.output);
+    for (const pid of demo.seen.strays ?? []) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, `process ${pid} is still running`);
+    assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there");
+    assert.ok(existsSync(join(demo.runDir, "changes", ".agents", "skills", "verify-demo", "SKILL.md")), "the skill create wrote is gone");
+    assert.doesNotMatch(demo.section, /^## demo,/m);
+    assert.equal(demo.status, 1);
+    assert.match(demo.output, /create: the agent run failed/);
   });
 });
