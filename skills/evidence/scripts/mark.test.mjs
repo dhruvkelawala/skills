@@ -83,6 +83,34 @@ test("draws every pane under its label, a circle and arrow at each point, and a 
   assert.ok(sheet.height - Math.max(...legend.map((circle) => circle.y1)) < 60, `no empty band under the legend in a ${sheet.height} px sheet`);
 });
 
+test("crops every pane to the same region, and each point stays on the spot it names in its capture", { skip: NO_BROWSER }, (t) => {
+  const f = fixture(t);
+  const crop = [100, 50, 700, 400];
+  f.capture("before.png", [[GREEN, TITLE]], crop);
+  f.capture("after.png", [[GREEN, TITLE], [BLUE, CARD]], crop);
+  const sheet = f.sheet({
+    layout: "stack",
+    crop,
+    panes: [{ file: "before.png", label: "Before" }, { file: "after.png", label: "After" }],
+    marks: [
+      { n: 1, text: "The blue card is new", at: [null, [580, 390]] },
+      { n: 2, text: "The title block", at: [[200, 130], [200, 130]] },
+    ],
+  });
+
+  assert.equal(blobs(sheet, RED, 40).length, 0, "nothing of either capture outside the crop");
+  const panes = panesOf(sheet);
+  assert.equal(panes.length, 2, "one pane per capture");
+  assert.ok(panes[1].y0 > panes[0].y1, "stacked");
+  for (const pane of panes) {
+    assert.ok(Math.abs(pane.width - 700) <= 1 && Math.abs(pane.height - 400) <= 1, `a 700 × 400 pane, got ${pane.width} × ${pane.height}`);
+  }
+  const tips = [[0, [200, 130]], [1, [200, 130]], [1, [580, 390]]];
+  for (const [pane, point] of tips) {
+    assert.ok(accentNear(sheet, onSheet(panes[pane], point, crop)), `an arrow ends at ${point} on pane ${pane + 1}`);
+  }
+});
+
 // The panes are the two largest areas of the capture's screen colour, left to right or top to bottom.
 function panesOf(sheet) {
   return blobs(sheet, SCREEN, 10)

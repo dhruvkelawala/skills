@@ -8,11 +8,13 @@
 // The spec names its PNG captures relative to its own folder:
 //
 //   { "layout": "side",
+//     "crop": [0, 120, 600, 400],
 //     "panes": [{ "file": "before.png", "label": "Before" }, { "file": "after.png", "label": "After" }],
 //     "marks": [{ "n": 1, "text": "The title uses the 60 px token", "at": [[455, 190], [505, 422]] }] }
 //
-// `layout` is `side` or `stack`. `at` holds one point per pane, in that capture's pixels, or null for
-// a pane the mark doesn't apply to. The sheet is an HTML page that agent-browser renders headless and
+// `layout` is `side` or `stack`. `crop` is optional: `[x, y, width, height]` in capture pixels, cut
+// from every pane alike. `at` holds one point per pane, in that capture's pixels, or null for a pane
+// the mark doesn't apply to. The sheet is an HTML page that agent-browser renders headless and
 // screenshots, so the script needs no npm package.
 
 import { execFileSync } from "node:child_process";
@@ -41,7 +43,10 @@ const READY = "Promise.all([...document.images].map((image) => image.decode())).
 
 function sheetOf(spec, captures) {
   const side = spec.layout !== "stack";
-  const panes = captures.map(({ capture }) => ({ left: 0, top: 0, ...capture }));
+  const panes = captures.map(({ capture }) => {
+    const [left, top, width, height] = spec.crop ?? [0, 0, capture.width, capture.height];
+    return { left, top, width, height };
+  });
   const frames = 2 * FRAME * (side ? panes.length : 1);
   const room = MAX_WIDTH - 2 * PAD - frames - (side ? GAP * (panes.length - 1) : 0);
   const widths = panes.map((pane) => pane.width);
