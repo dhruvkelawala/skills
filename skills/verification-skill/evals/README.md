@@ -16,13 +16,13 @@ It needs macOS, git, node and the claude CLI signed in through environment varia
 
 ## What a run does
 
-1. Clones the case's checkout into a new run folder in `~/.cache/verification-skill-evals/`, at the case's base commit, then deletes every ref, reflog and remote. The clone shares the case repo's objects, so it's fast, but no ref leads to a later commit, and nothing done in it reaches the case repo or GitHub. `gh` is off for both agents.
+1. Makes a run folder in `~/.cache/verification-skill-evals/` for the records, and a temp folder for what the agents touch, away from earlier runs' grades. In the temp folder it clones the case's checkout at the case's base commit, then deletes every ref, reflog and remote. The clone shares the case repo's objects, so it's fast, but no ref leads to a later commit, and nothing done in it reaches the case repo or GitHub. `gh` is off for both agents.
 2. Runs `/verification-skill create` in a fresh headless Claude Code. Its config folder holds this skill without this folder, plus the files the skill links to.
-3. Stops whatever create left running: each process that carries the run's marker variable, works inside the run folder or names it, the children of those, and each simulator that one of create's commands named. Then it copies what create wrote into the run folder.
+3. Stops whatever create left running: each process that carries the run's marker variable, works inside the temp folder or names it, the children of those, and each simulator that one of create's commands named. Then it copies what create wrote into the run folder.
 4. Runs a fresh grader. The grader gives each lesson `covered`, `partly` or `missing`, quoting the line that covers it, then replays the new skill's launch, doctor, one drive and cleanup.
-5. Stops what the replay left running, appends the section to results.md and deletes the checkout. A failed or interrupted run still deletes the checkout and stops its processes, but appends nothing.
+5. Stops what the replay left running, appends the section to results.md and deletes the temp folder. A failed or interrupted run still stops its processes and deletes the temp folder, but appends nothing.
 
-The run folder keeps both transcripts, the grade with its quotes and replay notes, and the files create wrote. Don't open a shell inside it during a run, because the sweep would stop it.
+The run folder keeps both transcripts, the grade with its quotes and replay notes, and the files create wrote. Don't open a shell inside the checkout during a run, because the sweep would stop it. Watching a transcript in the run folder is fine.
 
 ## Cases
 

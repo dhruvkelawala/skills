@@ -7,8 +7,8 @@
 //
 // README.md says what a run does and what it needs.
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { appendFileSync, chmodSync, closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,12 +38,13 @@ class Refused extends Error {}
 
 async function runCase(kase) {
   const run = prepare(kase);
-  console.log(`${kase.name}: run folder ${run.dir}`);
+  console.log(`${kase.name}: run folder ${run.dir}, checkout ${run.checkout}`);
+  let changed = null;
   try {
     console.log(`${kase.name}: create is running`);
     const create = await agent(run, "create", "/verification-skill create");
     const createLeft = await sweep(run, create);
-    const changed = keepChanges(run);
+    changed = keepChanges(run);
     console.log(`${kase.name}: grading ${changed.length} changed files`);
     const grade = await agent(run, "grade", gradePrompt(kase, changed), GRADE_SCHEMA);
     const gradeLeft = await sweep(run, grade);
@@ -52,8 +53,12 @@ async function runCase(kase) {
     appendResult(kase, result, { create, grade, createLeft, gradeLeft });
     console.log(`${kase.name}: ${result.score} at skill ${skillCommit()}. Results in ${resultsFile}`);
   } finally {
-    rmSync(run.checkout, { recursive: true, force: true });
     await sweep(run);
+    try {
+      if (!changed) keepChanges(run);
+    } finally {
+      removeWork(run);
+    }
   }
 }
 
@@ -103,6 +108,9 @@ function git(cwd, ...args) {
   return result.stdout.trim();
 }
 
+// The run folder keeps the transcripts and the grade. What the agents touch, the checkout, their config folders and
+// the gh stand-in, goes in a separate temp folder, away from earlier runs' grades, which hold the lessons.
+//
 // The checkout is a clone that shares the case repo's objects but none of its refs, config or hooks. A worktree would
 // share all three, so the agent could read the hand-fixed skill on main, and an install step's hook installer would
 // write into the case repo. Later commits stay readable by hash, but no ref or reflog leads to them.
@@ -114,18 +122,24 @@ function prepare(kase) {
   const id = `${kase.name}-${new Date().toISOString().replace(/[-:]|\.\d+/g, "")}`;
   mkdirSync(join(runsDir, id), { recursive: true });
   const dir = realpathSync(join(runsDir, id));
-  const checkout = join(dir, "checkout");
-  git(dir, "clone", "--quiet", "--shared", "--no-checkout", kase.checkout, checkout);
-  git(checkout, "checkout", "--quiet", "--detach", kase.base);
-  git(checkout, "remote", "remove", "origin");
-  for (const ref of git(checkout, "for-each-ref", "--format=%(refname)").split("\n").filter(Boolean)) git(checkout, "update-ref", "-d", ref);
-  rmSync(join(checkout, ".git", "logs"), { recursive: true, force: true });
+  const work = realpathSync(mkdtempSync(join(tmpdir(), "verification-skill-eval-")));
+  const checkout = join(work, "checkout");
+  try {
+    git(work, "clone", "--quiet", "--shared", "--no-checkout", kase.checkout, checkout);
+    git(checkout, "checkout", "--quiet", "--detach", kase.base);
+    git(checkout, "remote", "remove", "origin");
+    for (const ref of git(checkout, "for-each-ref", "--format=%(refname)").split("\n").filter(Boolean)) git(checkout, "update-ref", "-d", ref);
+    rmSync(join(checkout, ".git", "logs"), { recursive: true, force: true });
+  } catch (error) {
+    rmSync(work, { recursive: true, force: true });
+    throw error;
+  }
 
-  const bin = join(dir, "bin");
+  const bin = join(work, "bin");
   mkdirSync(bin);
   writeFileSync(join(bin, "gh"), GH_OFF);
   chmodSync(join(bin, "gh"), 0o755);
-  const configs = { create: join(dir, "claude-create"), grade: join(dir, "claude-grade") };
+  const configs = { create: join(work, "claude-create"), grade: join(work, "claude-grade") };
   copySkill(join(configs.create, "skills"));
   mkdirSync(configs.grade);
   const env = (phase) => {
@@ -134,7 +148,7 @@ function prepare(kase) {
     for (const key of Object.keys(vars)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_")) delete vars[key];
     return vars;
   };
-  return { id, dir, checkout, env, simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
+  return { id, dir, work, checkout, env, simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
 }
 
 // The skill without its evals, which hold the answers, plus each file outside it that it links to, at the same
@@ -161,6 +175,16 @@ function keepChanges(run) {
   writeFileSync(join(run.dir, "changes.patch"), `${git(run.checkout, "diff", "--binary", "HEAD")}\n`);
   for (const file of files) if (existsSync(join(run.checkout, file))) cpSync(join(run.checkout, file), join(run.dir, "changes", file));
   return files;
+}
+
+function removeWork(run) {
+  try {
+    rmSync(run.work, { recursive: true, force: true });
+  } catch {
+    // A build can leave read-only folders behind, which rm cannot empty until they are writable again.
+    spawnSync("chmod", ["-R", "u+w", run.work]);
+    rmSync(run.work, { recursive: true, force: true });
+  }
 }
 
 // --- the agents
@@ -272,18 +296,24 @@ const GRADE_SCHEMA = {
 
 // --- what the run left behind
 
-// Stops each process this run started: one that carries the run's marker, works inside the run folder or names it on
-// its command line, and every child of those. Then shuts down each simulator the phase booted.
+// Stops each process this run started: one that carries the run's marker, works inside the temp folder or names it on
+// its command line, and every child of those. Then shuts down each simulator the phase booted. The run folder doesn't
+// count, so a `tail -f` on one of its transcripts survives.
 async function sweep(run, phase) {
   const ancestors = new Set();
   const procs = processes();
   for (let pid = process.pid; pid > 1 && !ancestors.has(pid); pid = procs.get(pid)?.ppid ?? 1) ancestors.add(pid);
-  const inside = (path) => path === run.dir || path.startsWith(run.dir + sep);
+  const inside = (path) => path === run.work || path.startsWith(run.work + sep);
   const ours = new Set();
-  for (const p of procs.values()) if (p.env.includes(`${MARKER}=${run.id}`) || inside(p.cwd) || p.command.includes(run.dir)) ours.add(p.pid);
+  for (const p of procs.values()) if (p.env.includes(`${MARKER}=${run.id}`) || inside(p.cwd) || p.command.includes(run.work)) ours.add(p.pid);
   for (let grew = true; grew; ) {
     grew = false;
-    for (const p of procs.values()) if (!ours.has(p.pid) && ours.has(p.ppid)) grew = ours.add(p.pid);
+    for (const p of procs.values()) {
+      if (!ours.has(p.pid) && ours.has(p.ppid)) {
+        ours.add(p.pid);
+        grew = true;
+      }
+    }
   }
   for (const pid of ancestors) ours.delete(pid);
   await stop([...ours]);

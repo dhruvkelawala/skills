@@ -1,9 +1,9 @@
 // Drives run.mjs through its command line. A run's agents are a fake claude on PATH, and its case is a scratch repo.
 // From the repo root: node --test skills/verification-skill/evals/run.test.mjs
-import { before, describe, test } from "node:test";
+import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,9 +15,13 @@ const runner = (dir, args = [], env = process.env) => spawnSync(process.execPath
 const git = (cwd, ...a) => execFileSync("git", ["-c", "user.name=eval", "-c", "user.email=eval@example.com", "-c", "core.hooksPath=/dev/null", ...a], { cwd, encoding: "utf8" }).trim();
 const LESSONS = ["Pin the toolchain (abb228b0).", "Wait for an element before measuring it (#12).", "Kill the whole process group (#540, #545)."];
 
+const scratch = [];
+after(() => scratch.forEach((root) => rmSync(root, { recursive: true, force: true })));
+
 // A copy of the skills this eval reads, so a test can add a case or a results file without touching the repo.
 function scratchSkills() {
   const root = mkdtempSync(join(tmpdir(), "verification-skill-eval-test-"));
+  scratch.push(root);
   cpSync(join(skillsDir, "verification-skill"), join(root, "skills", "verification-skill"), { recursive: true });
   cpSync(join(skillsDir, "evidence", "references", "surfaces.md"), join(root, "skills", "evidence", "references", "surfaces.md"));
   return { root, evals: join(root, "skills", "verification-skill", "evals") };
@@ -125,7 +129,7 @@ describe("a run", () => {
   test("stops what the agents left running and removes the checkout, keeping what create wrote", () => {
     for (const pid of demo.seen.strays ?? []) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, `process ${pid} is still running`);
     assert.match(demo.section, /after create: node, node; after the grade: nothing/, demo.output);
-    assert.ok(demo.runDir && !existsSync(join(demo.runDir, "checkout")), "the checkout is still there");
+    assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there");
     assert.ok(existsSync(join(demo.runDir, "changes", ".agents", "skills", "verify-demo", "SKILL.md")), "the skill create wrote is gone");
     assert.equal(git(demo.repo, "for-each-ref"), demo.refs);
     assert.equal(git(demo.repo, "status", "--porcelain"), "");
