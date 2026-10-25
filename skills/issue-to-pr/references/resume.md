@@ -20,7 +20,7 @@ The repair budget in the record still applies.
 2. Move only this layer's commits: `git rebase --onto <new base ref> <base_sha> <branch>`. Use this in a gh-stack-tracked stack too, so the predecessor branches are never rewritten. Resolve any conflicts.
 3. Compare `git rev-parse HEAD^{tree}` with the recorded tree. When they are the same, as after the predecessor squash-merged, the earlier tests and reviews still hold. Otherwise run the focused tests for the touched paths.
 4. Push only this branch: `git push --force-with-lease origin <branch>`. When the predecessor merged and GitHub did not retarget the PR, run `gh pr edit <n> --base <default-branch>` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -f base=<default-branch>`).
-5. Record the new `base_ref`, `base_sha`, `head` and `tree`. Run the base and file-count checks from [stacks](stacks.md), and refresh the PR body for the new head with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>`).
+5. Record the new `base_ref`, `base_sha`, `head` and `tree`. Run the base and file-count checks from [stacks](stacks.md), and refresh the PR body for the new head, [check it](pr-body.md#the-check), and update it with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>`).
 
 Then run stage 6 once.
 
@@ -34,7 +34,7 @@ Do each step once.
 4. Run `/verify` at the new head.
 5. Push only this branch: `git push origin <branch>`, with `--force-with-lease` after a rebase.
 6. Answer the reviewers. Reply on each thread, and resolve it after its fix is pushed or its rejection is posted. For a `kind: "review"` entry, post one PR comment that answers it point by point.
-7. Refresh the PR body for the new head with `gh pr edit --body-file` (REST: as in the predecessor case, step 5), listing the repairs as not re-reviewed.
+7. Refresh the PR body for the new head, listing the repairs as not re-reviewed, [check it](pr-body.md#the-check), and update it with `gh pr edit --body-file` (REST: as in the predecessor case, step 5).
 8. Re-request review: `gh pr edit <n> --add-reviewer <login>` (REST: `gh api -X POST repos/{owner}/{repo}/pulls/<n>/requested_reviewers -f "reviewers[]=<login>"`) for a human, or the request comment for a bot.
 
 Then run stage 6 once.

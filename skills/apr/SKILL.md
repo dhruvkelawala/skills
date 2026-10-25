@@ -107,7 +107,7 @@ repairs: 0/<budget>
 
 ## PR body
 
-With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, the model it ran (step 1) and the result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: a Summary with one diagram, Evidence before and after, and Merge danger with the door and the blast radius. Under Evidence, give the exact verification and autoreview commands with their results, rather than "tests pass". For a fix, name the root cause in the Summary.
+With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, the model it ran (step 1) and the result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: the problem and the change, Evidence before and after, a Proof paragraph that names the verification and autoreview commands that passed, rather than "tests pass", and the door and the blast radius. For a fix, name the root cause in the opening.
 
 ## Report
 
