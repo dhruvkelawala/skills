@@ -14,8 +14,11 @@
 //
 // `layout` is `side` or `stack`. `crop` is optional: `[x, y, width, height]` in capture pixels, cut
 // from every pane alike. `at` holds one point per pane, in that capture's pixels, or null for a pane
-// the mark doesn't apply to. The sheet is an HTML page that agent-browser renders headless and
-// screenshots, so the script needs no npm package.
+// the mark doesn't apply to. A spec with problems, such as a point outside its pane once cropped,
+// draws nothing: each problem prints on its own line, naming its mark, and the exit code is 1.
+//
+// The sheet is an HTML page that agent-browser renders headless and screenshots, so the script needs
+// no npm package.
 
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -41,12 +44,41 @@ const HEAD = 16;
 const DIRECTIONS = [[-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].map(([x, y]) => unit(x, y));
 const READY = "Promise.all([...document.images].map((image) => image.decode())).then(() => document.fonts.ready).then(() => true)";
 
+// What each pane shows of its capture: the crop, or the whole capture.
+function regionOf(spec, capture) {
+  const [left, top, width, height] = spec.crop ?? [0, 0, capture.width, capture.height];
+  return { left, top, width, height };
+}
+
+// Every problem with the spec, checked against each capture's size before anything is drawn.
+function specProblems(spec, captures) {
+  const problems = [];
+  if (spec.crop) {
+    const [left, top, width, height] = spec.crop;
+    for (const { file, capture } of captures) {
+      if (left < 0 || top < 0 || left + width > capture.width || top + height > capture.height) {
+        problems.push(`crop [${spec.crop.join(", ")}] runs past ${file}, which is ${capture.width} × ${capture.height}`);
+      }
+    }
+  }
+  for (const { n, at } of spec.marks) {
+    at.forEach((point, i) => {
+      if (!point) return;
+      const { file, label, capture } = captures[i];
+      const { left, top, width, height } = regionOf(spec, capture);
+      const [x, y] = point;
+      if (x < left || y < top || x >= left + width || y >= top + height) {
+        const pane = spec.crop ? `the crop [${spec.crop.join(", ")}]` : `${file}, which is ${capture.width} × ${capture.height}`;
+        problems.push(`mark ${n}: its point [${x}, ${y}] on ${label} is outside ${pane}`);
+      }
+    });
+  }
+  return problems;
+}
+
 function sheetOf(spec, captures) {
   const side = spec.layout !== "stack";
-  const panes = captures.map(({ capture }) => {
-    const [left, top, width, height] = spec.crop ?? [0, 0, capture.width, capture.height];
-    return { left, top, width, height };
-  });
+  const panes = captures.map(({ capture }) => regionOf(spec, capture));
   const frames = 2 * FRAME * (side ? panes.length : 1);
   const room = MAX_WIDTH - 2 * PAD - frames - (side ? GAP * (panes.length - 1) : 0);
   const widths = panes.map((pane) => pane.width);
@@ -188,8 +220,13 @@ function main(argv) {
     const folder = dirname(resolve(specFile));
     const captures = spec.panes.map((pane) => {
       const png = readFileSync(resolve(folder, pane.file));
-      return { label: pane.label, png, capture: pngSize(png, pane.file) };
+      return { file: pane.file, label: pane.label, png, capture: pngSize(png, pane.file) };
     });
+    const problems = specProblems(spec, captures);
+    if (problems.length) {
+      console.error(`spec refused:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
+      return 1;
+    }
     const sheet = sheetOf(spec, captures);
     render(pageOf(spec, sheet), sheet.width, out);
     const { width, height } = pngSize(readFileSync(out), out);

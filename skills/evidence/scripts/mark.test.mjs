@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -110,6 +110,38 @@ test("crops every pane to the same region, and each point stays on the spot it n
     assert.ok(accentNear(sheet, onSheet(panes[pane], point, crop)), `an arrow ends at ${point} on pane ${pane + 1}`);
   }
 });
+
+const PAIR = [{ file: "before.png", label: "Before" }, { file: "after.png", label: "After" }];
+const refusals = [
+  {
+    name: "a point inside its capture but outside the crop",
+    spec: {
+      crop: [100, 50, 700, 400],
+      marks: [
+        { n: 1, text: "The title block", at: [[200, 130], [200, 130]] },
+        { n: 2, text: "The footer", at: [null, [850, 300]] },
+      ],
+    },
+    names: /^- mark 2: /m,
+  },
+  {
+    name: "a crop that runs past a capture",
+    spec: { crop: [300, 100, 700, 400], marks: [{ n: 1, text: "The blue card", at: [null, [580, 390]] }] },
+    names: /^- crop \[300, 100, 700, 400\] runs past before\.png/m,
+  },
+];
+
+for (const { name, spec, names } of refusals) {
+  test(`refuses ${name}, naming it, and writes nothing`, (t) => {
+    const f = fixture(t);
+    f.capture("before.png", [[GREEN, TITLE]]);
+    f.capture("after.png", [[GREEN, TITLE], [BLUE, CARD]]);
+    const run = f.mark({ layout: "side", panes: PAIR, ...spec });
+    assert.equal(run.status, 1, `expected a refusal, got: ${run.stdout}${run.stderr}`);
+    assert.match(run.stderr, names);
+    assert.equal(existsSync(run.out), false, "no image written");
+  });
+}
 
 // The panes are the two largest areas of the capture's screen colour, left to right or top to bottom.
 function panesOf(sheet) {
