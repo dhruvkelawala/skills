@@ -9,8 +9,9 @@ const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta
 
 // pingdotgg/t3code#24832's body as it merged (MIT): the problem, the change, one Before | After
 // table and a Proof line. 219 words, by `wc -w` once its images, link targets, table pipes, the
-// `/` and the 🤖 are deleted by hand.
-const T3_BODY = fixture("t3code-24832.md");
+// `/` and the 🤖 are deleted by hand. A .txt file, because it names models and models.test.mjs
+// keeps model names out of the .md files under skills/.
+const T3_BODY = fixture("t3code-24832.txt");
 const T3_WORDS = 219;
 
 const check = (body) => spawnSync(process.execPath, [PR_BODY], { input: body, encoding: "utf8" });
