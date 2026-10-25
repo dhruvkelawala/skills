@@ -68,7 +68,7 @@ How to prove a change works in this repository. Agents read this before writing 
 
 1. Launch the surface the change touches, from a local build at HEAD.
 2. Drive the exact behaviour each acceptance criterion names, using the surface's recorded tier. When the change alters existing behaviour, drive it before and after.
-3. Capture a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair for a change to existing behaviour, marked with the evidence skill's `scripts/mark.mjs` when the pair has more than one difference or one that is hard to spot.
+3. Capture a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair for a change to existing behaviour, marked when the evidence skill's "Marking a before and after pair" says to.
 4. Publish, and link each capture from the PR's Evidence section with the HEAD SHA it came from.
 ```
 
@@ -84,7 +84,7 @@ Complete when the capture is published and its link works.
 
 ## Marking a before and after pair
 
-Mark a pair when it has more than one difference, as the `pr` skill's Evidence rule asks, or one difference that is hard to spot. `scripts/mark.mjs` draws the marked image: both captures cropped to the same region, a numbered arrow on each difference, and a legend saying what each number is. [Marking a pair](references/surfaces.md#marking-a-before-and-after-pair) has the spec and the command. A pair with one plain difference needs no marks.
+Mark a pair when it has more than one difference, as the `pr` skill's Evidence rule asks, or one difference that is hard to spot. [Marking a pair](references/surfaces.md#marking-a-before-and-after-pair) shows how, with `scripts/mark.mjs`.
 
 ## Report
 
