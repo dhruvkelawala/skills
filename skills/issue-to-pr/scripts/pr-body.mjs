@@ -23,7 +23,7 @@ const INLINE_CODE = /`([^`\n]+)`/g;
 // A short or full SHA, or a range of two, with at least one letter so a plain number is not one.
 const SHA = /^(?=.*[a-f])[0-9a-f]{7,40}(?:\.{2,3}[0-9a-f]{7,40})?$/i;
 const FILE_AT_COMMIT = /\s@\s*`?[0-9a-f]{7,40}`?$/i;
-const MEDIA_FILE = /^\S+\.(?:png|jpe?g|gif|webp|svg|avif|heic|mp4|mov|webm)$/i;
+const MEDIA_FILE = /\.(?:png|jpe?g|gif|webp|svg|avif|heic|mp4|mov|webm)$/i;
 
 function checkBody(body) {
   const lines = linesOf(body);

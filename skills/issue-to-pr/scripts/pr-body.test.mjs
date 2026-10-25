@@ -94,6 +94,11 @@ const REFUSALS = [
     problem: /"queue-steer-before-crop-6c52bffe\.png" is its file name/,
   },
   {
+    rule: "alt text that is a screenshot's file name, after the upload host renamed the file",
+    ...editLine("![after]", (line) => line.replace("![after]", "![Screenshot 2026-10-25 at 10.00.00.png]")),
+    problem: /"Screenshot 2026-10-25 at 10\.00\.00\.png" is its file name/,
+  },
+  {
     rule: "alt text of the form <file> @ <sha>, in an <img> tag",
     ...editLine("![near miss steered]", () => '<img alt="queue-steer-near-miss.png @ 1fa6265" src="https://files.tslop.org/2026/10/queue-steer-near-miss-steered-473259c6.png" width="300">'),
     problem: /"queue-steer-near-miss\.png @ 1fa6265" is a file name and a commit/,
