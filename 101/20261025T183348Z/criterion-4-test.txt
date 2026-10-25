@@ -1,0 +1,28 @@
+# Criterion 4 at e8b7c78, with agent-browser on PATH (agent-browser 0.38.1)
+$ node --test skills/evidence/scripts/mark.test.mjs
+✔ draws every pane under its label, a circle and arrow at each point, and a legend line per mark, at most 1200 px wide (1081.115584ms)
+✔ crops every pane to the same region, and each point stays on the spot it names in its capture (1454.5935ms)
+✔ refuses a point inside its capture but outside the crop, naming it and why, and writes nothing (98.494792ms)
+✔ refuses a crop that runs past a capture, naming it and why, and writes nothing (86.75375ms)
+✔ refuses a mark with one point for two panes, naming it and why, and writes nothing (80.654792ms)
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
+ℹ skipped 0
+
+# With agent-browser off PATH (PATH holds only node's folder, /usr/bin and /bin)
+$ PATH="$(dirname "$(which node)"):/usr/bin:/bin" node --test skills/evidence/scripts/mark.test.mjs
+﹣ draws every pane under its label, a circle and arrow at each point, and a legend line per mark, at most 1200 px wide (0.453416ms) # agent-browser is not on PATH, and mark.mjs renders in it
+﹣ crops every pane to the same region, and each point stays on the spot it names in its capture (0.044417ms) # agent-browser is not on PATH, and mark.mjs renders in it
+✔ refuses a point inside its capture but outside the crop, naming it and why, and writes nothing (83.800333ms)
+✔ refuses a crop that runs past a capture, naming it and why, and writes nothing (80.431666ms)
+✔ refuses a mark with one point for two panes, naming it and why, and writes nothing (79.404667ms)
+ℹ tests 5
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 2
+
+# The script itself, off PATH
+$ node skills/evidence/scripts/mark.mjs receipts-mark.json x.png
+mark.mjs renders in agent-browser, which is not on PATH. Install it with `npm install -g agent-browser`.
+exit=1

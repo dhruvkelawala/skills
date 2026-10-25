@@ -1,0 +1,36 @@
+# Criterion 5: check-docs.mjs (a scratch checker, published beside this transcript) reads skills/evidence/SKILL.md and references/surfaces.md at a revision
+$ node check-docs.mjs c325ddc   # base
+MISS SKILL.md says when to mark, pointing to the pr skill's Evidence rule
+MISS SKILL.md names scripts/mark.mjs
+MISS surfaces.md has a section on marking a pair
+MISS surfaces.md gives the mark.mjs command
+MISS surfaces.md no longer offers ffmpeg hstack
+MISS the EVIDENCE.md template points to the marking section rather than restating when to mark
+c325ddc: 6 of 6 missing
+exit=1
+$ node check-docs.mjs e8b7c78   # head
+ok   SKILL.md says when to mark, pointing to the pr skill's Evidence rule
+ok   SKILL.md names scripts/mark.mjs
+ok   surfaces.md has a section on marking a pair
+ok   surfaces.md gives the mark.mjs command
+ok   surfaces.md no longer offers ffmpeg hstack
+ok   the EVIDENCE.md template points to the marking section rather than restating when to mark
+e8b7c78: 0 of 6 missing
+exit=0
+
+$ git show e8b7c78:skills/evidence/SKILL.md | grep -n -i mark
+71:3. Capture a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair for a change to existing behaviour, marked when the evidence skill's "Marking a before and after pair" says to.
+85:## Marking a before and after pair
+87:Mark a pair when it has more than one difference, as the `pr` skill's Evidence rule asks, or one difference that is hard to spot. [Marking a pair](references/surfaces.md#marking-a-before-and-after-pair) shows how, with `scripts/mark.mjs`.
+
+$ git show c325ddc:skills/evidence/references/surfaces.md | grep -n hstack
+32:ffmpeg -i .evidence/<slug>-before.png -i .evidence/<slug>-after.png -filter_complex hstack .evidence/<slug>-compare.png
+$ git show e8b7c78:skills/evidence/references/surfaces.md | grep -n -E 'hstack|mark\.mjs|^## Marking'
+121:## Marking a before and after pair
+123:`scripts/mark.mjs` turns two PNG captures of the same screen into one image. Both are cropped to the same region and shown side by side or stacked under their labels, with a numbered circle and arrow on each difference and a legend under them, one line per number. It renders headless in `agent-browser` and needs no npm package.
+143:node <skill-dir>/scripts/mark.mjs .evidence/<slug>-mark.json .evidence/<slug>-marked.png
+
+# The docs' example spec, run through mark.mjs on generated 600 × 900 captures
+$ node skills/evidence/scripts/mark.mjs example-mark.json example-marked.png
+example-marked.png: 1200 × 539
+exit=0

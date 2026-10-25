@@ -1,0 +1,26 @@
+# Criteria 1 and 2: mark.mjs at e8b7c78, on two self-made captures of a mock receipts screen, 780 × 1688 each
+$ cat receipts-mark.json
+{
+  "layout": "side",
+  "crop": [0, 100, 780, 940],
+  "panes": [
+    { "file": "receipts-before.png", "label": "Before" },
+    { "file": "receipts-after.png", "label": "After" }
+  ],
+  "marks": [
+    { "n": 1, "text": "The title is larger and bolder", "at": [[300, 155], [440, 170]] },
+    { "n": 2, "text": "Initials sit on a dark green disc", "at": [[126, 309], [126, 337]] },
+    { "n": 3, "text": "A new Share receipts button", "at": [null, [600, 962]] }
+  ]
+}
+
+$ node skills/evidence/scripts/mark.mjs receipts-mark.json mark-after-marked.png
+mark-after-marked.png: 1200 × 842
+exit=0
+
+# The recipe surfaces.md gave before this PR (base c325ddc), on the same captures:
+$ ffmpeg -i receipts-before.png -i receipts-after.png -filter_complex hstack mark-before-hstack.png
+exit=0
+$ sips -g pixelWidth -g pixelHeight mark-before-hstack.png
+  pixelWidth: 1560
+  pixelHeight: 1688

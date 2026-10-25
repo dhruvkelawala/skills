@@ -1,0 +1,21 @@
+# Criterion 3 at e8b7c78: mark 4 points at [390, 1300], inside the 780 × 1688 capture but below the crop [0, 100, 780, 940]
+$ node skills/evidence/scripts/mark.mjs receipts-outside.json refused/marked.png
+spec refused:
+- mark 4: its point [390, 1300] on After is outside the crop [0, 100, 780, 940]
+exit=1
+$ ls refused
+ls: refused: No such file or directory
+
+# The second refusal: mark 1 gives one point for two panes
+$ node skills/evidence/scripts/mark.mjs receipts-one-point.json refused/marked.png
+spec refused:
+- mark 1: at has 1 point for 2 panes; give one per pane, or null where the mark doesn't apply
+exit=1
+$ ls refused
+ls: refused: No such file or directory
+
+# The issue's own example spec (crop [0, 270, 600, 530], mark 1 at y 190)
+$ node skills/evidence/scripts/mark.mjs issue-example.json issue-example.png
+spec refused:
+- mark 1: its point [455, 190] on Before is outside the crop [0, 270, 600, 530]
+exit=1
