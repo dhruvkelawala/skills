@@ -167,7 +167,7 @@ describe("a run whose create agent dies", () => {
     demo = runDemo("fails");
   });
 
-  test("still shuts down the simulator it booted, stops its processes and removes the checkout, and scores nothing", () => {
+  test("still shuts down the simulator it booted, stops its processes, keeps what it wrote, removes the checkout and scores nothing", () => {
     assert.equal(demo.simulators["DEMO-UDID"], "Shutdown", demo.output);
     for (const pid of demo.seen.strays ?? []) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, `process ${pid} is still running`);
     assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there");

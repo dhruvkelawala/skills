@@ -94,10 +94,8 @@ async function cleanUp(run, changed) {
   }
 }
 
-// --- the case
-
 function caseNames() {
-  return existsSync(casesDir) ? readdirSync(casesDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort() : [];
+  return readdirSync(casesDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort();
 }
 
 function readCase(name) {
@@ -131,8 +129,6 @@ function list() {
   });
   console.log(`${USAGE}\n\ncases:\n${lines.join("\n")}`);
 }
-
-// --- the run folder and its checkout
 
 function git(cwd, ...args) {
   const result = spawnSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { cwd, encoding: "utf8", maxBuffer: 256 << 20 });
@@ -219,8 +215,6 @@ function removeWork(run) {
   }
 }
 
-// --- the agents
-
 let running = null;
 let interrupted = null;
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -276,13 +270,14 @@ function agent(run, phase, prompt, schema) {
   });
 }
 
-// A hard kill can cut the last line short, so a line that doesn't parse is skipped.
+// A hard kill can cut the last line short, so a line that isn't a JSON object is skipped.
 function readEvents(transcript) {
   return readFileSync(transcript, "utf8")
     .split("\n")
     .flatMap((line) => {
       try {
-        return [JSON.parse(line)];
+        const event = JSON.parse(line);
+        return event && typeof event === "object" ? [event] : [];
       } catch {
         return [];
       }
@@ -338,8 +333,6 @@ const GRADE_SCHEMA = {
   },
   required: ["lessons", "replay"],
 };
-
-// --- what the run left behind
 
 // Stops each process this run started: one that carries the run's marker, works inside the temp folder or names it on
 // its command line, and every child of those. Then shuts down each simulator the run booted. The run folder doesn't
@@ -430,8 +423,6 @@ function stopSimulators(run) {
   for (const d of booted) spawnSync("xcrun", ["simctl", "shutdown", d.udid]);
   return booted.map((d) => `simulator ${d.name}`);
 }
-
-// --- the result
 
 function scored(kase, output) {
   const verdicts = new Map((output?.lessons ?? []).map((l) => [l.lesson, l.verdict]));
