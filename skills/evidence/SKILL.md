@@ -68,7 +68,7 @@ How to prove a change works in this repository. Agents read this before writing 
 
 1. Launch the surface the change touches, from a local build at HEAD.
 2. Drive the exact behaviour each acceptance criterion names, using the surface's recorded tier. When the change alters existing behaviour, drive it before and after.
-3. Capture a still for a state, a recording for a flow, a transcript for a CLI or API, and side-by-side images for before and after.
+3. Capture a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair for a change to existing behaviour, marked when the evidence skill's "Marking a before and after pair" says to.
 4. Publish, and link each capture from the PR's Evidence section with the HEAD SHA it came from.
 ```
 
@@ -81,6 +81,10 @@ Complete when `EVIDENCE.md` exists, every surface from step 1 is in the table, a
 Pick one small existing feature and run the checklist end to end: launch, drive, capture, publish. If a step fails, fix `EVIDENCE.md` and rerun that step.
 
 Complete when the capture is published and its link works.
+
+## Marking a before and after pair
+
+Mark a pair when it has more than one difference, as the `pr` skill's Evidence rule asks, or one difference that is hard to spot. [Marking a pair](references/surfaces.md#marking-a-before-and-after-pair) shows how, with `scripts/mark.mjs`.
 
 ## Report
 
