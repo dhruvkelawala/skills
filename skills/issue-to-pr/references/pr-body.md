@@ -94,6 +94,6 @@ node <issue-to-pr>/scripts/pr-body.mjs < <body file>
 - The top tier names no commit. SHAs, the base and the head, earlier builds and review rounds, red and green lines, log links and verifier output go in `<details>`.
 - Alt text says what the reader sees in the capture, such as "The polaroid fading in with the shared photo already in it".
 - The verification table lists every command `/verify` found, including the ones that could not run.
-- The head in Verification equals the PR head. After every push, refresh the body for the new head, check it, and update it with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>`).
+- The head in Verification equals the PR head. After every push, refresh the body for the new head, [check it](#the-check), and update it with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>`).
 - Excerpts are real output from this run, trimmed to the failing assertion, the passing summary or the changed output. Leave out full logs and diffs, since the PR already shows the diff.
 - For each capture, pick the lightest proof a reviewer would accept as seeing the feature work: a still for a state, a recording under 30 seconds for a flow, or a transcript for a CLI or API.
