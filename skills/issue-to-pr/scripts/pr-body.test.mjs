@@ -62,6 +62,15 @@ test("Lore #78's body, rewritten to the template, passes the check", () => {
   passes(fixture("lore-78.md"));
 });
 
+// The body agents copy: the pr skill's worked example, in its `## Worked example` section.
+test("the pr skill's worked example passes, with under 250 words above <details>", () => {
+  const skill = readFileSync(new URL("../../pr/SKILL.md", import.meta.url), "utf8");
+  const example = skill.match(/^## Worked example\n[\s\S]*?^````markdown\n([\s\S]*?)^````$/m)?.[1];
+  assert.ok(example, "pr/SKILL.md has a `## Worked example` section with the body in a ````markdown fence");
+  const words = passes(example);
+  assert.ok(words < 250, `the worked example has ${words} words above <details>`);
+});
+
 const REFUSALS = [
   {
     rule: "the 401st word above <details>",
