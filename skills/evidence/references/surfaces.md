@@ -146,7 +146,7 @@ node <skill-dir>/scripts/mark.mjs .evidence/<slug>-mark.json .evidence/<slug>-ma
 - `layout` is `side` for tall captures, such as phone screens, and `stack` for wide ones, such as desktop pages, so neither shrinks far.
 - `crop` is `[x, y, width, height]`, cut from every pane alike. Crop to the region that holds all the differences, or leave it out to show the whole capture.
 - Each legend line says what the reader sees changed, in a few words.
-- The image is at most 1200 px wide. A point outside its pane after the crop, or a mark without one point or `null` per pane, is refused, naming the mark, and nothing is written.
+- The image is at most 1200 px wide. The script refuses a point outside its pane after the crop, and a mark without one point or `null` per pane. It names the mark and writes nothing.
 
 Publish the marked image and the full captures together. The `pr` skill says where each goes in the PR body.
 

@@ -122,22 +122,22 @@ const refusals = [
         { n: 2, text: "The footer", at: [null, [850, 300]] },
       ],
     },
-    names: /^- mark 2: /m,
+    names: /^- mark 2: its point \[850, 300\] on After is outside the crop \[100, 50, 700, 400\]$/m,
   },
   {
     name: "a crop that runs past a capture",
     spec: { crop: [300, 100, 700, 400], marks: [{ n: 1, text: "The blue card", at: [null, [580, 390]] }] },
-    names: /^- crop \[300, 100, 700, 400\] runs past before\.png/m,
+    names: /^- crop \[300, 100, 700, 400\] runs past before\.png, which is 900 × 600$/m,
   },
   {
     name: "a mark with one point for two panes",
     spec: { marks: [{ n: 1, text: "The title block", at: [[200, 130]] }] },
-    names: /^- mark 1: /m,
+    names: /^- mark 1: at has 1 point for 2 panes/m,
   },
 ];
 
 for (const { name, spec, names } of refusals) {
-  test(`refuses ${name}, naming it, and writes nothing`, (t) => {
+  test(`refuses ${name}, naming it and why, and writes nothing`, (t) => {
     const f = fixture(t);
     f.capture("before.png", [[GREEN, TITLE]]);
     f.capture("after.png", [[GREEN, TITLE], [BLUE, CARD]]);
@@ -165,7 +165,6 @@ function circlesOf(sheet) {
 
 const insidePane = (blob, pane) => blob.x0 >= pane.x0 && blob.x1 <= pane.x1 && blob.y0 >= pane.y0 && blob.y1 <= pane.y1;
 
-// A capture point on the sheet, given the region of the capture the pane shows.
 function onSheet(pane, [x, y], [left, top, width] = [0, 0, WIDTH]) {
   const scale = pane.width / width;
   return [pane.x0 + (x - left) * scale, pane.y0 + (y - top) * scale];

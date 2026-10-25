@@ -40,17 +40,14 @@ const RING = 3;
 const OUTER = RADIUS + RING / 2;
 const ARROW = 80;
 const HEAD = 16;
-// Where a circle may sit around its point, most wanted first once sorted toward the pane's middle.
 const DIRECTIONS = [[-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].map(([x, y]) => unit(x, y));
 const READY = "Promise.all([...document.images].map((image) => image.decode())).then(() => document.fonts.ready).then(() => true)";
 
-// What each pane shows of its capture: the crop, or the whole capture.
 function regionOf(spec, capture) {
   const [left, top, width, height] = spec.crop ?? [0, 0, capture.width, capture.height];
   return { left, top, width, height };
 }
 
-// The spec and its captures, with every problem in them. Nothing is drawn until there are none.
 function load(specFile) {
   if (!existsSync(specFile)) return { problems: [`there is no spec at ${specFile}`] };
   let spec;
@@ -72,7 +69,6 @@ function load(specFile) {
   return { spec, captures, problems: fitProblems(spec, captures) };
 }
 
-// The spec's own shape, checked before any capture is read.
 function shapeProblems(spec) {
   const problems = [];
   if (!["side", "stack"].includes(spec.layout ?? "side")) problems.push(`layout is ${JSON.stringify(spec.layout)}; use "side" or "stack"`);
@@ -107,15 +103,12 @@ function shapeProblems(spec) {
   return problems;
 }
 
-// The points and the crop, checked against each capture's size.
 function fitProblems(spec, captures) {
   const problems = [];
-  if (spec.crop) {
-    const [left, top, width, height] = spec.crop;
-    for (const { file, capture } of captures) {
-      if (left < 0 || top < 0 || left + width > capture.width || top + height > capture.height) {
-        problems.push(`crop [${spec.crop.join(", ")}] runs past ${file}, which is ${capture.width} × ${capture.height}`);
-      }
+  for (const { file, capture } of captures) {
+    const { left, top, width, height } = regionOf(spec, capture);
+    if (left < 0 || top < 0 || left + width > capture.width || top + height > capture.height) {
+      problems.push(`crop [${spec.crop.join(", ")}] runs past ${file}, which is ${capture.width} × ${capture.height}`);
     }
   }
   for (const { n, at } of spec.marks) {
@@ -136,12 +129,11 @@ function fitProblems(spec, captures) {
 function sheetOf(spec, captures) {
   const side = spec.layout !== "stack";
   const panes = captures.map(({ capture }) => regionOf(spec, capture));
-  const frames = 2 * FRAME * (side ? panes.length : 1);
-  const room = MAX_WIDTH - 2 * PAD - frames - (side ? GAP * (panes.length - 1) : 0);
+  const around = 2 * PAD + 2 * FRAME * (side ? panes.length : 1) + (side ? GAP * (panes.length - 1) : 0);
   const widths = panes.map((pane) => pane.width);
   const natural = side ? widths.reduce((a, b) => a + b, 0) : Math.max(...widths);
-  const scale = Math.min(1, room / natural);
-  const width = scale < 1 ? MAX_WIDTH : Math.round(natural + frames + 2 * PAD + (side ? GAP * (panes.length - 1) : 0));
+  const scale = Math.min(1, (MAX_WIDTH - around) / natural);
+  const width = scale < 1 ? MAX_WIDTH : Math.round(natural + around);
   return {
     side,
     width,
@@ -238,11 +230,17 @@ function pngSize(png) {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
-// A fresh session per sheet, closed even when the render fails, as Lore's evidence tools do.
 function render(html, width, out) {
   const dir = mkdtempSync(join(tmpdir(), "mark-"));
   const session = ["--session", `mark-${randomUUID()}`];
-  const browser = (...args) => execFileSync("agent-browser", [...session, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const browser = (...args) => {
+    try {
+      return execFileSync("agent-browser", [...session, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      if (error.code === "ENOENT") throw new Error("mark.mjs renders in agent-browser, which is not on PATH. Install it with `npm install -g agent-browser`.");
+      throw new Error(`agent-browser ${args[0]} failed: ${(error.stderr || error.stdout || error.message).trim()}`);
+    }
+  };
   try {
     writeFileSync(join(dir, "sheet.html"), html);
     browser("set", "viewport", String(width), "100");
@@ -251,9 +249,6 @@ function render(html, width, out) {
     browser("screenshot", "--full", join(dir, "sheet.png"));
     mkdirSync(dirname(resolve(out)), { recursive: true });
     copyFileSync(join(dir, "sheet.png"), out);
-  } catch (error) {
-    if (error.code === "ENOENT") throw new Error("mark.mjs renders in agent-browser, which is not on PATH. Install it with `npm install -g agent-browser`.");
-    throw new Error(`agent-browser failed: ${(error.stderr || error.stdout || error.message).trim()}`);
   } finally {
     try {
       browser("close");
