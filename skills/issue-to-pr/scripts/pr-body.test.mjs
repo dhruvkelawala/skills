@@ -58,6 +58,11 @@ test("400 words above <details> pass, and image markup, URLs and the body below 
   assert.equal(passes(longer), T3_WORDS);
 });
 
+test("alt text that describes the image passes, even when it ends in a file name", () => {
+  const { body } = editLine("![after]", (line) => line.replace("![after]", "![The upload dialog after the player picks avatar.png]"));
+  assert.equal(passes(body), T3_WORDS);
+});
+
 // A full two-tier body from issue-to-pr, with commit SHAs, fenced excerpts and images below <details>.
 test("Lore #78's body, rewritten to the template, passes the check", () => {
   passes(fixture("lore-78.md"));
@@ -94,7 +99,7 @@ const REFUSALS = [
     problem: /"queue-steer-before-crop-6c52bffe\.png" is its file name/,
   },
   {
-    rule: "alt text that is a screenshot's file name, after the upload host renamed the file",
+    rule: "alt text that is a macOS screenshot's default name, on a renamed upload",
     ...editLine("![after]", (line) => line.replace("![after]", "![Screenshot 2026-10-25 at 10.00.00.png]")),
     problem: /"Screenshot 2026-10-25 at 10\.00\.00\.png" is its file name/,
   },
