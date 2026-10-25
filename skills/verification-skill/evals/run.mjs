@@ -74,7 +74,7 @@ async function runCase(kase) {
     writeFileSync(join(run.dir, "grade.json"), `${JSON.stringify(grade.output, null, 2)}\n`);
     const result = scored(kase, grade.output);
     appendResult(kase, run, result, { create, grade, createLeft, gradeLeft });
-    console.log(`${kase.name}: ${result.score} at skill ${run.skill}. Results in ${resultsFile}`);
+    console.log(`${kase.name}: ${result.score} at skill ${run.skill}, create on ${create.model}, the grade on ${grade.model}. Results in ${resultsFile}`);
   } finally {
     await cleanUp(run, changed);
   }
@@ -455,7 +455,7 @@ function appendResult(kase, run, result, { create, grade, createLeft, gradeLeft 
   const section = [
     `## ${kase.name}, ${new Date().toLocaleDateString("en-CA")}, skill ${run.skill}`,
     "",
-    `Score ${result.score}. Create took ${create.minutes} min on ${create.model}, and the grade ${grade.minutes} min on ${grade.model}.`,
+    `Score ${result.score}. Create took ${create.minutes} min, and the grade ${grade.minutes} min.`,
     `Replay: ${replay}.`,
     `Left behind, and stopped by the eval: after create: ${left(createLeft)}; after the grade: ${left(gradeLeft)}.`,
     "",

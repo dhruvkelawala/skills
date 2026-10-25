@@ -30,6 +30,6 @@ The run folder keeps both transcripts, the grade with its quotes and replay note
 
 ## Results
 
-[results.md](results.md) holds scores and verdicts only. Both case repos are private, so quotes and replay notes stay in the run folder. A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The same skill scores differently from run to run, so score a change more than once before you keep it.
+[results.md](results.md) holds scores and verdicts only. Both case repos are private, so quotes and replay notes stay in the run folder. It doesn't name the agents' model either, because no skill text here does ([models.json](../../models.json) maps jobs to models). The run's last line and its transcripts name it. A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The same skill scores differently from run to run, so score a change more than once before you keep it.
 
 `run.test.mjs` tests the runner with a fake claude: `node --test skills/verification-skill/evals/run.test.mjs`.
