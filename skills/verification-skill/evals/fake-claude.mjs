@@ -41,6 +41,7 @@ if (process.argv.includes("--json-schema")) {
     skills: files(join(process.env.CLAUDE_CONFIG_DIR, "skills")),
     gh: spawnSync("gh", ["pr", "list"]).status,
     push: spawnSync("git", ["push", process.env.FAKE_CASE_REPO, "HEAD:refs/heads/pushed"]).status,
+    scpPush: spawnSync("git", ["push", "nohost.invalid:acme/demo.git", "HEAD"], { encoding: "utf8" }).stderr,
     auth: process.env.CLAUDE_CODE_OAUTH_TOKEN,
     nested: ["CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID"].filter((key) => key in process.env),
     strays: [stray.pid, bare.pid],

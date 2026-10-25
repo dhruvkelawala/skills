@@ -135,6 +135,7 @@ describe("a run", () => {
     assert.equal(seen.remotes, "");
     assert.notEqual(seen.gh, 0, "gh worked inside the run");
     assert.notEqual(seen.push, 0, "a push to the case repo worked inside the run");
+    assert.match(seen.scpPush, /pushes-are-off-in-this-eval/, "a push to an scp-style address got past the guard");
     assert.deepEqual(seen.skills.filter((f) => f.endsWith("SKILL.md")), [join("verification-skill", "SKILL.md")]);
     assert.ok(seen.skills.includes(join("evidence", "references", "surfaces.md")), "a file the skill links to is missing");
     assert.deepEqual(seen.skills.filter((f) => f.includes("evals")), [], "the agent can read the eval's lessons");

@@ -29,16 +29,12 @@ const POINTS = { covered: 1, partly: 0.5, missing: 0 };
 const REPLAY = ["launch", "doctor", "drive", "cleanup"];
 const UNATTENDED = "Nobody can answer questions during this run.";
 const GH_OFF = '#!/bin/sh\necho "gh is off in this eval, so nothing reaches the case repo on GitHub" >&2\nexit 1\n';
-// Git rewrites a push to a URL that starts with any of these into a path that can't exist, so no push leaves the run,
-// to GitHub or to the case repo on disk. Fetches are untouched.
-const PUSH_PREFIXES = ["/", ".", "~", "file://", "https://", "http://", "ssh://", "git://", "git@"];
-const NO_PUSH = Object.fromEntries([
-  ["GIT_CONFIG_COUNT", String(PUSH_PREFIXES.length)],
-  ...PUSH_PREFIXES.flatMap((prefix, i) => [
-    [`GIT_CONFIG_KEY_${i}`, "url./dev/null/pushes-are-off-in-this-eval/.pushInsteadOf"],
-    [`GIT_CONFIG_VALUE_${i}`, prefix],
-  ]),
-]);
+// An empty pushInsteadOf prefix matches every URL, so git rewrites each push, to GitHub or to the case repo on disk,
+// into a path that can't exist. Fetches are untouched. It goes after any git config the caller passes the same way.
+function noPush(env) {
+  const n = Number(env.GIT_CONFIG_COUNT) || 0;
+  return { GIT_CONFIG_COUNT: String(n + 1), [`GIT_CONFIG_KEY_${n}`]: "url./dev/null/pushes-are-off-in-this-eval/.pushInsteadOf", [`GIT_CONFIG_VALUE_${n}`]: "" };
+}
 // Set by an enclosing Claude Code session in what it spawns (https://code.claude.com/docs/en/env-vars), plus the SDK
 // host's own. Left in, they would make each agent a child of that session. Sign-in and provider settings, such as
 // CLAUDE_CODE_OAUTH_TOKEN or CLAUDE_CODE_USE_BEDROCK, stay.
@@ -180,7 +176,7 @@ function prepare(kase) {
   copySkill(join(configs.create, "skills"));
   mkdirSync(configs.grade);
   const env = (phase) => {
-    const vars = { ...process.env, ...NO_PUSH, CLAUDE_CONFIG_DIR: configs[phase], PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
+    const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
     for (const key of SESSION_MARKERS) delete vars[key];
     return vars;
   };
