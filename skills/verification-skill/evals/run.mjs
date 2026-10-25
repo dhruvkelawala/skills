@@ -60,8 +60,8 @@ async function runCase(kase) {
     const gradeLeft = await sweep(run);
     writeFileSync(join(run.dir, "grade.json"), `${JSON.stringify(grade.output, null, 2)}\n`);
     const result = scored(kase, grade.output);
-    appendResult(kase, result, { create, grade, createLeft, gradeLeft });
-    console.log(`${kase.name}: ${result.score} at skill ${skillCommit()}. Results in ${resultsFile}`);
+    appendResult(kase, run, result, { create, grade, createLeft, gradeLeft });
+    console.log(`${kase.name}: ${result.score} at skill ${run.skill}. Results in ${resultsFile}`);
   } finally {
     await cleanUp(run, changed);
   }
@@ -159,6 +159,7 @@ function prepare(kase) {
   writeFileSync(join(bin, "gh"), GH_OFF);
   chmodSync(join(bin, "gh"), 0o755);
   const configs = { create: join(work, "claude-create"), grade: join(work, "claude-grade") };
+  const skill = skillCommit();
   copySkill(join(configs.create, "skills"));
   mkdirSync(configs.grade);
   const env = (phase) => {
@@ -167,7 +168,7 @@ function prepare(kase) {
     for (const key of Object.keys(vars)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_")) delete vars[key];
     return vars;
   };
-  return { id, dir, work, checkout, env, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
+  return { id, dir, work, checkout, env, skill, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
 }
 
 // The skill without its evals, which hold the answers, plus each file outside it that it links to, at the same
@@ -436,11 +437,11 @@ function skillCommit() {
   return `${sha.stdout.trim()}${changed ? " with uncommitted changes" : ""}`;
 }
 
-function appendResult(kase, result, { create, grade, createLeft, gradeLeft }) {
+function appendResult(kase, run, result, { create, grade, createLeft, gradeLeft }) {
   const replay = REPLAY.map((step) => `${step} ${grade.output.replay?.[step]?.result ?? "not reported"}`).join(", ");
   const left = (names) => names.join(", ") || "nothing";
   const section = [
-    `## ${kase.name}, ${new Date().toLocaleDateString("en-CA")}, skill ${skillCommit()}`,
+    `## ${kase.name}, ${new Date().toLocaleDateString("en-CA")}, skill ${run.skill}`,
     "",
     `Score ${result.score}. Create took ${create.minutes} min on ${create.model}, and the grade ${grade.minutes} min on ${grade.model}.`,
     `Replay: ${replay}.`,

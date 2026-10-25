@@ -68,6 +68,7 @@ function runDemo(create = "succeeds") {
   writeFileSync(simulators, JSON.stringify({ "DEMO-UDID": "Shutdown" }));
   const log = join(root, "claude.log");
   const refs = git(repo, "for-each-ref");
+  const skillCommit = git(join(root, "skills"), "rev-parse", "--short", "HEAD");
   const env = {
     ...process.env,
     HOME: home,
@@ -75,6 +76,7 @@ function runDemo(create = "succeeds") {
     FAKE_CASE_REPO: repo,
     FAKE_CLAUDE_LOG: log,
     FAKE_CREATE: create,
+    FAKE_SKILLS_REPO: join(root, "skills"),
     FAKE_VERDICTS: "covered,partly,missing",
     FAKE_XCRUN_STATE: simulators,
   };
@@ -87,7 +89,7 @@ function runDemo(create = "succeeds") {
     section: results.slice(results.lastIndexOf("\n## ") + 1),
     seen: existsSync(log) ? JSON.parse(readFileSync(log, "utf8").split("\n")[0]) : {},
     runDir: existsSync(runs) ? join(runs, readdirSync(runs)[0]) : null,
-    skillCommit: git(join(root, "skills"), "rev-parse", "--short", "HEAD"),
+    skillCommit,
     repo,
     base,
     later: git(repo, "rev-parse", "HEAD"),
@@ -132,7 +134,7 @@ describe("a run", () => {
     assert.deepEqual(seen.skills.filter((f) => f.includes("evals")), [], "the agent can read the eval's lessons");
   });
 
-  test("appends the grader's score to results.md, with the date and the skill's commit", () => {
+  test("appends the grader's score to results.md, with the date and the commit of the skill it ran", () => {
     const { section } = demo;
     assert.match(section, new RegExp(`^## demo, ${today}, skill ${demo.skillCommit}$`, "m"), demo.output);
     assert.match(section, /^Score 1\.5 of 3 \(50%\)/m);

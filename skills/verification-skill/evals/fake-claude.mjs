@@ -1,7 +1,8 @@
 // Stands in for the claude CLI in run.test.mjs. The create agent logs what it can see, writes a verify skill and
 // leaves two processes running: one that keeps the run's environment, and one started with an empty environment from
-// inside the checkout. With FAKE_CREATE=fails it also boots a simulator, then dies halfway through a line of its
-// transcript. The grader, called with --json-schema, returns the verdicts in FAKE_VERDICTS.
+// inside the checkout. It also commits to the skills repo, as someone working on the next change would. With
+// FAKE_CREATE=fails it boots a simulator, then dies halfway through a line of its transcript. The grader, called with
+// --json-schema, returns the verdicts in FAKE_VERDICTS.
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,6 +43,7 @@ if (process.argv.includes("--json-schema")) {
     push: spawnSync("git", ["push", process.env.FAKE_CASE_REPO, "HEAD:refs/heads/pushed"]).status,
     strays: [stray.pid, bare.pid],
   });
+  spawnSync("git", ["-C", process.env.FAKE_SKILLS_REPO, "-c", "user.name=eval", "-c", "user.email=eval@example.com", "commit", "-q", "--allow-empty", "-m", "the next change"]);
   mkdirSync(".agents/skills/verify-demo", { recursive: true });
   writeFileSync(".agents/skills/verify-demo/SKILL.md", "---\nname: verify-demo\n---\n\n# Verify demo\n");
   emit({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "node -e 'setInterval(() => {}, 1000)' &" } }] } });
