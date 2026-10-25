@@ -71,6 +71,10 @@ function runDemo(create = "succeeds") {
   const skillCommit = git(join(root, "skills"), "rev-parse", "--short", "HEAD");
   const env = {
     ...process.env,
+    CLAUDECODE: "1",
+    CLAUDE_CODE_CHILD_SESSION: "1",
+    CLAUDE_CODE_SESSION_ID: "the-enclosing-session",
+    CLAUDE_CODE_OAUTH_TOKEN: "eval-oauth-token",
     HOME: home,
     PATH: `${bin}:${process.env.PATH}`,
     FAKE_CASE_REPO: repo,
@@ -124,6 +128,8 @@ describe("a run", () => {
 
   test("the create agent works at the base with only the skill, with no ref to later commits, no gh and no push", () => {
     const { seen } = demo;
+    assert.equal(seen.auth, "eval-oauth-token", "the agent lost the sign-in it was given");
+    assert.deepEqual(seen.nested, [], "the agent runs as a child of the enclosing session");
     assert.equal(seen.head, demo.base, demo.output);
     assert.ok(!seen.commits.includes(demo.later), "the agent can read the commit after the base");
     assert.equal(seen.remotes, "");

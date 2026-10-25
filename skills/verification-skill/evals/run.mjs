@@ -39,6 +39,23 @@ const NO_PUSH = Object.fromEntries([
     [`GIT_CONFIG_VALUE_${i}`, prefix],
   ]),
 ]);
+// Set by an enclosing Claude Code session in what it spawns (https://code.claude.com/docs/en/env-vars), plus the SDK
+// host's own. Left in, they would make each agent a child of that session. Sign-in and provider settings, such as
+// CLAUDE_CODE_OAUTH_TOKEN or CLAUDE_CODE_USE_BEDROCK, stay.
+const SESSION_MARKERS = [
+  "CLAUDECODE",
+  "CLAUDE_CODE_CHILD_SESSION",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_CODE_BRIDGE_SESSION_ID",
+  "CLAUDE_CODE_REMOTE_SESSION_ID",
+  "CLAUDE_CODE_MESSAGING_SOCKET",
+  "CLAUDE_CODE_MESSAGING_TOKEN",
+  "CLAUDE_PID",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_EXECPATH",
+  "CLAUDE_CODE_SESSION_ATTENDED",
+  "CLAUDE_AGENT_SDK_VERSION",
+];
 const RESULTS_HEADER = `# Results
 
 Each section is one run of \`run.mjs <case>\`: the date, the skill's commit, the score and each lesson's verdict. A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The case repos are private, so the grader's quotes and replay notes stay in the run folder.
@@ -164,8 +181,7 @@ function prepare(kase) {
   mkdirSync(configs.grade);
   const env = (phase) => {
     const vars = { ...process.env, ...NO_PUSH, CLAUDE_CONFIG_DIR: configs[phase], PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
-    // Drop the markers of an enclosing Claude Code session so each agent starts as its own session.
-    for (const key of Object.keys(vars)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_")) delete vars[key];
+    for (const key of SESSION_MARKERS) delete vars[key];
     return vars;
   };
   return { id, dir, work, checkout, env, skill, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
