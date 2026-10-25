@@ -57,6 +57,11 @@ test("400 words above <details> pass, and image markup, URLs and the body below 
   assert.equal(passes(longer), T3_WORDS);
 });
 
+// A full two-tier body from issue-to-pr, with commit SHAs, fenced excerpts and images below <details>.
+test("Lore #78's body, rewritten to the template, passes the check", () => {
+  passes(fixture("lore-78.md"));
+});
+
 const REFUSALS = [
   {
     rule: "the 401st word above <details>",
