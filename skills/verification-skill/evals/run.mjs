@@ -29,6 +29,16 @@ const POINTS = { covered: 1, partly: 0.5, missing: 0 };
 const REPLAY = ["launch", "doctor", "drive", "cleanup"];
 const UNATTENDED = "Nobody can answer questions during this run.";
 const GH_OFF = '#!/bin/sh\necho "gh is off in this eval, so nothing reaches the case repo on GitHub" >&2\nexit 1\n';
+// Git rewrites a push to a URL that starts with any of these into a path that can't exist, so no push leaves the run,
+// to GitHub or to the case repo on disk. Fetches are untouched.
+const PUSH_PREFIXES = ["/", ".", "~", "file://", "https://", "http://", "ssh://", "git://", "git@"];
+const NO_PUSH = Object.fromEntries([
+  ["GIT_CONFIG_COUNT", String(PUSH_PREFIXES.length)],
+  ...PUSH_PREFIXES.flatMap((prefix, i) => [
+    [`GIT_CONFIG_KEY_${i}`, "url./dev/null/pushes-are-off-in-this-eval/.pushInsteadOf"],
+    [`GIT_CONFIG_VALUE_${i}`, prefix],
+  ]),
+]);
 const RESULTS_HEADER = `# Results
 
 Each section is one run of \`run.mjs <case>\`: the date, the skill's commit, the score and each lesson's verdict. A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The case repos are private, so the grader's quotes and replay notes stay in the run folder.
@@ -152,7 +162,7 @@ function prepare(kase) {
   copySkill(join(configs.create, "skills"));
   mkdirSync(configs.grade);
   const env = (phase) => {
-    const vars = { ...process.env, CLAUDE_CONFIG_DIR: configs[phase], PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
+    const vars = { ...process.env, ...NO_PUSH, CLAUDE_CONFIG_DIR: configs[phase], PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
     // Drop the markers of an enclosing Claude Code session so each agent starts as its own session.
     for (const key of Object.keys(vars)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_")) delete vars[key];
     return vars;

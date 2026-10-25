@@ -39,6 +39,7 @@ if (process.argv.includes("--json-schema")) {
     remotes: git("remote"),
     skills: files(join(process.env.CLAUDE_CONFIG_DIR, "skills")),
     gh: spawnSync("gh", ["pr", "list"]).status,
+    push: spawnSync("git", ["push", process.env.FAKE_CASE_REPO, "HEAD:refs/heads/pushed"]).status,
     strays: [stray.pid, bare.pid],
   });
   mkdirSync(".agents/skills/verify-demo", { recursive: true });

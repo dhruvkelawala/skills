@@ -72,6 +72,7 @@ function runDemo(create = "succeeds") {
     ...process.env,
     HOME: home,
     PATH: `${bin}:${process.env.PATH}`,
+    FAKE_CASE_REPO: repo,
     FAKE_CLAUDE_LOG: log,
     FAKE_CREATE: create,
     FAKE_VERDICTS: "covered,partly,missing",
@@ -119,12 +120,13 @@ describe("a run", () => {
     demo = runDemo();
   });
 
-  test("the create agent works at the base with only the skill, and can't see later commits or reach GitHub", () => {
+  test("the create agent works at the base with only the skill, with no ref to later commits, no gh and no push", () => {
     const { seen } = demo;
     assert.equal(seen.head, demo.base, demo.output);
     assert.ok(!seen.commits.includes(demo.later), "the agent can read the commit after the base");
     assert.equal(seen.remotes, "");
     assert.notEqual(seen.gh, 0, "gh worked inside the run");
+    assert.notEqual(seen.push, 0, "a push to the case repo worked inside the run");
     assert.deepEqual(seen.skills.filter((f) => f.endsWith("SKILL.md")), [join("verification-skill", "SKILL.md")]);
     assert.ok(seen.skills.includes(join("evidence", "references", "surfaces.md")), "a file the skill links to is missing");
     assert.deepEqual(seen.skills.filter((f) => f.includes("evals")), [], "the agent can read the eval's lessons");
