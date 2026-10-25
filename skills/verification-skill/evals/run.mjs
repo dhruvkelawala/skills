@@ -196,12 +196,15 @@ function copySkill(skills) {
   }
 }
 
-// Every file create added or changed, copied into the run folder, which outlives the checkout.
+// Every file create added or changed, copied into the run folder, which outlives the checkout. A link, such as a skill
+// folder linked into .claude/skills, stays a link.
 function keepChanges(run) {
   git(run.checkout, "add", "--all", "--intent-to-add");
   const files = git(run.checkout, "diff", "--name-only", "HEAD").split("\n").filter(Boolean);
   writeFileSync(join(run.dir, "changes.patch"), `${git(run.checkout, "diff", "--binary", "HEAD")}\n`);
-  for (const file of files) if (existsSync(join(run.checkout, file))) cpSync(join(run.checkout, file), join(run.dir, "changes", file));
+  for (const file of files) {
+    if (existsSync(join(run.checkout, file))) cpSync(join(run.checkout, file), join(run.dir, "changes", file), { recursive: true, verbatimSymlinks: true });
+  }
   return files;
 }
 

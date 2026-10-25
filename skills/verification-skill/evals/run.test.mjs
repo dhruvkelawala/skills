@@ -3,7 +3,7 @@
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,11 +151,12 @@ describe("a run", () => {
     assert.equal(demo.status, 0, demo.output);
   });
 
-  test("stops what the agents left running and removes the checkout, keeping what create wrote", () => {
+  test("stops what the agents left running and removes the checkout, keeping what create wrote, links included", () => {
     for (const pid of demo.seen.strays ?? []) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, `process ${pid} is still running`);
     assert.match(demo.section, /after create: node, node; after the grade: nothing/, demo.output);
     assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there");
     assert.ok(existsSync(join(demo.runDir, "changes", ".agents", "skills", "verify-demo", "SKILL.md")), "the skill create wrote is gone");
+    assert.equal(readlinkSync(join(demo.runDir, "changes", ".claude", "skills", "verify-demo")), "../../.agents/skills/verify-demo");
     assert.equal(git(demo.repo, "for-each-ref"), demo.refs);
     assert.equal(git(demo.repo, "status", "--porcelain"), "");
   });
