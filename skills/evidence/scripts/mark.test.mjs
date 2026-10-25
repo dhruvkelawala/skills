@@ -129,6 +129,11 @@ const refusals = [
     spec: { crop: [300, 100, 700, 400], marks: [{ n: 1, text: "The blue card", at: [null, [580, 390]] }] },
     names: /^- crop \[300, 100, 700, 400\] runs past before\.png/m,
   },
+  {
+    name: "a mark with one point for two panes",
+    spec: { marks: [{ n: 1, text: "The title block", at: [[200, 130]] }] },
+    names: /^- mark 1: /m,
+  },
 ];
 
 for (const { name, spec, names } of refusals) {

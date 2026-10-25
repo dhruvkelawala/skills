@@ -50,8 +50,65 @@ function regionOf(spec, capture) {
   return { left, top, width, height };
 }
 
-// Every problem with the spec, checked against each capture's size before anything is drawn.
-function specProblems(spec, captures) {
+// The spec and its captures, with every problem in them. Nothing is drawn until there are none.
+function load(specFile) {
+  if (!existsSync(specFile)) return { problems: [`there is no spec at ${specFile}`] };
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(specFile, "utf8"));
+  } catch (error) {
+    return { problems: [`${specFile} is not a JSON spec: ${error.message}`] };
+  }
+  const shape = shapeProblems(spec ?? {});
+  if (shape.length) return { problems: shape };
+  const folder = dirname(resolve(specFile));
+  const captures = spec.panes.map(({ file, label }) => {
+    const path = resolve(folder, file);
+    const png = existsSync(path) ? readFileSync(path) : undefined;
+    return { file, label, png, capture: png && pngSize(png) };
+  });
+  const unread = captures.filter(({ capture }) => !capture);
+  if (unread.length) return { problems: unread.map(({ file, png }) => (png ? `${file} is not a PNG` : `there is no ${file} beside the spec`)) };
+  return { spec, captures, problems: fitProblems(spec, captures) };
+}
+
+// The spec's own shape, checked before any capture is read.
+function shapeProblems(spec) {
+  const problems = [];
+  if (!["side", "stack"].includes(spec.layout ?? "side")) problems.push(`layout is ${JSON.stringify(spec.layout)}; use "side" or "stack"`);
+  const crop = spec.crop;
+  if (crop !== undefined && !(Array.isArray(crop) && crop.length === 4 && crop.every(Number.isFinite) && crop[2] > 0 && crop[3] > 0)) {
+    problems.push("crop is [x, y, width, height] in capture pixels");
+  }
+  const panes = Array.isArray(spec.panes) ? spec.panes : [];
+  if (!panes.length) problems.push("panes lists no captures");
+  panes.forEach((pane, i) => {
+    if (typeof pane?.file !== "string" || typeof pane?.label !== "string") problems.push(`pane ${i + 1} needs a file and a label`);
+  });
+  const marks = Array.isArray(spec.marks) ? spec.marks : [];
+  if (!marks.length) problems.push("marks lists no marks");
+  const numbers = new Set();
+  marks.forEach((mark, i) => {
+    const numbered = Number.isInteger(mark?.n) && mark.n > 0;
+    const name = numbered ? `mark ${mark.n}` : `the mark at position ${i + 1}`;
+    if (!numbered) problems.push(`${name} needs a number n, 1 or more`);
+    else if (numbers.has(mark.n)) problems.push(`${name} is numbered twice`);
+    numbers.add(mark?.n);
+    if (typeof mark?.text !== "string" || !mark.text.trim()) problems.push(`${name} needs text for its legend line`);
+    const at = Array.isArray(mark?.at) ? mark.at : [];
+    if (at.length !== panes.length) {
+      problems.push(`${name}: at has ${at.length} ${at.length === 1 ? "point" : "points"} for ${panes.length} panes; give one per pane, or null where the mark doesn't apply`);
+    } else if (!at.every((point) => point === null || (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)))) {
+      problems.push(`${name}: each point in at is [x, y] in capture pixels, or null`);
+    } else if (at.every((point) => point === null)) {
+      problems.push(`${name}: at points at no pane`);
+    }
+  });
+  return problems;
+}
+
+// The points and the crop, checked against each capture's size.
+function fitProblems(spec, captures) {
   const problems = [];
   if (spec.crop) {
     const [left, top, width, height] = spec.crop;
@@ -176,10 +233,8 @@ function overlay(pane) {
 
 const escape = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function pngSize(png, file) {
-  if (png.toString("hex", 0, 8) !== "89504e470d0a1a0a" || png.toString("latin1", 12, 16) !== "IHDR") {
-    throw new Error(`${file} is not a PNG; mark.mjs reads PNG captures`);
-  }
+function pngSize(png) {
+  if (png.toString("hex", 0, 8) !== "89504e470d0a1a0a" || png.toString("latin1", 12, 16) !== "IHDR") return undefined;
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
@@ -216,20 +271,14 @@ function main(argv) {
   }
   const [specFile, out] = argv;
   try {
-    const spec = JSON.parse(readFileSync(specFile, "utf8"));
-    const folder = dirname(resolve(specFile));
-    const captures = spec.panes.map((pane) => {
-      const png = readFileSync(resolve(folder, pane.file));
-      return { file: pane.file, label: pane.label, png, capture: pngSize(png, pane.file) };
-    });
-    const problems = specProblems(spec, captures);
+    const { spec, captures, problems } = load(specFile);
     if (problems.length) {
       console.error(`spec refused:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
       return 1;
     }
     const sheet = sheetOf(spec, captures);
     render(pageOf(spec, sheet), sheet.width, out);
-    const { width, height } = pngSize(readFileSync(out), out);
+    const { width, height } = pngSize(readFileSync(out));
     console.log(`${out}: ${width} × ${height}`);
     return 0;
   } catch (error) {
