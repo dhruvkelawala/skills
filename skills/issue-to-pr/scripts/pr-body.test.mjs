@@ -73,8 +73,8 @@ test("the pr skill's worked example passes, with under 250 words above <details>
   const skill = readFileSync(new URL("../../pr/SKILL.md", import.meta.url), "utf8");
   const example = skill.match(/^## Worked example\n[\s\S]*?^````markdown\n([\s\S]*?)^````$/m)?.[1];
   assert.ok(example, "pr/SKILL.md has a `## Worked example` section with the body in a ````markdown fence");
-  const words = passes(example);
-  assert.ok(words < 250, `the worked example has ${words} words above <details>`);
+  const count = passes(example);
+  assert.ok(count < 250, `the worked example has ${count} words above <details>`);
 });
 
 const REFUSALS = [

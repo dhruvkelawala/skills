@@ -29,15 +29,14 @@ const MEDIA_FILE = /^(?:\S+|(?:Screenshot|Screen Shot|Screen Recording|Simulator
 function checkBody(body) {
   const lines = linesOf(body);
   const top = lines.filter((line) => line.top);
-  const details = top.length < lines.length;
-  const problems = [...wordProblems(top, details), ...top.flatMap(shaProblems), ...lines.flatMap(altProblems)]
+  const count = top.reduce((sum, line) => sum + wordsIn(line.text), 0);
+  const words = `${count} words ${top.length < lines.length ? "above the first <details>" : "in a body with no <details>"}`;
+  const problems = [...wordProblems(top, words), ...top.flatMap(shaProblems), ...lines.flatMap(altProblems)]
     .sort((a, b) => a.line - b.line)
     .map(({ line, text }) => `line ${line}: ${text}`);
-  return { problems, summary: `${wordCount(top)} words ${details ? "above the first <details>" : "and no <details>"}` };
+  return { problems, words };
 }
 
-// Each line with its number, whether it sits in a fenced code block, and whether it is above the
-// first <details> outside one.
 function linesOf(body) {
   let fence = "";
   let top = true;
@@ -55,18 +54,15 @@ function linesOf(body) {
   });
 }
 
-function wordProblems(top, details) {
+function wordProblems(top, words) {
   let total = 0;
   const over = top.find((line) => (total += wordsIn(line.text)) > TOP_WORDS);
   if (!over) return [];
-  const where = details ? "above the first <details>" : "in a body with no <details>";
   return [{
     line: over.number,
-    text: `the top tier reaches ${TOP_WORDS + 1} words here; it has ${wordCount(top)} ${where}, not counting images and URLs. Keep it to ${TOP_WORDS} by moving the rest into <details>`,
+    text: `the top tier reaches ${TOP_WORDS + 1} words here; it has ${words}, not counting images and URLs. Keep it to ${TOP_WORDS} by moving the rest into <details>`,
   }];
 }
-
-const wordCount = (top) => top.reduce((sum, line) => sum + wordsIn(line.text), 0);
 
 function wordsIn(text) {
   return text
@@ -124,12 +120,12 @@ function main(argv) {
     console.error(USAGE);
     return 2;
   }
-  const { problems, summary } = checkBody(readFileSync(0, "utf8"));
+  const { problems, words } = checkBody(readFileSync(0, "utf8"));
   if (problems.length) {
     console.error(`body refused:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
     return 1;
   }
-  console.log(`the body passes: ${summary}`);
+  console.log(`the body passes: ${words}`);
   return 0;
 }
 
