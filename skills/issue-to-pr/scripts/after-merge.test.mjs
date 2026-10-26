@@ -150,9 +150,18 @@ test("nothing goes before the PR merges, and a merged PR keeps whatever could lo
 
   const withEnv = repo.build(12);
   repo.pr(12, withEnv, "MERGED");
-  writeFileSync(join(withEnv.checkout, ".env"), "API_TOKEN=only-here\n");
+  writeFileSync(join(withEnv.checkout, ".env.local"), "API_TOKEN=only-here\n");
   const keptEnv = repo.afterMerge(12, repo.main);
   assert.equal(keptEnv.status, 1, keptEnv.stdout + keptEnv.stderr);
-  assert.match(keptEnv.stdout, /kept .*feat-12-change.*\.env/);
-  assert.equal(existsSync(join(withEnv.checkout, ".env")), true, "an ignored file Git doesn't keep is still there");
+  assert.match(keptEnv.stdout, /kept .*feat-12-change: removing it would delete ignored files Git doesn't keep: \.env\.local$/m);
+  assert.equal(existsSync(join(withEnv.checkout, ".env.local")), true, "an ignored file Git doesn't keep is still there");
+
+  // A link into the worktree keeps it, even when it points at a tracked file, so only the link can.
+  const linkedIn = repo.build(13);
+  repo.pr(13, linkedIn, "MERGED");
+  symlinkSync("change-13.txt", join(linkedIn.checkout, ".env.local"));
+  const keptLink = repo.afterMerge(13, repo.main);
+  assert.equal(keptLink.status, 1, keptLink.stdout + keptLink.stderr);
+  assert.match(keptLink.stdout, /kept .*feat-13-change: removing it would delete ignored files Git doesn't keep: \.env\.local$/m);
+  assert.equal(existsSync(linkedIn.checkout), true);
 });
