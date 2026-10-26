@@ -369,3 +369,59 @@ Left behind, and stopped by the eval: after create: idb_companion, idb_companion
 | 11. Don't assume the seeded layout; wait for an element before measuring it (3010b086, d33d24db, 0ccfe514). | covered |
 | 12. A measurement must require that something was measured (a42ae484, d0ce329c). | covered |
 | 13. Catch short-lived states from video, and stop recorders in a `finally` (7fb75647). | partly |
+
+## visaroy, 2026-10-26, skill 857735b
+
+Score 6 of 19 (32%). Create took 41 min, and the grade 2 min.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Each paid external dependency gets an off and a live mode that doctor prints (9ceb4e23). | partly |
+| 2. Flag fixtures with absolute dates (9ceb4e23). | missing |
+| 3. Run helpers on GNU and BSD tools (d286d647). | missing |
+| 4. Bind to loopback, and have doctor prove it (f7a3336d). | partly |
+| 5. Prove recipes on a clean PATH (f7a3336d). | missing |
+| 6. Open each capture at full size before calling it proof (800509b7). | partly |
+| 7. Reach deep states through a dev-only seed, and say what it skips (305835f0, fc9651e7). | partly |
+| 8. Blank build-time public variables too (ec87acbe). | partly |
+| 9. Prove the production-build launch separately (daf4aeb1). | missing |
+| 10. For each spec, list its mocks, what it asserts and the credentials the test process reads (553a93d1). | missing |
+| 11. Name each environment and which ones a run may drive (66a4d9f7). | partly |
+| 12. Environment guards fail closed (70479332). | missing |
+| 13. Record the revision the target actually serves (e63a07c1). | partly |
+| 14. Point at the source instead of copying changing values (edc28879). | partly |
+| 15. One unmocked recipe per feature; label mocked ones UI-only (3b722625). | covered |
+| 16. Helpers need a fallback when a shared API quota runs out (e1f36c16, 840987fb). | missing |
+| 17. Never echo URLs or env values (cf53f164). | partly |
+| 18. Route every harness `webServer` and `reuseExistingServer` to the owned instance (4f8b1b23, 13c96fcc). | missing |
+| 19. Not fixed in the skill, but recurring: a port per run for parallel verifiers (about 14 PRs, such as #507 and #569), and killing the whole process group (#540, #545, #555, #569). | partly |
+
+## visaroy, 2026-10-26, skill 857735b
+
+Score 8 of 19 (42%). Create took 43 min, and the grade 2 min.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Each paid external dependency gets an off and a live mode that doctor prints (9ceb4e23). | partly |
+| 2. Flag fixtures with absolute dates (9ceb4e23). | missing |
+| 3. Run helpers on GNU and BSD tools (d286d647). | partly |
+| 4. Bind to loopback, and have doctor prove it (f7a3336d). | partly |
+| 5. Prove recipes on a clean PATH (f7a3336d). | missing |
+| 6. Open each capture at full size before calling it proof (800509b7). | covered |
+| 7. Reach deep states through a dev-only seed, and say what it skips (305835f0, fc9651e7). | covered |
+| 8. Blank build-time public variables too (ec87acbe). | partly |
+| 9. Prove the production-build launch separately (daf4aeb1). | missing |
+| 10. For each spec, list its mocks, what it asserts and the credentials the test process reads (553a93d1). | missing |
+| 11. Name each environment and which ones a run may drive (66a4d9f7). | partly |
+| 12. Environment guards fail closed (70479332). | partly |
+| 13. Record the revision the target actually serves (e63a07c1). | partly |
+| 14. Point at the source instead of copying changing values (edc28879). | partly |
+| 15. One unmocked recipe per feature; label mocked ones UI-only (3b722625). | covered |
+| 16. Helpers need a fallback when a shared API quota runs out (e1f36c16, 840987fb). | missing |
+| 17. Never echo URLs or env values (cf53f164). | missing |
+| 18. Route every harness `webServer` and `reuseExistingServer` to the owned instance (4f8b1b23, 13c96fcc). | partly |
+| 19. Not fixed in the skill, but recurring: a port per run for parallel verifiers (about 14 PRs, such as #507 and #569), and killing the whole process group (#540, #545, #555, #569). | partly |
