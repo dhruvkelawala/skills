@@ -18,20 +18,31 @@ Invoke as `/verification-skill create [app]` or `/verification-skill check [veri
 
 - **Launch.** Exact setup and launch commands from an empty data folder to a usable state, environment variable names (never secret values), the readiness signal, the build being run, and teardown. A server or UI runs as one instance this run owns. A CLI or TUI gets a fresh isolated session for each drive.
 - **Doctor.** A read-only check that the instance is the one this run owns, on the expected build, port and profile, ready, and signed in when it needs to be. Run it before driving and after anything surprising. Relaunch a stuck UI even when its process looks healthy.
-- **Drive.** Literal commands and selectors from the repo, the starting state, waits on observable conditions, and assertions. Match labels as rendered, and prefer stable handles to coordinates. Confirm the harness case actually ran, because a run with zero tests or all tests skipped proves nothing.
+- **Drive.** Literal commands and selectors from the repo, the starting state, waits on observable conditions, and assertions. Match labels as rendered, and prefer stable handles to coordinates. Judge each result by [What counts as a pass](#what-counts-as-a-pass).
 - **Evidence.** Capture the action and the resulting state through the real user path, plus a second view of any side effect, such as a written file or row. Record the revision, feature ID and entry point. Mock only at an existing production boundary and say so. When the safe path is a dry-run mode, observe what it skips (files, network, git) instead of trusting its name. Keep captures at an ignored or external path and link `EVIDENCE.md` for PR proof.
 - **Cleanup.** Stop only the processes this run started, by their recorded handle, including after failed attempts. Captures survive every teardown, including the harness's own.
 
 Ship a helper script only when the repo's harness cannot express a recipe. Make it executable, show its invocation in the skill, and give non-trivial logic a runnable check.
 
-`features/README.md` is the index. It holds the baseline state, driving conventions, how to report proof and skips, a link to each feature file on disk, and a short `Not mapped yet` list of features no replay has driven, each with its reason. Each feature file has an H1, a short paragraph on what the user sees, and exactly these H2s in this order:
+`features/README.md` is the index. It holds the baseline state, driving conventions, a `What counts as a pass` section, how to report proof and skips, a link to each feature file on disk, and a short `Not mapped yet` list of features no replay has driven, each with its reason. Each feature file has an H1, a short paragraph on what the user sees, and exactly these H2s in this order:
 
 1. `Sub-features`: short stable IDs, one observable behaviour each.
 2. `How to get to it (user POV)`: every entry point a user has.
-3. `Driving it with <harness>`: preconditions, then pairs of exact action and observable result, ending with what proves the end state.
+3. `Driving it with <harness>`: preconditions, then pairs of exact action and observable result, ending with what proves the end state and how that proof was seen failing.
 4. `Gotchas`: focus, timing, prerequisites, destructive effects and harness limits.
 
 [The example map](references/feature-map-example/README.md) and its two feature files show the shape. Copy the shape, not the commands.
+
+## What counts as a pass
+
+A check that has never been seen failing proves nothing. The index's `What counts as a pass` section states these rules in the app's own terms, including how doctor was seen failing, and create's own run follows them:
+
+- Doctor fails against a stopped instance and against a stale one, such as an instance still on an earlier build or started with another data folder.
+- Each drive's final assertion has run once where its effect is absent, such as on the base revision, with the feature off or before the state is reached, and failed. The feature file records how.
+- Zero tests, any skipped test or any retry is not a pass. A drive that has flaked once runs twice in a row with retries off, and passes both times.
+- A measurement shows that something was measured, such as a non-zero sample count.
+- Each feature has at least one unmocked recipe. A mocked recipe is labelled UI-only and lists its mocks.
+- Open each capture before keeping it, and check that it shows the requested state.
 
 ## Create
 
