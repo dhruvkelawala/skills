@@ -57,7 +57,7 @@ On `main`, `master` or the default branch, create `<type>/<short-description>` w
 
 ## 5. Commit
 
-Stage only the in-scope files. Commit with a conventional-commit subject that will also be the PR title. Follow the repository's own rule on AI attribution trailers.
+Stage only the in-scope files. Commit with a subject that will also be the PR title, written as the `pr` skill's [title](../pr/SKILL.md#the-title) says. Follow the repository's own rule on AI attribution trailers.
 
 ## 6. Push and publish
 
@@ -108,6 +108,8 @@ repairs: 0/<budget>
 ## PR body
 
 With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, the model it ran (step 1) and the result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: the problem and the change, Evidence before and after, a Proof paragraph that names the verification and autoreview commands that passed, rather than "tests pass", and the door and the blast radius. For a fix, name the root cause in the opening.
+
+Before step 6 sends a body, check it with `node <this skill's folder>/../pr-watch/scripts/secrets.mjs < <body file>`. When it exits 1, put each secret's variable in its place, as its output says, and check again.
 
 ## Report
 

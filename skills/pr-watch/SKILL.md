@@ -37,6 +37,15 @@ These go out without asking: replies to threads where `bot` is true and resolvin
 - a reply in a thread where `bot` is false, and resolving that thread
 - a PR comment that answers a written review
 
+Every reply and comment you write opens with this label, then a blank line and the text, so its reader knows a model wrote it for the user:
+
+```md
+> [!NOTE]
+> 🤖 **<model> responding on behalf of <login>**
+```
+
+`<model>` is the public name of the model writing it, as the harness reports it, or the harness's name when it reports none. `<login>` is the user's GitHub login, from `gh api user --jq .login`. The request comment goes out bare, because a bot reads it as a command. Before you send a reply without holding it, run `node "$SKILL_DIR/scripts/secrets.mjs" < <reply file>`. It exits 1 and names the line when the text holds a token, a key or a password, and the reply then names its variable, such as `$API_TOKEN`, in its place. `held.mjs hold` refuses a draft without the label or with a secret.
+
 Keep the held items for a PR in `HELD=~/.agent/pr-watch/<owner>/<repo>/<pr>.held.json`, and hold each one with the script beside the gate. The ids come from the gate's `threads`:
 
 ```bash
@@ -72,6 +81,10 @@ Then go back to step 1 of the watch loop.
 - **GraphQL quota.** When the gate's GraphQL query fails with a rate-limit error, it reads the PR, its checks, reviews, comments and reactions through REST, and holds at pending with `review threads unknown: GraphQL quota`, because REST cannot tell whether a thread is resolved. Each run tries GraphQL first, so the reason clears once the quota resets (`gh api rate_limit --jq .resources.graphql.reset`).
 - **Written reviews.** A COMMENTED review with a body, from a human account other than the PR author, appears in `threads` with `kind: "review"` and blocks. It counts as answered once the PR author posts a later PR comment or a later review with a non-empty body, or the same reviewer posts a newer review. The empty review that GitHub creates for a reply inside a thread does not answer it.
 
+## Scope
+
+Review loops grow a PR one cheap-looking fix at a time. A finding from a bot or review agent earns a fix when it is a real bug in the case the PR is for. Count the rest as nits, whatever severity the reviewer gave them: another path or a rare case, a test or guard the change doesn't need, extra compatibility, a small performance cost. Decline each nit in its thread with the reason, and list it under follow-ups in the report. Make each fix the smallest that clears its finding, and prefer one that deletes or narrows code. Before you hand a repair on, read its `git diff --shortstat` and cut what the finding doesn't need.
+
 ## Watch loop
 
 1. Pin the HEAD. `git rev-parse HEAD` must equal the PR's `headRefOid`. If they differ, push or stop, so that you only watch a HEAD you verified.
@@ -89,7 +102,7 @@ Then go back to step 1 of the watch loop.
    - **A person.** The PR waits on them. Step 5 re-requests their review after a push that fixes one of their comments.
 4. On blocked, handle each reason:
    - **Failed check.** Read the log with `gh run view --log-failed` and fix the cause locally.
-   - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code, and fix it or reply with why it is wrong. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
+   - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), check the finding against the code and the PR's [scope](#scope), and fix it or reply with why it is wrong or a nit. Resolve the thread after its fix is pushed or its reply is posted. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
    - **Unresolved thread with `bot: false`.** Read the whole thread the same way and check it against the code. Fix a clear request, and hold its reply in step 5, once the fix commit exists. Answer a question in a held reply. For a request you would decline, hold a reply that gives your reason, and change no code. `post` resolves the thread after the reply, so when you need the person's answer before you can act, ask the user instead of holding a question.
    - **Written review** (`kind: "review"`). Read it and fix each clear point. Hold one PR comment that answers it point by point, in step 5 when a point needed a fix.
    - **Changes requested by a person.** Fix the points in their threads as above. Answer the points in the review's own text in one held comment, where `--review` takes the review's `node_id` from `gh api repos/{owner}/{repo}/pulls/<n>/reviews`. Leave their review in place: the gate shows CHANGES_REQUESTED until they review again. Once every point is fixed or answered in a draft, CHANGES_REQUESTED is no longer a repair: the PR waits on the user while anything is held, and then on the person.
@@ -100,9 +113,13 @@ Then go back to step 1 of the watch loop.
    - **Someone else**, such as a running check, a reviewer that has not covered the HEAD, or a person who has your posted reply or re-request. Call `watch_pull_request` for the PR and end the turn. T3 wakes the thread when a check fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict, and you start again at step 1. It wakes only for comments made after the call, so handle the existing ones first. A wake is news, so run the gate before acting on it.
    - **The user**, when the gate exits `0`, anything is held for "post", the budget is spent, or a reason needs the user's decision. Call `unwatch_pull_request`, which returns the thread to the user's inbox, and report.
 
+   Outside T3, where there is no `watch_pull_request`, run the step 2 command with `--watch` added in place of the call: as a background command that wakes you when it exits, or in the foreground where the harness has none. It polls every 30 seconds and exits once the PR is ready, blocked, or still pending after 30 minutes, and you start again at step 1 with what it printed.
+
+   When T3 says it stopped watching because it could not read the PR, the account's GraphQL quota is usually spent. Read `gh api rate_limit --jq .resources.graphql`, and when `remaining` is near 0, wait until its `reset` time with one background command before you watch again. A pass that ends by watching again posts no message.
+
    A subagent cannot watch, because its parent thread owns the PR. It runs one pass and returns the PR URL, the HEAD, the gate result and the held file to the parent.
 
-**Complete when:** the gate exits `0` for the exact current HEAD and the PR is unwatched, or the PR waits on someone else and T3 watches it, or it waits on the user, is unwatched, and the report lists what is held and every reason still open.
+**Complete when:** the gate exits `0` for the exact current HEAD and the PR is unwatched, or the PR waits on someone else and T3 or the gate's `--watch` run watches it, or it waits on the user, is unwatched, and the report lists what is held and every reason still open.
 
 ## Report
 
@@ -113,4 +130,9 @@ Then go back to step 1 of the watch loop.
 - Gate result, the reviewers it required, the checks ignored, and any checks left in `notes`
 - Repairs made: the count, and one line per finding with its source thread or check link, the HEAD it was reviewed at, and the repair commit, so that `/promote` can use them
 - Findings rejected, with the reply posted or held
+- Follow-ups: each nit declined under [scope](#scope), with its thread link
 - Reasons still open
+
+## Credits
+
+The label, the scope rule and the notes on T3's watch adapt Theo Browne's `leaving-pr-comments` and `babysit-pr` from [tstack](https://github.com/t3dotgg/tstack) (MIT), at `t3dotgg/tstack@7de017b`.

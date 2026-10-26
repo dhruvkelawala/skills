@@ -63,6 +63,14 @@ test("alt text that describes the image passes, even when it ends in a file name
   assert.equal(passes(body), T3_WORDS);
 });
 
+// Captured requests sit in fenced blocks inside <details>, where a token is easiest to miss.
+test("a secret is refused wherever it sits, even in a fenced capture inside <details>", () => {
+  const token = "gh" + "p_" + "aB3dE5gH7j".repeat(4);
+  const body = [T3_BODY, "<details>\n<summary>Request</summary>", "```text\nGET /user\nAuthorization: token " + token + "\n```", "</details>"].join("\n\n");
+  const line = body.split("\n").findIndex((text) => text.includes(token)) + 1;
+  assert.deepEqual(problemsOf(body), [`line ${line}: a GitHub token; put its variable's name, such as $API_TOKEN, in its place`]);
+});
+
 // A full two-tier body from issue-to-pr, with commit SHAs, fenced excerpts and images below <details>.
 test("Lore #78's body, rewritten to the template, passes the check", () => {
   passes(fixture("lore-78.md"));

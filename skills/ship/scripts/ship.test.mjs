@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FINGERPRINT_DIFF_FLAGS, actor, bypassBlockers, formatVerdict, humanApprovers, landableRun, latestVerdict, parseArgs, parseDoor, patchFingerprint, verdictStatus, walkStack } from "./ship.mjs";
+import { FINGERPRINT_DIFF_FLAGS, actor, baseDrift, bypassBlockers, formatVerdict, humanApprovers, landableRun, latestVerdict, parseArgs, parseDoor, patchFingerprint, verdictStatus, walkStack } from "./ship.mjs";
 
 const TWO = "## Merge Danger\n\n**Door:** two-way\n\n**Blast Radius:** local";
 const ONE = "## Merge Danger\n\n**Door:** one-way\n\n**Blast Radius:** every user";
@@ -195,6 +195,19 @@ test("landableRun: stops at the first gap, so a verified PR above an unverified 
 test("landableRun: a bot author's own verdict, recorded under its bare login, does not count", () => {
   const r = landableRun([pr(1, "main", "a", { author: { login: "app/claude" } })], new Map([[1, ok("claude")]]), { me: "dhruv" });
   assert.match(r.ceiling.blocker, /not recorded by someone other than the PR author/);
+});
+
+test("baseDrift: a base commit that changed a file the PR renamed counts, and so does a compare cut off at GitHub's file limit", () => {
+  const files = [{ filename: "src/a.ts" }, { filename: "src/new.ts", previous_filename: "src/old.ts" }];
+  assert.equal(baseDrift(files, { ahead_by: 1, files: [{ filename: "src/old.ts" }] }, "main"),
+    "main has 1 commit this head lacks that change src/old.ts; rebase onto main, push, wait for required checks, then run again");
+  const limited = { ahead_by: 400, files: Array.from({ length: 300 }, (_, n) => ({ filename: `gen/${n}.ts` })) };
+  assert.match(baseDrift(files, limited, "main"), /^main has 400 commits this head lacks that change src\/a\.ts, src\/new\.ts, src\/old\.ts;/);
+});
+
+test("landableRun: base drift stops a PR before its verdict is weighed, since the rebase can change the patch", () => {
+  const drift = "main has 1 commit this head lacks that change x.ts; rebase onto main, push, wait for required checks, then run again";
+  assert.deepEqual(landableRun([pr(1, "main", "a")], new Map(), { driftByNumber: new Map([[1, drift]]), ruleB: [1] }), { run: [], ceiling: { number: 1, blocker: drift } });
 });
 
 test("landableRun: nothing lands onto a merge-queue branch, since the queue merges later heads", () => {

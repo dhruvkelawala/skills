@@ -12,7 +12,8 @@
 //   { kind: "comment", review, to, body }                 a PR comment answering a written review
 //   { kind: "resolve", thread, seen, to, url }            left by a post whose reply went out but whose
 //                                                        resolve did not; seen and url are the reply's
-// Holding again for the same thread or review replaces the earlier item.
+// Holding again for the same thread or review replaces the earlier item. `hold` refuses a draft that
+// does not open with pr-watch's label, or that holds a secret.
 //
 // `post` sends the items in order and removes each from the file once GitHub accepts it, so a failed
 // post can run again without sending anything twice. It appends one line per send to the run record.
@@ -23,6 +24,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { describeSecret, findSecrets } from "./secrets.mjs";
 
 const USAGE = [
   "usage: held.mjs hold --file F --thread ID --reply-to COMMENT_ID --seen COMMENT_ID --to LOGIN --body-file PATH",
@@ -31,6 +33,9 @@ const USAGE = [
 ].join("\n");
 const RESOLVE = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }";
 const LAST_COMMENT = "query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread{ comments(last:1){ nodes{ databaseId author{ login } } } } } }";
+// pr-watch's label, which says a model wrote the text for the user, then a blank line and the text.
+const LABEL = /^> \[!NOTE\]\n> 🤖 \*\*\S.* responding on behalf of \S+\*\*\n\n\S/u;
+const LABEL_SHAPE = "> [!NOTE]\n> 🤖 **<model> responding on behalf of <login>**";
 const FLAGS = new Set(["file", "thread", "reply-to", "seen", "to", "body-file", "review", "repo", "pr", "record"]);
 
 export function readHeld(file) {
@@ -87,13 +92,20 @@ function itemFrom(args) {
     if (!Number.isInteger(id) || id <= 0) throw new Error(`--${flag} expects a comment id, got "${args[flag]}"`);
     return id;
   };
-  const body = () => readFileSync(required("body-file"), "utf8");
+  const body = () => checkDraft(readFileSync(required("body-file"), "utf8"));
   const targets = ["thread", "review"].filter((flag) => args[flag] !== undefined);
   if (targets.length !== 1) throw new Error("hold needs exactly one of --thread or --review");
   if (args.thread) {
     return { kind: "reply", thread: args.thread, replyTo: commentId("reply-to"), seen: commentId("seen"), to: required("to"), body: body() };
   }
   return { kind: "comment", review: args.review, to: required("to"), body: body() };
+}
+
+function checkDraft(body) {
+  if (!LABEL.test(body)) throw new Error(`the draft must open with the label, then a blank line and the text:\n${LABEL_SHAPE}`);
+  const secrets = findSecrets(body);
+  if (secrets.length) throw new Error(`the draft holds a secret:\n${secrets.map((secret) => `- line ${secret.line}: ${describeSecret(secret)}`).join("\n")}`);
+  return body;
 }
 
 function post(file, args) {
