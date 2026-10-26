@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,7 +21,8 @@ const GIT_ENV = {
 // in `github`: GraphQL's `gh pr view` while the PR has `graphql: true`, and otherwise the rate-limit
 // error GitHub gives once the account's quota is spent, which leaves REST's `gh api` to answer.
 // `build(n)` makes PR n's branch in a worktree of its own, the way T3 makes a build's, and pushes it.
-// The repository ignores `.env` and `node_modules/`, as most projects do.
+// The repository ignores `.env`, `.env.local` and `node_modules/`, as most projects do, and keeps its
+// husky hooks in `.husky/`.
 function project(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-after-merge-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -40,7 +41,9 @@ function project(t) {
   git(main, "init", "--quiet", "--initial-branch=main");
   git(main, "remote", "add", "origin", origin);
   commit(main, "README.md", "skills\n");
-  commit(main, ".gitignore", ".env\nnode_modules/\n");
+  commit(main, ".gitignore", ".env\n.env.local\nnode_modules/\n");
+  mkdirSync(join(main, ".husky"));
+  commit(main, ".husky/pre-commit", "npm test\n");
   git(main, "push", "--quiet", "-u", "origin", "main");
   mkdirSync(join(dir, "bin"));
   writeFileSync(join(dir, "bin", "gh"), `#!/usr/bin/env node
@@ -87,15 +90,23 @@ fail("gh: Not Found (HTTP 404)");
   };
 }
 
-test("once a PR merged, its worktree, its local branch and origin's branch are gone, read through GraphQL or, with its quota spent, REST", (t) => {
+test("once a PR merged, its worktree goes with its packages, husky's hooks and its links out, and so do its local branch and origin's branch, read through GraphQL or, with its quota spent, REST", (t) => {
   const repo = project(t);
   const built = repo.build(7);
   repo.pr(7, built, "MERGED");
   mkdirSync(join(built.checkout, "node_modules", "left-pad"), { recursive: true });
   writeFileSync(join(built.checkout, "node_modules", "left-pad", "index.js"), "// installed by the project's setup\n");
+  // The project's worktree setup links the main checkout's env file in, and husky writes its hooks.
+  writeFileSync(join(repo.main, ".env.local"), "API_TOKEN=kept-in-main\n");
+  symlinkSync(join(repo.main, ".env.local"), join(built.checkout, ".env.local"));
+  mkdirSync(join(built.checkout, ".husky", "_"), { recursive: true });
+  writeFileSync(join(built.checkout, ".husky", "_", ".gitignore"), "*\n");
+  writeFileSync(join(built.checkout, ".husky", "_", "pre-commit"), "#!/usr/bin/env sh\n");
   const run = repo.afterMerge(7, built.checkout);
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.equal(existsSync(built.checkout), false, "the build's worktree is removed");
+  assert.match(run.stdout, /removed the worktree .*feat-7-change.*\.env\.local -> .*skills\/\.env\.local/);
+  assert.equal(readFileSync(join(repo.main, ".env.local"), "utf8"), "API_TOKEN=kept-in-main\n", "the link's target stays");
   assert.deepEqual(repo.branches(), ["main"]);
   assert.equal(repo.onOrigin(built.branch), false, "origin's branch is deleted");
   assert.doesNotMatch(repo.git(repo.main, "worktree", "list"), /feat-7/);
