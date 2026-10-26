@@ -1,0 +1,43 @@
+# after-merge on a scratch project with three merged PRs, each in its own worktree.
+# Same project, built fresh for each run; temp paths print as $TMP.
+
+## before: after-merge.mjs at c959e88
+after-merge: <base>/after-merge.mjs
+
+$ after-merge.mjs https://github.com/o/r/pull/1    # worktree holds installed packages, husky's hooks, and .env.local linked to the main checkout's
+deleted origin/fix/1-change
+kept $TMP/worktrees/fix-1-change: removing it would delete ignored files Git doesn't keep: .env.local, .husky/_/, .husky/_/.gitignore, .husky/_/pre-commit
+exit 1; worktree still there
+
+$ after-merge.mjs https://github.com/o/r/pull/2    # worktree holds .env.local linked to a file inside the worktree
+deleted origin/fix/2-change
+kept $TMP/worktrees/fix-2-change: removing it would delete ignored files Git doesn't keep: .env.local
+exit 1; worktree still there
+
+$ after-merge.mjs https://github.com/o/r/pull/3    # worktree holds a plain .env.local of its own
+deleted origin/fix/3-change
+kept $TMP/worktrees/fix-3-change: removing it would delete ignored files Git doesn't keep: .env.local
+exit 1; worktree still there
+
+main checkout's .env.local: "API_TOKEN=kept-in-main\n"
+
+## after: after-merge.mjs at 7b62df3
+after-merge: <head>/after-merge.mjs
+
+$ after-merge.mjs https://github.com/o/r/pull/1    # worktree holds installed packages, husky's hooks, and .env.local linked to the main checkout's
+removed the worktree $TMP/worktrees/fix-1-change, and its links out of it, whose targets stay: .env.local -> $TMP/project/.env.local
+deleted the branch fix/1-change
+deleted origin/fix/1-change
+exit 0; worktree gone
+
+$ after-merge.mjs https://github.com/o/r/pull/2    # worktree holds .env.local linked to a file inside the worktree
+deleted origin/fix/2-change
+kept $TMP/worktrees/fix-2-change: removing it would delete ignored files Git doesn't keep: .env.local
+exit 1; worktree still there
+
+$ after-merge.mjs https://github.com/o/r/pull/3    # worktree holds a plain .env.local of its own
+deleted origin/fix/3-change
+kept $TMP/worktrees/fix-3-change: removing it would delete ignored files Git doesn't keep: .env.local
+exit 1; worktree still there
+
+main checkout's .env.local: "API_TOKEN=kept-in-main\n"

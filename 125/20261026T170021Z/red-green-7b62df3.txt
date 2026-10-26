@@ -1,0 +1,54 @@
+# after-merge.test.mjs at 7b62df3, run against four copies of after-merge.mjs
+# base = c959e88; head = 7b62df3; mutant-every-file: outsideTarget returns join(root, path) for every ignored path;
+# mutant-any-symlink: outsideTarget returns the target of any symlink, inside the worktree or out.
+
+## base  (diff vs head: 46 lines)
+✖ once a PR merged, its worktree goes with its packages, husky's hooks and its links out, and so do its local branch and origin's branch, read through GraphQL or, with its quota spent, REST (1726.356209ms)
+✔ nothing goes before the PR merges, and a merged PR keeps whatever could lose work (3801.119792ms)
+ℹ tests 2
+ℹ pass 1
+ℹ fail 1
+✖ failing tests:
+  kept $TMP/worktrees/feat-7-change: removing it would delete ignored files Git doesn't keep: .env.local, .husky/_/, .husky/_/.gitignore, .husky/_/pre-commit
+  1 !== 0
+
+## head  (diff vs head: 0 lines)
+✔ once a PR merged, its worktree goes with its packages, husky's hooks and its links out, and so do its local branch and origin's branch, read through GraphQL or, with its quota spent, REST (1867.231833ms)
+✔ nothing goes before the PR merges, and a merged PR keeps whatever could lose work (5348.253334ms)
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+
+## mutant-every-file  (diff vs head: 1 lines)
+✖ once a PR merged, its worktree goes with its packages, husky's hooks and its links out, and so do its local branch and origin's branch, read through GraphQL or, with its quota spent, REST (2386.70775ms)
+✖ nothing goes before the PR merges, and a merged PR keeps whatever could lose work (4703.482083ms)
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+✖ failing tests:
+  deleted the branch feat/12-change
+  0 !== 1
+
+## mutant-any-symlink  (diff vs head: 2 lines)
+✔ once a PR merged, its worktree goes with its packages, husky's hooks and its links out, and so do its local branch and origin's branch, read through GraphQL or, with its quota spent, REST (2684.337875ms)
+✖ nothing goes before the PR merges, and a merged PR keeps whatever could lose work (4807.037333ms)
+ℹ tests 2
+ℹ pass 1
+ℹ fail 1
+✖ failing tests:
+  deleted the branch feat/13-change
+  0 !== 1
+
+# criterion 3: the two lists (node lists.mjs <rev>)
+at c959e88
+after-merge REBUILDABLE: .next, .turbo, node_modules, target
+cleanup step 4 rebuildable output: (no list)
+MISMATCH
+at cbeb953
+after-merge REBUILDABLE: .husky/_, .next, .turbo, node_modules, target
+cleanup step 4 rebuildable output: (no list)
+MISMATCH
+at 7b62df3
+after-merge REBUILDABLE: .husky/_, .next, .turbo, node_modules, target
+cleanup step 4 rebuildable output: .husky/_, .next, .turbo, node_modules, target
+match
