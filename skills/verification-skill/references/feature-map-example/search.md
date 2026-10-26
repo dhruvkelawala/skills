@@ -10,6 +10,7 @@ Search lets a user find notes by title or body text, inspect a matching note, an
 - `search-empty` shows a complete empty state for a query with no matches.
 - `search-clear` removes the query and restores the recent-notes view.
 - `search-cli` returns the same matching notes from the terminal.
+- `search-unavailable` shows an error, not the empty state, when search cannot run.
 
 ## How to get to it (user POV)
 
@@ -34,7 +35,8 @@ Preconditions:
 - **Clear query.** Choose `Clear search`. Run `control-notes browser click --role button --name "Clear search"`. The searchbox is empty and the `Recent notes` region replaces the result list.
 - **CLI match.** Search from the terminal. Run `control-notes cli -- notes search "quarterly" --format json`. Exit code `0` and stdout contain one object whose title is `Quarterly plan`.
 - **CLI miss.** Search for an absent value. Run `control-notes cli -- notes search "volcano" --format json`. Exit code `0` and stdout are `[]`.
-- **Proof.** Capture the populated result state. Run `control-notes browser snapshot --aria --path artifacts/search/results.aria.txt` and `control-notes browser screenshot --path artifacts/search/results.png`. Both artifacts identify Notes, the query, and `Quarterly plan`.
+- **Unavailable search (UI-only).** Mocks: `GET /api/search` answers `503`. Reopen search, then run `control-notes browser route --url "**/api/search*" --status 503` and `control-notes browser fill --role searchbox --name "Search notes" --value "quarterly"`. A status named `Search unavailable` appears and no `No matching notes` status does. Then run `control-notes browser unroute --url "**/api/search*"`. This proves the error state's UI only. **Title match** proves search itself.
+- **Proof.** Capture the populated result state. Run `control-notes browser snapshot --aria --path artifacts/search/results.aria.txt` and `control-notes browser screenshot --path artifacts/search/results.png`. Both artifacts identify Notes, the query, and `Quarterly plan`. Seen failing: with `NOTES_DATA_DIR` set to an empty directory, the same steps end at `No matching notes` and neither artifact contains `Quarterly plan`.
 
 ## Gotchas
 
@@ -43,3 +45,4 @@ Preconditions:
 - Archived notes are excluded unless the user enables `Include archived`.
 - The CLI defaults to human-readable output. Use `--format json` for stable assertions.
 - Opening a result changes browser state. Reopen search before proving another query.
+- A route left in place mocks every later search. Unroute it before any unmocked step.

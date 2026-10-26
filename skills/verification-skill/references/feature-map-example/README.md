@@ -20,6 +20,17 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Run terminal actions through `control-notes cli -- <command>`.
 - Restore seeded data after a mutation. Do not remove proof artifacts during cleanup.
 
+## What counts as a pass
+
+A check counts only after this map has seen it fail.
+
+- `control-notes doctor` exits non-zero when Notes is stopped, and when the running Notes reports another build revision or data directory than this run expects. Both failures were seen when this map was written. See them again after changing `control-notes doctor`.
+- Each feature's final proof failed once where its effect was absent. Its `Proof.` bullet says how. See a proof fail again after changing it.
+- A run that reports zero cases, any skipped case or any retry has not passed. A recipe that has flaked once runs twice in a row with retries off, and passes both times.
+- A timing, such as search latency, reports its sample count, and a count of zero fails.
+- Each feature has at least one unmocked recipe. A mocked recipe has `UI-only` in its label and lists each mock.
+- Open each capture before keeping it, and check that it shows the requested state, such as the query and its results, not the page's default state.
+
 ## Proof and skip reporting
 
 - Capture the user action and the resulting state, not only the final screen.
@@ -36,7 +47,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 1. `Sub-features` lists short IDs with one line for each behavior.
 2. `How to get to it (user POV)` lists every user entry point.
-3. `Driving it with <harness>` starts with `Preconditions:` and uses labeled bullets that pair each user action with an exact command and observable result.
+3. `Driving it with <harness>` starts with `Preconditions:` and uses labeled bullets that pair each user action with an exact command and observable result. The last bullet, `Proof.`, ends with how that proof was seen failing.
 4. `Gotchas` lists traps that can waste or invalidate a verification run.
 
 Keep implementation details out of the map. Name only user paths, stable handles, required state, commands, and observable proof.
@@ -44,4 +55,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 ## Features
 
 - [Create a note](./create-note.md) covers browser and CLI creation, cancellation, persistence, and cleanup.
-- [Search notes](./search.md) covers toolbar, keyboard, and CLI search with matching, empty, and clear states.
+- [Search notes](./search.md) covers toolbar, keyboard, and CLI search with matching, empty, clear, and unavailable states.
