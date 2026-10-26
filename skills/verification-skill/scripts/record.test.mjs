@@ -50,6 +50,18 @@ test("a launch that leaves a process in the background returns when the command 
   assert.ok(existsSync(marker), "the background process stopped before it finished");
 });
 
+test("a reader that stops early, such as head, still leaves the command in the record", (t) => {
+  const path = join(scratch(t), "record.md");
+  const command = "for i in 1 2 3 4 5; do seq 1 3000; sleep 0.3; done; echo finished";
+  const piped = spawnSync("bash", ["-c", `'${process.execPath}' '${RECORD}' '${path}' '${command}' | head -n 1`], { encoding: "utf8", timeout: 20_000 });
+
+  assert.equal(piped.stdout, "1\n");
+  const [entry] = entries(path);
+  assert.match(entry, / exit 0 /);
+  assert.ok(entry.includes(`$ ${command}\n1\n2\n`), entry);
+  assert.ok(entry.includes("\nfinished\n"), entry);
+});
+
 test("a command a signal stops, such as on a harness timeout, is still recorded with the output it had", async (t) => {
   const path = join(scratch(t), "record.md");
   const child = spawn(process.execPath, [RECORD, path, "echo begun; exec sleep 30"]);

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The record create keeps from its first command. Every command runs through this script, which prints
-// what the command printed and appends one entry to the record: when it started, its exit status, how
-// long it took, the load average and core count, the folder it ran in, the command and its output.
+// what the command printed, stdout and stderr together in the order they came, and appends one entry to
+// the record: when it started, its exit status, how long it took, the load average and core count, the
+// folder it ran in, the command and its output.
 //
 //   record.mjs <record> '<command>'
 //
@@ -20,8 +21,6 @@ const STOPS = ["SIGINT", "SIGTERM", "SIGHUP"];
 
 function record(path, command) {
   const started = new Date();
-  // The output goes through a file, not a pipe, so a launch that leaves a process in the background
-  // returns when the command does, and that process can keep writing after this script exits.
   const dir = mkdtempSync(join(tmpdir(), "verification-skill-record-"));
   const file = join(dir, "output");
   const out = openSync(file, "w");
@@ -82,7 +81,6 @@ async function main(argv) {
     return 2;
   }
   mkdirSync(dirname(resolve(path)), { recursive: true });
-  // A reader that closes early, such as `| head`, leaves the record whole.
   process.stdout.on("error", () => {});
   return record(resolve(path), command);
 }
