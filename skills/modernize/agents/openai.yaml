@@ -1,0 +1,4 @@
+interface:
+  display_name: "Modernize"
+  short_description: "Rebase an old PR and decide whether it should still land"
+  default_prompt: "Use $modernize to check this PR against its current base, say MODERNIZE, REWORK or CLOSE with the evidence, and rebase and push it only if it should still land."

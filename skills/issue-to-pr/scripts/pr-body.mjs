@@ -7,11 +7,13 @@
 //
 // The top tier is everything above the first <details>, or the whole body when it has none. It is
 // refused for more than 400 words, not counting image markup and URLs, and for a backticked commit
-// SHA. An image whose alt text is its file name, or `<file> @ <sha>`, is refused wherever it sits.
-// Each problem prints on its own line, naming the body's line, and the exit code is 1.
+// SHA. An image whose alt text is its file name, or `<file> @ <sha>`, and a secret, such as a token in
+// a captured request, are refused wherever they sit. Each problem prints on its own line, naming the
+// body's line, and the exit code is 1.
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { describeSecret, findSecrets } from "../../pr-watch/scripts/secrets.mjs";
 
 const USAGE = "usage: pr-body.mjs < body.md";
 const TOP_WORDS = 400;
@@ -31,7 +33,8 @@ function checkBody(body) {
   const top = lines.filter((line) => line.top);
   const count = top.reduce((sum, line) => sum + wordsIn(line.text), 0);
   const words = `${count} words ${top.length < lines.length ? "above the first <details>" : "in a body with no <details>"}`;
-  const problems = [...wordProblems(top, words), ...top.flatMap(shaProblems), ...lines.flatMap(altProblems)]
+  const secrets = findSecrets(body).map((secret) => ({ line: secret.line, text: describeSecret(secret) }));
+  const problems = [...wordProblems(top, words), ...top.flatMap(shaProblems), ...lines.flatMap(altProblems), ...secrets]
     .sort((a, b) => a.line - b.line)
     .map(({ line, text }) => `line ${line}: ${text}`);
   return { problems, words };

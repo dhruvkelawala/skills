@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Use when writing a PR body."
+description: "Use when writing a PR title or body."
 metadata:
   credits:
     skill: show-me
@@ -44,6 +44,10 @@ Write the body in two tiers. The top tier is what a reviewer reads first, in abo
 </details>
 ````
 
+## The title
+
+The title usually becomes the squash commit's subject, so take its form from the repository's recent merged PRs and `git log`, such as a conventional-commit prefix. After the prefix, say what the change does for the user, with its number when it has one, rather than how it works: "perf(server): cut websocket frame size by 70%+ with gzipping", not "perf(server): negotiate permessage-deflate on the websocket".
+
 ## The top tier
 
 Skip all preambles and keep prose brief. Use the user's domain language from `GLOSSARY.md`.
@@ -58,7 +62,7 @@ Skip all preambles and keep prose brief. Use the user's domain language from `GL
 
 Screenshots are S-tier when the environment is set up for it and the change is visual. A terminal transcript or an API response is A-tier. When a test is the only proof, show it in pseudocode as the test that now fails and passes.
 
-How the change was built goes in `<details>`: commit SHAs, base and head bookkeeping, the story of earlier builds and review rounds, red and green assertion lines, log links and verifier output. The commit each capture was taken at sits beside the verification there. `issue-to-pr` checks a body with its `scripts/pr-body.mjs`, which refuses more than 400 words above the first `<details>`, a backticked commit SHA above it, and alt text that is a file name.
+How the change was built goes in `<details>`: commit SHAs, base and head bookkeeping, the story of earlier builds and review rounds, red and green assertion lines, log links and verifier output. The commit each capture was taken at sits beside the verification there. `issue-to-pr` checks a body with its `scripts/pr-body.mjs`, which refuses more than 400 words above the first `<details>`, a backticked commit SHA above it, alt text that is a file name, and a secret anywhere in the body, such as a token in a captured request.
 
 ## Diagrams
 

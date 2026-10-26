@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 const GATE = fileURLToPath(new URL("./pr-gate.mjs", import.meta.url));
 const HELD = fileURLToPath(new URL("./held.mjs", import.meta.url));
 const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+// pr-watch's label, which every held draft opens with.
+const LABEL = "> [!NOTE]\n> 🤖 **Codex responding on behalf of dhruv**\n\n";
 
 // A gh on PATH that logs each call's arguments as a JSON line and answers from `answers`, keyed by
 // "query" for the gate's PR read, "thread" for post's read of a thread's newest comment, "mutation"
@@ -99,7 +101,7 @@ test("a person's thread: hold keeps the drafted reply off GitHub, and the gate t
   );
 
   const reads = gh.calls().length;
-  for (const draft of ["first draft", "Renamed to joinAll in 1a2b3c4."]) {
+  for (const draft of [`${LABEL}first draft`, `${LABEL}Renamed to joinAll in 1a2b3c4.`]) {
     const hold = gh.run(HELD, [
       "hold", "--file", held, "--thread", thread.id, "--reply-to", String(thread.replyTo),
       "--seen", String(thread.lastCommentId), "--to", thread.author, "--body-file", gh.file("reply.md", draft),
@@ -111,6 +113,22 @@ test("a person's thread: hold keeps the drafted reply off GitHub, and the gate t
   const after = gh.run(GATE, [...GATE_ARGS, "--held-file", held]);
   assert.equal(after.status, 1, after.stderr);
   assert.deepEqual(after.json, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
+});
+
+test("hold refuses a draft without the label or with a secret, and holds nothing", (t) => {
+  const gh = stubGh(t, {});
+  const held = gh.file("held.json");
+  const token = "gh" + "p_" + "aB3dE5gH7j".repeat(4);
+  for (const [body, error] of [
+    ["Renamed to joinAll in 1a2b3c4.", /must open with the label/],
+    [`${LABEL}Renamed it, and checked with ${token}.`, /line 4: a GitHub token/],
+  ]) {
+    const hold = gh.run(HELD, ["hold", "--file", held, "--review", "PRR_h", "--to", "reviewer", "--body-file", gh.file("draft.md", body)]);
+    assert.equal(hold.status, 2, hold.stdout);
+    assert.match(hold.stderr, error);
+    assert.ok(!hold.stderr.includes(token), "the refusal never repeats the secret");
+  }
+  assert.equal(existsSync(held), false);
 });
 
 // --- post ---------------------------------------------------------------------
@@ -127,8 +145,8 @@ const SENDS = {
 
 function holdEach(gh, held) {
   const holds = [
-    ["--thread", "PRRT_p", "--reply-to", "201", "--seen", "201", "--to", "teammate", "--body-file", gh.file("reply.md", "Renamed to joinAll in 1a2b3c4.")],
-    ["--review", "PRR_h", "--to", "reviewer", "--body-file", gh.file("answer.md", "1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed.")],
+    ["--thread", "PRRT_p", "--reply-to", "201", "--seen", "201", "--to", "teammate", "--body-file", gh.file("reply.md", `${LABEL}Renamed to joinAll in 1a2b3c4.`)],
+    ["--review", "PRR_h", "--to", "reviewer", "--body-file", gh.file("answer.md", `${LABEL}1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed.`)],
   ];
   for (const flags of holds) {
     const hold = gh.run(HELD, ["hold", "--file", held, ...flags]);
@@ -158,9 +176,9 @@ test("post sends every held reply, resolution and comment in order, and the run 
   const first = post(gh, held, record);
   assert.equal(first.status, 0, first.stderr);
   assert.deepEqual(writes(gh), [
-    ["POST", "repos/o/r/pulls/7/comments/201/replies", "body=Renamed to joinAll in 1a2b3c4."],
+    ["POST", "repos/o/r/pulls/7/comments/201/replies", `body=${LABEL}Renamed to joinAll in 1a2b3c4.`],
     ["POST", "graphql", "query=mutation", "id=PRRT_p"],
-    ["POST", "repos/o/r/issues/7/comments", "body=1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed."],
+    ["POST", "repos/o/r/issues/7/comments", `body=${LABEL}1. Fixed in 1a2b3c4.\n2. Kept, because the order is fixed.`],
   ]);
   const lines = readFileSync(record, "utf8").split("\n");
   assert.equal(lines[0], "stage: watching", "post appends and keeps what the record held");

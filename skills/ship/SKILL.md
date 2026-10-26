@@ -29,6 +29,7 @@ Each GitHub call in the script tries GraphQL first. When the GraphQL quota that 
 - **`ship land --force`** skips only the wait for a required approval. Required checks, every other branch rule, the pinned head, a rule B verdict, a standing change request and the one-way-door confirmation still apply. Only the user types it, in full, and an agent never adds it on its own.
 - **One-way doors.** The door is read from the PR body's `**Door:**` line, which the `pr` skill writes, and a PR with no door line counts as one-way. Confirm a one-way door with the user in chat before each merge, even when an approval exists.
 - **Land from the bottom.** Only the contiguous landable run starting at the lowest unmerged PR can land. A landable PR above a blocked one waits.
+- **The checks see the base.** When the default branch has commits a PR's head lacks that change a file the PR changes, `run` stops at that PR, because ship can't tell whether any check ran the patch with them. Commits that change only other files don't stop it. It is a narrow form of GitHub's "require branches to be up to date" rule, for branches that don't have it.
 - **Never** force-push a shared branch, merge with failing required checks, or approve on GitHub on anyone's behalf.
 
 ## verify
@@ -62,7 +63,7 @@ Landing requires an explicit request to land.
    4. Merge pinned to that head: `node "$SHIP" merge <pr> --head <head>`, adding `--force` when `run[0].forced` is true. It squash-merges with `gh pr merge --squash --match-head-commit <head>`, or, when GraphQL's quota is spent, with REST's `PUT repos/{owner}/{repo}/pulls/<pr>/merge` and `sha=<head>`. Either way GitHub refuses the merge if anything was pushed after the check. With `--force`, while GitHub still shows the PR as `REVIEW_REQUIRED`, `merge` takes GitHub's admin bypass, which skips every branch rule, only when the review is all that is missing: each required check passed as GitHub judges it, on the test merge commit where that has results and from the app the rule names; conversations are resolved and the head is up to date where the branch asks for that; and every other rule is one a squash merge keeps. Otherwise it refuses and names what is missing. A deployment, code-scanning or other rule it cannot confirm, or a classic protection rule only admins can read, always stops it. Never merge another way, such as `gh pr merge --auto`. `run` refuses a branch with a merge queue, because a queue merges whatever head is current when it fires.
    5. `merge` then confirms the merge happened at once and prints the merge commit. When the PR did not merge, or an auto-merge request exists, it disables auto-merge and exits 2: stop there. A merge that GitHub deferred is not pinned to the verified head.
    6. Fetch, confirm the merge commit is on the default branch, and rerun `run` from the next PR. Never assume GitHub retargeted the child.
-4. Stop at the ceiling. Report what landed, the ceiling PR and its blocker, and the cheapest thing that would clear it.
+4. When the ceiling's blocker is the base, rebase that PR onto the tip, push with `--force-with-lease`, wait for its required checks, and go back to step 2. Stop at any other ceiling. Report what landed, the ceiling PR and its blocker, and the cheapest thing that would clear it.
 
 ## Report
 

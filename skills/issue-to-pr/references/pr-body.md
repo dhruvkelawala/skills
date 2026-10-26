@@ -86,7 +86,7 @@ Before `gh pr create` and before every `gh pr edit --body-file`, check the body 
 node <issue-to-pr>/scripts/pr-body.mjs < <body file>
 ```
 
-`<issue-to-pr>` is the folder that holds this file's `references` folder. The check refuses more than 400 words above the first `<details>`, not counting image markup and URLs, a backticked commit SHA above it, and an image anywhere whose alt text is its file name or `<file> @ <sha>`. Each problem names its line. Rewrite the body and check it again until it prints `the body passes`. [Lore #78, rewritten](../scripts/fixtures/lore-78.md) is a full body that passes.
+`<issue-to-pr>` is the folder that holds this file's `references` folder. The check refuses more than 400 words above the first `<details>`, not counting image markup and URLs, a backticked commit SHA above it, an image anywhere whose alt text is its file name or `<file> @ <sha>`, and a secret anywhere, such as a token in a captured request. Each problem names its line. Rewrite the body and check it again until it prints `the body passes`. [Lore #78, rewritten](../scripts/fixtures/lore-78.md) is a full body that passes.
 
 ## Rules
 

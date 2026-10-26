@@ -153,7 +153,7 @@ if (args[0] === "pr" && args[1] === "comment") {
 }
 const endpoint = (args.find((a) => a === "user" || a.startsWith("repos/")) ?? "").split("?")[0];
 const method = args.includes("-X") ? args[args.indexOf("-X") + 1] : "GET";
-if (endpoint.startsWith("repos/fixture/repo/compare/")) answer({ behind_by: state.behindBy ?? 0 });
+if (endpoint.startsWith("repos/fixture/repo/compare/")) answer({ behind_by: state.behindBy ?? 0, ahead_by: state.baseAhead ?? 0, files: state.baseFiles ?? [] });
 const field = (name) => args.find((a) => a.startsWith(name + "="))?.slice(name.length + 1);
 const pages = (list) => (args.includes("--slurp") ? [list] : list);
 switch (method + " " + endpoint) {
@@ -164,6 +164,7 @@ switch (method + " " + endpoint) {
   case "GET repos/fixture/repo/pulls/7":
     answer({ ...pr, state: state.mergedAs ? "closed" : "open", merged: Boolean(state.mergedAs), merge_commit_sha: state.mergedAs, auto_merge: null });
   case "GET repos/fixture/repo/pulls/7/reviews": answer(pages(state.reviews));
+  case "GET repos/fixture/repo/pulls/7/files": answer(pages([{ filename: "sample.txt" }]));
   case "GET repos/fixture/repo/issues/7/comments": answer(pages(state.comments));
   case "POST repos/fixture/repo/issues/7/comments": {
     const comment = { body: field("body"), user: { login: state.login }, created_at: "2026-10-21T12:00:00Z" };
@@ -377,4 +378,15 @@ test("run: an approval given while the PR sat on its parent survives the restack
   git("update-ref", "refs/pull/7/head", changed);
   setState({ pr: { ...state().pr, head: { ...state().pr.head, sha: changed } } });
   assert.deepEqual(cli("run", "7").ceiling, REVIEW_WAIT, "the parent's head is a base for the approved commit, not a pass for any patch");
+});
+
+test("run: a base commit the head lacks holds the PR when it changes one of the PR's files, and not otherwise", (t) => {
+  const { cli, setState } = fixtureGitHub(t, { graphql: true, baseAhead: 2, baseFiles: [{ filename: "other.txt" }] });
+  assert.equal(cli("run", "7").ceiling, null, "base commits that change only other files");
+  setState({ baseFiles: [{ filename: "other.txt" }, { filename: "sample.txt" }] });
+  assert.deepEqual(cli("run", "7"), {
+    run: [],
+    ceiling: { number: 7, blocker: "main has 2 commits this head lacks that change sample.txt; rebase onto main, push, wait for required checks, then run again" },
+    stackStop: null,
+  });
 });

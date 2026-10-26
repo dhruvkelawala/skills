@@ -127,6 +127,26 @@ export function walkStack(prs, bottomNumber) {
   }
 }
 
+// GitHub's compare lists at most this many files.
+const COMPARE_FILE_LIMIT = 300;
+
+// Base drift: commits on the PR's base that its head lacks and that change a file the PR changes.
+// A check may have run on a test merge that held some of them, but ship cannot tell which, so any one
+// stops the PR until a rebase puts it under the PR's checks. Takes the PR's files and GitHub's compare
+// from the head to the base, both as REST returns them; a renamed file counts under both names, and a
+// compare that hit its file limit counts as changing every file.
+export function baseDrift(prFiles, compare, base) {
+  const missing = compare.ahead_by ?? 0;
+  if (missing === 0) return null;
+  const names = (files) => files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
+  const changed = new Set(names(compare.files ?? []));
+  const limited = (compare.files ?? []).length >= COMPARE_FILE_LIMIT;
+  const shared = [...new Set(names(prFiles))].filter((file) => limited || changed.has(file));
+  if (shared.length === 0) return null;
+  const listed = shared.slice(0, 3).join(", ") + (shared.length > 3 ? ` and ${shared.length - 3} more` : "");
+  return `${base} has ${missing} commit${missing === 1 ? "" : "s"} this head lacks that change ${listed}; rebase onto ${base}, push, wait for required checks, then run again`;
+}
+
 // Rule B: a PR needs an independent verdict only when its door is one-way or unstated, when the caller
 // names it in `ruleB` (it touches authority, stored data, money or a production switch that its proof
 // doesn't cover, or the user said verify), or when a verdict is already on record for it. Every other
@@ -150,7 +170,10 @@ function verdictReason(p, door, status, ruleB) {
 //
 // A merge queue (or any deferred merge) lands whatever head is current when it fires, so the pinned
 // head cannot be enforced. ship never lands onto a branch with a merge queue.
-export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), requiredApprovals = 0, ruleB = [], force = false, mergeQueue = false, me } = {}) {
+//
+// Base drift (`driftByNumber`, baseDrift() per PR) comes before every other blocker, because the
+// rebase that clears it can change the patch each verdict and approval is measured on.
+export function landableRun(stack, statusByNumber, { approversByNumber = new Map(), driftByNumber = new Map(), requiredApprovals = 0, ruleB = [], force = false, mergeQueue = false, me } = {}) {
   if (mergeQueue && stack.length) return { run: [], ceiling: { number: stack[0].number, blocker: "the target branch uses a merge queue, which merges later heads ship cannot pin" } };
   const run = [];
   for (const p of stack) {
@@ -161,8 +184,10 @@ export function landableRun(stack, statusByNumber, { approversByNumber = new Map
     const needed = Math.max(requiredApprovals, p.reviewDecision === "REVIEW_REQUIRED" ? 1 : 0);
     const waiting = approvers.length < needed;
     const why = verdictReason(p, door, s, ruleB);
+    const drift = driftByNumber.get(p.number);
     let blocker = null;
-    if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
+    if (drift) blocker = drift;
+    else if (why && s.status !== "current") blocker = `verdict ${s.status}${s.reason ? `: ${s.reason}` : ""} (rule B: ${why})`;
     else if (why && (!s.recordedBy || (actor(s.recordedBy) === actor(p.author?.login) && !ownPr))) blocker = "verdict was not recorded by someone other than the PR author";
     else if (waiting && !force) blocker = approvers.length === 0 ? "GitHub requires a review: waiting for a human approval of this patch" : `GitHub requires ${needed} approvals: ${approvers.length} human approval${approvers.length > 1 ? "s" : ""} of this patch so far`;
     else if (waiting && p.reviewDecision === "CHANGES_REQUESTED") blocker = "a reviewer requested changes, and --force skips only the wait for an approval";
@@ -412,6 +437,13 @@ function mergeAt(n, head, repo, force) {
   throw new Error(`PR #${n} did not merge at once, so the merge was not pinned to ${head.slice(0, 12)}${pr.autoMerge ? "; its auto-merge request is now disabled" : ""}`);
 }
 
+// Base drift for one PR, read through REST.
+function driftFor(pr, repo) {
+  const owner = nameWithOwner(repo);
+  const compare = JSON.parse(sh("gh", ["api", `repos/${owner}/compare/${pr.headRefOid}...${pr.baseRefName}`, "--jq", "{ ahead_by, files: [.files[]? | { filename, previous_filename }] }"]));
+  return compare.ahead_by ? baseDrift(restList(`repos/${owner}/pulls/${pr.number}/files?per_page=100`), compare, pr.baseRefName) : null;
+}
+
 function statusFor(pr, repo, trusted, me, patch = currentPatch(pr)) {
   return verdictStatus(latestVerdict(prComments(pr.number, repo), { prAuthor: pr.author?.login, trusted, me }), patch);
 }
@@ -504,8 +536,11 @@ async function main() {
     const states = new Map(stack.map((p) => [p.number, landingState(p, repo, trusted, me)]));
     const statuses = new Map([...states].map(([n, s]) => [n, s.status]));
     const approvers = new Map([...states].map(([n, s]) => [n, s.approvers]));
-    const { mergeQueue, approvals } = stack.length > 0 ? branchRules(repository(repo).defaultBranch, repo) : {};
-    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, requiredApprovals: approvals, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
+    const defaultBranch = stack.length > 0 ? repository(repo).defaultBranch : null;
+    const { mergeQueue, approvals } = defaultBranch ? branchRules(defaultBranch, repo) : {};
+    // A layer that sits on another PR is rebased onto the default branch before it lands, and checked then.
+    const drift = new Map(stack.filter((p) => p.baseRefName === defaultBranch).map((p) => [p.number, driftFor(p, repo)]));
+    const result = { ...landableRun(stack, statuses, { approversByNumber: approvers, driftByNumber: drift, requiredApprovals: approvals, ruleB, force: a.force, mergeQueue, me }), stackStop: stop ?? null };
     return print(result, a.json, (r) =>
       [`landable run: ${r.run.map((x) => `#${x.number}@${x.head}${x.forced ? " (approval skipped by --force)" : ""}`).join(" -> ") || "(none)"}`,
        r.ceiling ? `ceiling: #${r.ceiling.number}, ${r.ceiling.blocker}` : "ceiling: none, the whole stack is landable",

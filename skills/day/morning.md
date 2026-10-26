@@ -58,12 +58,13 @@ Stopped last night
 
 Strain: 38 GB free on disk, biggest ~/Library (300 GB, of which ~/Library/Developer 120 GB).
 
-Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, and "go on 9" restarts a stopped run.
+Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, `/modernize https://github.com/<owner>/app/pull/20` says whether line 7 should still land, and "go on 9" restarts a stopped run.
 ````
 
 - The sections come in this order, under these names. Leave out a section with nothing in it, and its count in the first line.
 - Number every line in one sequence, so a reply can name any line.
 - **Builds to start** and **Going stale** list their first 10 in the script's order, then count the rest in one line.
+- The last line offers `/modernize <its URL>` for the first **Going stale** PR, which rebases it or says why it should change or close.
 - **Review queue** lists every PR in the queue's order. The first one's line gives its prep: the findings by priority and where its tour is, or why it has no guide. If that PR changes before its review, pr-review preps it again, because its prep record no longer names the PR's head. The last line offers `/pr-review <its URL>`, which reviews it from its prep in this thread. A bare `/pr-review` reviews this thread's own branch, and `/pr-review queue` walks only this project's queue, so the report offers neither.
 - Link each issue and PR by its GitHub URL, which for a PR opens T3's PR panel beside the thread, and each thread as `[title](t3-thread://v1/<threadId>)` with the `threadId` exactly as T3 returns it. Never link a local file or localhost.
 - The last line names only the replies that apply to this report.
