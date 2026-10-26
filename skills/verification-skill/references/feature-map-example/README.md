@@ -24,8 +24,8 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 A check counts only after this map has seen it fail.
 
-- `control-notes doctor` exits non-zero when Notes is stopped, and when the running Notes reports another build revision or data directory than this run expects. Both failures were seen when this map was written.
-- Each feature's final proof failed once where its effect was absent. Its `Proof.` bullet says how.
+- `control-notes doctor` exits non-zero when Notes is stopped, and when the running Notes reports another build revision or data directory than this run expects. Both failures were seen when this map was written. See them again after changing `control-notes doctor`.
+- Each feature's final proof failed once where its effect was absent. Its `Proof.` bullet says how. See a proof fail again after changing it.
 - A run that reports zero cases, any skipped case or any retry has not passed. A recipe that has flaked once runs twice in a row with retries off, and passes both times.
 - A timing, such as search latency, reports its sample count, and a count of zero fails.
 - Each feature has at least one unmocked recipe. A mocked recipe has `UI-only` in its label and lists each mock.
