@@ -26,7 +26,8 @@ const SHAPES = [
   ["a JSON web token", /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
   // A token after `Bearer`, unless it is a placeholder: a variable, a <tag>, or ALL_CAPS words.
   ["a bearer token", /\b[Bb]earer\s+(?![$<{]|[A-Z_]+\b)[A-Za-z0-9._~+/-]{20,}/],
-  ["a password in a URL", /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:(?![$<{*])[^\s:/@]+@(?!localhost\b|127\.0\.0\.1\b|0\.0\.0\.0\b|\[::1\])/i],
+  // A password, unless it is a placeholder or the whole host is this machine's (not localhost.example.com).
+  ["a password in a URL", /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:(?![$<{*])[^\s:/@]+@(?!(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?![\w.-]))/i],
 ];
 
 // Every secret in `text` as { line, kind }, one per kind per line.

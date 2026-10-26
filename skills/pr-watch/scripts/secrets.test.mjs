@@ -22,6 +22,7 @@ test("each kind of secret is found on its line", () => {
     ["a JSON web token", `${fake("ey" + "J", 20)}.${fake("ey" + "J", 20)}.${fake("", 20)}`],
     ["a bearer token", `curl -H "Authorization: Bearer ${fake("", 40)}"`],
     ["a password in a URL", "DATABASE_URL=postgres://app:" + "s3cr3tpw" + "@db.internal:5432/app"],
+    ["a password in a URL", "DATABASE_URL=postgres://app:" + "s3cr3tpw" + "@localhost.example.com:5432/app"],
     ["a private key", "-----BEGIN OPENSSH " + "PRIVATE KEY-----"],
   ];
   for (const [kind, line] of cases) assert.deepEqual(findSecrets(`before\n${line}\nafter`), [{ line: 2, kind }], line);
