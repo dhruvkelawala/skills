@@ -15,7 +15,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
@@ -59,13 +59,13 @@ function tryGit(cwd, ...args) {
 
 // Where an ignored symlink points, when that is outside the worktree. Deleting such a link deletes
 // nothing it points at.
-function targetOutside(root, path) {
+function outsideTarget(root, path) {
   const link = join(root, path);
   try {
     if (!lstatSync(link).isSymbolicLink()) return null;
     const target = realpathSync(link);
     const inside = relative(realpathSync(root), target);
-    return inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside) ? target : null;
+    return inside === ".." || inside.startsWith(`..${sep}`) ? target : null;
   } catch {
     return null;
   }
@@ -73,10 +73,15 @@ function targetOutside(root, path) {
 
 // The ignored files removing a worktree would lose, and the links out of it, which lose nothing.
 function ignoredFiles(root) {
-  const paths = git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory").split("\0")
-    .filter((path) => path && !REBUILDABLE.some((entry) => `/${path}/`.includes(`/${entry}/`)));
-  const links = paths.map((path) => ({ path, target: targetOutside(root, path) })).filter((link) => link.target);
-  return { lost: paths.filter((path) => !links.some((link) => link.path === path)), links };
+  const lost = [];
+  const links = [];
+  for (const path of git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory").split("\0")) {
+    if (!path || REBUILDABLE.some((entry) => `/${path}/`.includes(`/${entry}/`))) continue;
+    const target = outsideTarget(root, path);
+    if (target) links.push(`${path} -> ${target}`);
+    else lost.push(path);
+  }
+  return { lost, links };
 }
 
 // The local branch and the checkout that holds it. Returns why they were kept, or nothing.
@@ -104,8 +109,7 @@ function removeLocal(pr, main, holder) {
     } catch (error) {
       return `${holder.path}: ${String(error.stderr).trim()}`;
     }
-    const linked = links.map((link) => `${link.path} -> ${link.target}`).join(", ");
-    console.log(`removed the worktree ${holder.path}${links.length ? `, and its links out of it, whose targets stay: ${linked}` : ""}`);
+    console.log(`removed the worktree ${holder.path}${links.length ? `, and its links out of it, whose targets stay: ${links.join(", ")}` : ""}`);
   }
   git(main.path, "branch", "--quiet", "-D", pr.branch);
   console.log(`deleted the branch ${pr.branch}`);

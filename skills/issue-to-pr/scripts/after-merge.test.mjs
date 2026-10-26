@@ -156,7 +156,7 @@ test("nothing goes before the PR merges, and a merged PR keeps whatever could lo
   assert.match(keptEnv.stdout, /kept .*feat-12-change: removing it would delete ignored files Git doesn't keep: \.env\.local$/m);
   assert.equal(existsSync(join(withEnv.checkout, ".env.local")), true, "an ignored file Git doesn't keep is still there");
 
-  // A link into the worktree keeps it, even when it points at a tracked file, so only the link can.
+  // A link into the worktree keeps it too. It points at a tracked file, so nothing else here could.
   const linkedIn = repo.build(13);
   repo.pr(13, linkedIn, "MERGED");
   symlinkSync("change-13.txt", join(linkedIn.checkout, ".env.local"));
