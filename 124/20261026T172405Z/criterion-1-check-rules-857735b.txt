@@ -1,0 +1,45 @@
+$ node check-rules.mjs 737b8d7   # base: main after #126
+MISS 1 replays run one after another, never two skills at once
+MISS 1 each replay records the load average
+MISS 1 a timeout learned under load is written with its idle timing, or not at all
+MISS 2 a gap that applies to a sibling skill is fixed in both
+MISS 2 the sibling's next replay counts that gap as its own
+MISS 3 a precaution is a gap when the step without it could change the user's data, cross another run, or touch something the skill leaves alone
+MISS 3 other precautions stay nits
+MISS 4 when the base moves after the last replay, run each block again on the new base
+MISS 4 a changed block gets one more replay within the cap, or each unreplayed fix goes under Not checked
+MISS 5 create starts the recorder script before its first command
+MISS 5 the recorder writes the command, its exit status and its output
+MISS 5 the hand-kept record is gone
+MISS 6 create checks Claude Code through .claude/skills/ and Codex through .agents/skills/
+MISS 6 where a host doesn't find it, create adds the link it reads, such as a relative symlink
+MISS 6 no telling agents to read the skill by path
+ok   keep: What counts as a pass is unchanged
+ok   keep: Run's seen-failing sentences are unchanged
+ok   keep: Run's completion line still asks for every command in the record
+ok   keep: Record's completion line unchanged, Write's keeps #106's proof clause
+ok   scope: only the Create section changed
+737b8d7: 15 of 20 missing
+
+$ node check-rules.mjs 857735b   # this branch
+ok   1 replays run one after another, never two skills at once
+ok   1 each replay records the load average
+ok   1 a timeout learned under load is written with its idle timing, or not at all
+ok   2 a gap that applies to a sibling skill is fixed in both
+ok   2 the sibling's next replay counts that gap as its own
+ok   3 a precaution is a gap when the step without it could change the user's data, cross another run, or touch something the skill leaves alone
+ok   3 other precautions stay nits
+ok   4 when the base moves after the last replay, run each block again on the new base
+ok   4 a changed block gets one more replay within the cap, or each unreplayed fix goes under Not checked
+ok   5 create starts the recorder script before its first command
+ok   5 the recorder writes the command, its exit status and its output
+ok   5 the hand-kept record is gone
+ok   6 create checks Claude Code through .claude/skills/ and Codex through .agents/skills/
+ok   6 where a host doesn't find it, create adds the link it reads, such as a relative symlink
+ok   6 no telling agents to read the skill by path
+ok   keep: What counts as a pass is unchanged
+ok   keep: Run's seen-failing sentences are unchanged
+ok   keep: Run's completion line still asks for every command in the record
+ok   keep: Record's completion line unchanged, Write's keeps #106's proof clause
+ok   scope: only the Create section changed
+857735b: 0 of 20 missing

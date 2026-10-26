@@ -1,0 +1,28 @@
+$ node skills/verification-skill/scripts/record.mjs /tmp/i2p124-demo-record.md 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9 || echo "no app on :9" >&2; exit 7'
+000
+no app on :9
+[exit 7]
+$ node skills/verification-skill/scripts/record.mjs /tmp/i2p124-demo-record.md 'uptime'
+17:22  up 4 days,  4:32, 3 users, load averages: 53.11 106.50 158.42
+[exit 0]
+
+$ cat /tmp/i2p124-demo-record.md
+
+## 2026-10-26T17:22:32Z · exit 7 · 0.0 s · load 53.11 on 12 cores
+
+In ~/.t3/worktrees/skills/feat-124-create-replay-rules:
+
+```console
+$ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9 || echo "no app on :9" >&2; exit 7
+000
+no app on :9
+```
+
+## 2026-10-26T17:22:32Z · exit 0 · 0.0 s · load 53.11 on 12 cores
+
+In ~/.t3/worktrees/skills/feat-124-create-replay-rules:
+
+```console
+$ uptime
+17:22  up 4 days,  4:32, 3 users, load averages: 53.11 106.50 158.42
+```

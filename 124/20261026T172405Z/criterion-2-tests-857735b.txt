@@ -1,0 +1,13 @@
+$ node --test skills/verification-skill/scripts/record.test.mjs   # at 857735b
+✔ each command lands in the record with its text, exit status and output, and the caller gets its status (151.759458ms)
+✔ a launch that leaves a process in the background returns when the command does, and the process keeps writing (2111.043667ms)
+✔ a reader that stops early, such as head, still leaves the command in the record (1706.06825ms)
+✔ a command a signal stops, such as on a harness timeout, is still recorded with the output it had (221.986084ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4294.212375
