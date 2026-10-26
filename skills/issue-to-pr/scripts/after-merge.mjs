@@ -14,13 +14,15 @@
 // quota spent, REST.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PR_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
-// The build output the cleanup skill deletes as rebuildable. Removing a worktree deletes its ignored
-// files too, so any other ignored file keeps the worktree.
-const REBUILDABLE = new Set(["node_modules", "target", ".next", ".turbo"]);
+// The rebuildable output the cleanup skill's step 4 names: build output, and the hooks husky writes
+// on install. Removing a worktree deletes its ignored files too, so any other ignored file keeps the
+// worktree, unless it is a link out of the worktree.
+const REBUILDABLE = ["node_modules", "target", ".next", ".turbo", ".husky/_"];
 
 const run = (command, args) => execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const git = (cwd, ...args) => run("git", ["-C", cwd, ...args]);
@@ -55,6 +57,33 @@ function tryGit(cwd, ...args) {
   }
 }
 
+// Where an ignored symlink points, when that is outside the worktree. Deleting such a link deletes
+// nothing it points at.
+function outsideTarget(root, path) {
+  const link = join(root, path);
+  try {
+    if (!lstatSync(link).isSymbolicLink()) return null;
+    const target = realpathSync(link);
+    const inside = relative(realpathSync(root), target);
+    return inside === ".." || inside.startsWith(`..${sep}`) ? target : null;
+  } catch {
+    return null;
+  }
+}
+
+// The ignored files removing a worktree would lose, and the links out of it, which lose nothing.
+function ignoredFiles(root) {
+  const lost = [];
+  const links = [];
+  for (const path of git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory").split("\0")) {
+    if (!path || REBUILDABLE.some((entry) => `/${path}/`.includes(`/${entry}/`))) continue;
+    const target = outsideTarget(root, path);
+    if (target) links.push(`${path} -> ${target}`);
+    else lost.push(path);
+  }
+  return { lost, links };
+}
+
 // The local branch and the checkout that holds it. Returns why they were kept, or nothing.
 function removeLocal(pr, main, holder) {
   const local = tryGit(main.path, "rev-parse", "--verify", "--quiet", `refs/heads/${pr.branch}`);
@@ -70,10 +99,9 @@ function removeLocal(pr, main, holder) {
     git(main.path, "switch", "--quiet", pr.base);
     console.log(`switched the main checkout, ${main.path}, to ${pr.base}`);
   } else if (holder) {
-    const ignored = git(holder.path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory").split("\n")
-      .filter((path) => path && !path.split("/").some((part) => REBUILDABLE.has(part)));
-    if (ignored.length) {
-      const named = ignored.slice(0, 5).join(", ") + (ignored.length > 5 ? `, and ${ignored.length - 5} more` : "");
+    const { lost, links } = ignoredFiles(holder.path);
+    if (lost.length) {
+      const named = lost.slice(0, 5).join(", ") + (lost.length > 5 ? `, and ${lost.length - 5} more` : "");
       return `${holder.path}: removing it would delete ignored files Git doesn't keep: ${named}`;
     }
     try {
@@ -81,7 +109,7 @@ function removeLocal(pr, main, holder) {
     } catch (error) {
       return `${holder.path}: ${String(error.stderr).trim()}`;
     }
-    console.log(`removed the worktree ${holder.path}`);
+    console.log(`removed the worktree ${holder.path}${links.length ? `, and its links out of it, whose targets stay: ${links.join(", ")}` : ""}`);
   }
   git(main.path, "branch", "--quiet", "-D", pr.branch);
   console.log(`deleted the branch ${pr.branch}`);
