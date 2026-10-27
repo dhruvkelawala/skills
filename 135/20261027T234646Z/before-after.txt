@@ -1,0 +1,33 @@
+Source head: a41cc84b9bc8da725956e31305fb991b705edda7
+Baseline: 2cf5a22b0c83f799c8fa383d78bf5adc3f52ed10
+Replay uses synthetic GitHub snapshots and a local Git repository; no network mutations.
+
+MODEL DEFAULT
+Before: {"driver":"claudeAgent","model":"claude-opus-5-5","effort":"xhigh"}
+After:  {"driver":"claudeAgent","model":"claude-opus-5-5","effort":"high"}
+
+DRAFT, CI PASSED, CURRENT-HEAD BOT REVIEW MISSING
+Before default gate: {"state":"blocked","reasons":["PR is a draft","PR merge state is DRAFT"],"threads":[]}
+After verification gate: {"state":"pending","reasons":["Reviewer review-bot[bot] has not reviewed the current HEAD"],"threads":[]}
+
+CURRENT-HEAD BOT REVIEW ARRIVES
+After verification gate: {"state":"ready","reasons":[],"threads":[]}
+Default merge gate: {"state":"blocked","reasons":["PR is a draft","PR merge state is DRAFT"],"threads":[]}
+
+SAFETY BARRIERS
+Missing required CI: {"state":"pending","reasons":["Required check \"ci\" has not reported on head commit"],"threads":[]}
+Failed CI: {"state":"blocked","reasons":["Check \"ci\" concluded FAILURE"],"threads":[]}
+Moved pushed head: {"state":"blocked","reasons":["PR HEAD bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb does not match expected HEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"threads":[]}
+Unknown BLOCKED state: {"state":"pending","reasons":["PR merge state is BLOCKED"],"threads":[]}
+
+CODEX RUNNING SUMMARY (FOUND ON PR #136)
+Before default gate: {"state":"ready","reasons":[],"threads":[]}
+After verification gate: {"state":"pending","reasons":["Reviewer chatgpt-codex-connector[bot] is reviewing the current HEAD"],"threads":[]}
+After Codex completes: {"state":"ready","reasons":[],"threads":[]}
+
+LIVE VERDICT CLI, LOCAL GIT + FAKE EXTERNAL GITHUB
+PASS recorded against tested patch: {"status":"current","verdict":"PASS","by":"independent-fixture-reviewer","recordedBy":"reviewer","head":"f19420226ae9d060354d9e31d0ba4e611f4bb19b"}
+Same-patch restack: {"status":"current","verdict":"PASS","by":"independent-fixture-reviewer","recordedBy":"reviewer","head":"79e04c9e02c3543312e32e94154528072bf22447"}
+Changed source: {"status":"stale","reason":"patch changed since verdict at f19420226ae9"}
+
+Replay passed. Workflow launch, cancellation and brief bounds remain agent instructions; this replay does not measure production token savings or high-versus-xhigh quality.
