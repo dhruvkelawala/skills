@@ -1,7 +1,7 @@
 // Stands in for gh in day's tests and eval. It answers from a world in the JSON file $FAKE_GH_WORLD: the user's
-// login, and each repository's issues and PRs with their comments and reviews. It models the calls the morning script
-// and pr-review's queue script make (REST search, REST lists with --paginate --slurp, `gh search prs`) and the REST
-// reads an agent makes about one repository, issue or PR. $FAKE_GH_LOG, when set, gets one line per call.
+// login, and each repository's issues and PRs with their comments, reviews and checks. It models the calls the
+// morning script and pr-review's queue script make (REST search, REST lists with --paginate --slurp, `gh search prs`)
+// and the REST reads an agent makes about one repository, issue or PR. $FAKE_GH_LOG, when set, gets one line per call.
 // A call it does not model exits 1, so a caller can't read a made-up success.
 //
 // World: { me, repos: { "<owner>/<name>": { archived, gone, defaultBranch, pushedAt, issues: [issue], pulls: [pull] } } }
@@ -9,10 +9,16 @@
 //         repository the user lost access to.
 //   issue: { number, title, author, state, labels, body, createdAt, updatedAt, involves, blockedBy, blocking }
 //   pull:  { number, title, author, state ("open" | "merged" | "closed"), draft, body, base, head, sha, createdAt,
-//            updatedAt, mergedAt, requested, additions, deletions, files, comments, reviewComments, reviews }
+//            updatedAt, mergedAt, requested, reviewers, conflicts, additions, deletions, files, comments,
+//            reviewComments, reviews, checks, statuses }
+//          requested: the PR asks for the user's review. reviewers: the logins it asks, as its author sees them.
+//          conflicts: null while GitHub has not worked out mergeability. computing: the PR's first read answers
+//          mergeable null, as GitHub's does after its base moves, and later reads answer from conflicts.
 //   comment: { author, at, body }   review: { author, at, state, body, commit }
-import { appendFileSync, readFileSync } from "node:fs";
+//   check: { name, status, conclusion }, in the order they ran   status: { context, state }
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
 
 const { me, repos } = JSON.parse(readFileSync(process.env.FAKE_GH_WORLD, "utf8"));
 const args = process.argv.slice(2).flatMap((a) => (/^--[\w-]+=/.test(a) ? [a.slice(0, a.indexOf("=")), a.slice(a.indexOf("=") + 1)] : [a]));
@@ -56,7 +62,16 @@ const pullRest = (repo, p) => ({
   base: { ref: p.base ?? "main", repo: { full_name: repo, archived: Boolean(repos[repo].archived) } },
   head: { ref: p.head ?? `branch-${p.number}`, sha: p.sha ?? `sha${p.number}`, repo: { full_name: repo } },
   additions: p.additions ?? 0, deletions: p.deletions ?? 0, changed_files: p.files ?? 1,
+  mergeable: p.conflicts === null ? null : !p.conflicts, requested_reviewers: (p.reviewers ?? []).map(user), requested_teams: [],
 });
+// Whether this is the first read of one PR in this world. Each call is its own process, so a file beside the world
+// remembers the reads.
+function firstRead(repo, p) {
+  const seen = join(dirname(process.env.FAKE_GH_WORLD), `read-${repo.replace("/", "--")}-${p.number}`);
+  if (existsSync(seen)) return false;
+  writeFileSync(seen, "");
+  return true;
+}
 // A search hit is an issue-shaped item; a PR's carries pull_request with its merge time.
 const pullHit = (repo, p) => ({
   ...issueRest(repo, { ...p, state: pullState(p) }), html_url: `${web(repo)}/pull/${p.number}`, draft: Boolean(p.draft),
@@ -121,9 +136,16 @@ function api(path) {
   if (kind === "issues" && !sub && issue) return print(issueRest(repo, issue));
   if (kind === "issues" && !sub && pull) return print(pullHit(repo, pull));
   if (kind === "issues" && sub === "comments" && (issue || pull)) return printList(since(((issue ?? pull).comments ?? []).map(commentRest(url)), query));
-  if (kind === "pulls" && pull && !sub) return print(pullRest(repo, pull));
+  if (kind === "pulls" && pull && !sub) return print({ ...pullRest(repo, pull), ...(pull.computing && firstRead(repo, pull) ? { mergeable: null } : {}) });
   if (kind === "pulls" && pull && sub === "comments") return printList(since((pull.reviewComments ?? []).map(commentRest(url)), query));
   if (kind === "pulls" && pull && sub === "reviews") return printList((pull.reviews ?? []).map(reviewRest(url)));
+  // A commit is a PR's head; check runs page as objects, each holding its runs.
+  const head = kind === "commits" && (r.pulls ?? []).find((p) => (p.sha ?? `sha${p.number}`) === number);
+  if (head && sub === "check-runs") {
+    const page = { total_count: (head.checks ?? []).length, check_runs: (head.checks ?? []).map((c, i) => ({ id: i + 1, name: c.name, status: c.status, conclusion: c.conclusion ?? null })) };
+    return print(has("--slurp") ? [page] : page);
+  }
+  if (head && sub === "status") return print({ sha: number, total_count: (head.statuses ?? []).length, statuses: head.statuses ?? [] });
   fail(`fake gh: api ${route} is not modelled`);
 }
 
