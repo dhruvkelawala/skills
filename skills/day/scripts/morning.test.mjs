@@ -133,8 +133,8 @@ test("going stale lists your open PRs with no update for 14 days, the one that w
   ]);
 });
 
-test("your open PRs are the ones updated in the last 14 days, updated last first, with their newest checks, review and conflicts", (t) => {
-  const [h2, d1, d3, d5, d9] = [daysAgo(2 / 24), daysAgo(1), daysAgo(3), daysAgo(5), daysAgo(9)];
+test("your open PRs are the ones updated in the last 14 days, updated last first, with their newest checks, review and conflicts, unknown while GitHub works them out", (t) => {
+  const [h2, d1, d3, d5, d7, d9, d11] = [daysAgo(2 / 24), daysAgo(1), daysAgo(3), daysAgo(5), daysAgo(7), daysAgo(9), daysAgo(11)];
   const ci = (conclusion) => ({ name: `ci-${conclusion}`, status: "completed", conclusion });
   const { active } = morning(t, {
     me: "maker",
@@ -162,6 +162,8 @@ test("your open PRs are the ones updated in the last 14 days, updated last first
             statuses: [{ context: "deploy", state: "success" }],
           }),
           pull(64, { updatedAt: d9, checks: [ci("success")], statuses: [{ context: "deploy", state: "error" }] }),
+          pull(67, { updatedAt: d7, conflicts: true, computing: true }),
+          pull(68, { updatedAt: d11, conflicts: null }),
           pull(65, { updatedAt: daysAgo(15) }),
           pull(66, { updatedAt: d1, author: "teammate" }),
         ],
@@ -174,7 +176,9 @@ test("your open PRs are the ones updated in the last 14 days, updated last first
     line(60, d1, { checks: "failing", review: "changes requested", conflicts: true }),
     line(62, d3, { checks: "none", review: "requested", conflicts: false }, true),
     line(63, d5, { checks: "passing", review: "none", conflicts: false }),
+    line(67, d7, { checks: "none", review: "none", conflicts: true }),
     line(64, d9, { checks: "failing", review: "none", conflicts: false }),
+    line(68, d11, { checks: "none", review: "none", conflicts: null }),
   ]);
 });
 

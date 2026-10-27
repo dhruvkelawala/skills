@@ -9,7 +9,7 @@
 //   almostReady   open unlabelled issues with ticket's "## What's missing" section, and its gaps
 //   active        your open PRs updated in the last 14 days, the one updated last first, with their checks (failing,
 //                 pending, passing or none), their review (changes requested, approved, requested or none) and
-//                 whether they conflict with their base
+//                 whether they conflict with their base (null while GitHub has not worked it out)
 //   stale         your open PRs with no update for 14 days, the one that went quiet last first
 //   lateComments  your PRs merged in the last 7 days that a person commented on or a bot reviewed after the merge,
 //                 newest first
@@ -131,6 +131,9 @@ async function standing(repo, number) {
     pages(`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`),
     gh("api", `repos/${repo}/commits/${pull.head.sha}/status?per_page=100`).then(JSON.parse),
   ]);
+  // GitHub starts working out mergeability when a read asks for it, and answers null until it knows. So a null is
+  // read once more after the reads above, and stays null, unknown, if it still is.
+  const mergeable = pull.mergeable ?? JSON.parse(await gh("api", `repos/${repo}/pulls/${number}`)).mergeable;
   // A rerun adds a check run under the same name, and only the newest one counts, as on the PR's page. The combined
   // status already keeps only the newest status for each context.
   const newest = new Map();
@@ -147,7 +150,7 @@ async function standing(repo, number) {
   return {
     checks: ["failing", "pending", "passing"].find((s) => results.includes(s)) ?? "none",
     review: states.includes("CHANGES_REQUESTED") ? "changes requested" : states.includes("APPROVED") ? "approved" : waiting ? "requested" : "none",
-    conflicts: pull.mergeable === false,
+    conflicts: mergeable === null ? null : !mergeable,
   };
 }
 
