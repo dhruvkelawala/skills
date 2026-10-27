@@ -21,15 +21,17 @@ While the prep runs, gather each section's lines.
 1. **The GitHub lists.** Run `node <skill-dir>/scripts/morning.mjs`. It prints `builds`, `almostReady`, `stale` and `lateComments` as JSON, and its header says what each one holds and in what order. When it exits with code 2, a reading failed, and the report says so in one line with the error, in place of those four sections.
 2. **Stopped last night.** Read the newest [night record](SKILL.md#the-night-record) in `~/.agent/day/` written in the last 24 hours. Its name holds the date and time it was written. After a night with no goodnight check there is none, and nothing is listed. For each line under its "Stopped" heading, read the thread with `t3_thread_read`. A run in its `recentRuns` requested after the line's stop time means the thread has restarted, whoever restarted it, so leave that line out.
 3. **The strain line.** Run `node <skill-dir>/scripts/strain.mjs` as [night mode's step 2](SKILL.md#2-check-the-strain) says, with a command timeout of at least 6 minutes.
-4. **A reason on each line.** For each build the report lists, write why it ranks there in a few words, from what it unblocks, its repository and its age, such as "unblocks #35". For each almost-ready issue, name its first gap. For each PR with late comments, say what the comments ask.
+4. **Progress pages.** A project can keep a `progress-report` skill at `.agents/skills/progress-report/`, which draws how far it is from its next release as one page. For each project from `t3_project_list` (follow `nextCursor` until it is null), take its `workspaceRoot` and its repository's default branch from `gh api repos/<owner>/<repo> --jq .default_branch`. Run `git -C <workspaceRoot> fetch -q origin <branch>`, then extract the skill from that branch into a new empty folder with `git -C <workspaceRoot> archive origin/<branch> .agents/skills/progress-report | tar -x -C <folder>`, so a checkout left on an old branch still runs today's skill. When the archive fails, the project has no progress page. Otherwise follow `<folder>/.agents/skills/progress-report/SKILL.md`, running its script from `<folder>` with `<workspaceRoot>` as the working directory, and keep the page it writes. When the build fails, keep its error for one line in the report.
+5. **A reason on each line.** For each build the report lists, write why it ranks there in a few words, from what it unblocks, its repository and its age, such as "unblocks #35". For each almost-ready issue, name its first gap. For each PR with late comments, say what the comments ask.
 
-**Complete when:** you hold the four lists or the line saying they could not be read, the stopped lines, and the strain line or nothing.
+**Complete when:** you hold the four lists or the line saying they could not be read, the stopped lines, the strain line or nothing, and each project's progress page or the error from building it.
 
 ## 3. Post the report
 
 1. When step 1 started a prep child, wait for it with `task_status`. When it failed, prep the PR yourself with pr-review's steps 1 and 2.
 2. Check the prep record names the PR's head, and read the PR's guide with `read_pull_request_guide`. The guide is ready when it is written for that head. While its run is `Running`, wait a minute and read it again. The PR has no guide when guides are off, its run is `Failed`, or it is still running about ten minutes after the prep began, and its line says why.
-3. Post the report in this shape:
+3. Show each progress page from step 2 as its skill says, with `html_preview` and then `html_render`. A rendered page sits above the reply, so the pages come before the report.
+4. Post the report in this shape:
 
 ````md
 Morning. 3 builds to start, 2 PRs wait on your review, 1 run stopped last night.
@@ -57,6 +59,7 @@ Stopped last night
 9. [Build #12: cache layer](t3-thread://v1/<threadId>) · stopped at stage 2, building criterion 2 of 3
 
 Strain: 38 GB free on disk, biggest ~/Library (300 GB, of which ~/Library/Developer 120 GB).
+Progress page for web could not be built: linear: not signed in.
 
 Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, `/modernize https://github.com/<owner>/app/pull/20` says whether line 7 should still land, and "go on 9" restarts a stopped run.
 ````
@@ -71,7 +74,7 @@ Reply with the builds to start, such as "start 1 and 3". `/pr-review https://git
 
 Then end the turn. The report starts nothing: a build starts only when the user's reply names it, and with no reply nothing starts.
 
-**Complete when:** the first PR's prep record names its head, its guide is written for that head or its line says why it has none, and the report is posted with no thread started.
+**Complete when:** the first PR's prep record names its head, its guide is written for that head or its line says why it has none, each progress page is shown above the report or its error has a line in it, and the report is posted with no thread started.
 
 ## 4. Start the builds the reply names
 
