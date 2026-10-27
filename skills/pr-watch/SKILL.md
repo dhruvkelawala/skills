@@ -37,14 +37,7 @@ These go out without asking: replies to threads where `bot` is true and resolvin
 - a reply in a thread where `bot` is false, and resolving that thread
 - a PR comment that answers a written review
 
-Every reply and comment you write opens with this label, then a blank line and the text, so its reader knows a model wrote it for the user:
-
-```md
-> [!NOTE]
-> 🤖 **<model> responding on behalf of <login>**
-```
-
-`<model>` is the public name of the model writing it, as the harness reports it, or the harness's name when it reports none. `<login>` is the user's GitHub login, from `gh api user --jq .login`. The request comment goes out bare, because a bot reads it as a command. Before you send a reply without holding it, run `node "$SKILL_DIR/scripts/secrets.mjs" < <reply file>`. It exits 1 and names the line when the text holds a token, a key or a password, and the reply then names its variable, such as `$API_TOKEN`, in its place. `held.mjs hold` refuses a draft without the label or with a secret.
+Each reply and comment, held or not, opens with [the label](#the-label).
 
 Keep the held items for a PR in `HELD=~/.agent/pr-watch/<owner>/<repo>/<pr>.held.json`, and hold each one with the script beside the gate. The ids come from the gate's `threads`:
 
@@ -55,6 +48,19 @@ node "$SKILL_DIR/scripts/held.mjs" hold --file "$HELD" --review <id> --to <perso
 ```
 
 `--to` names the person you answer, who in a thread a bot opened is the person who spoke in it. Holding again for the same thread or review replaces the earlier draft. Show the user each draft when you hold it. With `--held-file "$HELD"`, the gate stops counting a thread or written review as a repair once its reply is held, and waits at pending with `<n> item(s) to people held until "post"`. A newer comment in a held thread brings the thread back, so read it and hold a new draft.
+
+## The label
+
+Every comment, reply and review an agent posts on GitHub in the user's name, from this skill or any other, opens with this label, then a blank line and the text, so its reader knows a model wrote it for the user:
+
+```md
+> [!NOTE]
+> 🤖 **<model> responding on behalf of <login>**
+```
+
+`<model>` is the public name of the model writing it, as the harness reports it, or the harness's name when it reports none. `<login>` is the user's GitHub login, from `gh api user --jq .login`. Three go out bare: the request comment, because a bot reads it as a command; a review's inline comments, which GitHub shows under the labelled review; and ship's verdict comment, whose first line names the verifier.
+
+Check text before it goes out without being held: `node <pr-watch>/scripts/held.mjs check --body-file <file>`, where `<pr-watch>` is this skill's folder. It exits 2 when the label is missing or misshapen, or when the text holds a token, a key or a password; put the secret's variable, such as `$API_TOKEN`, in its place. `held.mjs hold` runs the same check on every draft.
 
 ## When the user says "post"
 

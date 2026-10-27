@@ -186,9 +186,9 @@ Keep one ledger per PR. Collect from:
 What happens next depends on whose PR it is:
 
 - **The user's own PR** (the PR author equals `gh api user --jq .login`). Each item becomes a fix for the agent that owns the branch, or for you when they ask. Nothing is posted.
-- **Someone else's PR.** Draft one review in the user's voice: a short body, the verifier's result when it ran, and inline comments anchored on added lines.
+- **Someone else's PR.** Draft one review in the user's voice: a short body that opens with pr-watch's [label](../pr-watch/SKILL.md#the-label), the verifier's result when it ran, and inline comments anchored on added lines.
   - Write like the user: short and direct, with "Nit:", "Non-blocking:" and "Please fix before X is enabled" where they fit.
-  - Show the draft, and post it only on the user's word for this PR: "post" sends it as COMMENT, "approve and post" as APPROVE, and "request changes and post" as REQUEST_CHANGES, through `gh api repos/<owner>/<repo>/pulls/<n>/reviews` with `commit_id` set to the reviewed head.
+  - Show the draft, and post it only on the user's word for this PR: "post" sends it as COMMENT, "approve and post" as APPROVE, and "request changes and post" as REQUEST_CHANGES, through `gh api repos/<owner>/<repo>/pulls/<n>/reviews` with `commit_id` set to the reviewed head. Check the body first with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`.
 
 **Complete when** every ledger item is fixed, posted, or dropped by the user.
 
