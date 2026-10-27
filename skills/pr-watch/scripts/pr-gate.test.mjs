@@ -758,20 +758,24 @@ function restPr(overrides = {}) {
   };
 }
 
-test("CLI verification on a draft waits for required CI that has not reported", (t) => {
+test("CLI verification on a draft holds for unreported or unreadable required CI", (t) => {
   const pr = restPr()["repos/o/r/pulls/7"];
-  const { gate } = rateLimitedGh(t, restPr({
-    "repos/o/r/pulls/7": { ...pr, draft: true, mergeable_state: "draft" },
-    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 1, check_runs: [{ name: "optional", status: "completed", conclusion: "failure" }] },
-    "repos/o/r/branches/main": { protection: { required_status_checks: { contexts: ["required-ci"] } } },
-  }));
-  const { status, stderr, result } = gate("--expected-head", HEAD, "--for-verification");
-  assert.equal(status, 1, stderr);
-  assert.deepEqual(result.reasons, [
-    "review threads unknown: GraphQL quota",
-    'Required check "required-ci" has not reported on head commit',
-  ]);
-  assert.deepEqual(result.notes, ['Check "optional" concluded FAILURE (not required)']);
+  const cases = [
+    [[], 'Required check "required-ci" has not reported on head commit', "failure"],
+    [{ httpError: "Resource not accessible by integration (HTTP 403)" }, "Required checks are unknown", "success"],
+  ];
+  for (const [rules, reason, conclusion] of cases) {
+    const { gate } = rateLimitedGh(t, restPr({
+      "repos/o/r/pulls/7": { ...pr, draft: true, mergeable_state: "draft" },
+      [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 1, check_runs: [{ name: "optional", status: "completed", conclusion }] },
+      "repos/o/r/branches/main": { protection: { required_status_checks: { contexts: ["required-ci"] } } },
+      "repos/o/r/rules/branches/main": rules,
+    }));
+    const { status, stderr, result } = gate("--expected-head", HEAD, "--for-verification");
+    assert.equal(status, 1, stderr);
+    assert.deepEqual(result.reasons, ["review threads unknown: GraphQL quota", reason]);
+    if (conclusion === "failure") assert.deepEqual(result.notes, ['Check "optional" concluded FAILURE (not required)']);
+  }
 });
 
 test("GraphQL quota spent: the gate reads through REST and holds short of ready, since threads are unknown", (t) => {

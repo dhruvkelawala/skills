@@ -2,6 +2,8 @@
 
 Use this before every new verifier, including a replacement after repairs. `ship verify` owns this sequence; callers return here through that skill.
 
+Keep the caller's existing edit and push authority. In a read-only review, send needed repairs or restacks to the PR owner and report verification as deferred.
+
 ## Settle the pushed head
 
 1. Finish known repairs and expected rebases together, run their focused checks, and push. The checkout must be clean and its `HEAD` must equal the published PR head. A local commit waiting to be pushed is not ready.

@@ -406,9 +406,17 @@ export async function fetchSnapshot(repo, prNumber, runGh = gh, { forVerificatio
   });
   const { owner, name } = repo;
   const { requiredNames: reportedRequired, ...snapshot } = read;
-  const requiredNames = forVerification
-    ? new Set([...reportedRequired, ...await requiredChecks(`repos/${owner}/${name}`, snapshot.pr.baseRefName, runGh)])
-    : reportedRequired;
+  const requiredNames = new Set(reportedRequired);
+  let requiredInventory = null;
+  if (forVerification) {
+    try {
+      const required = await requiredChecks(`repos/${owner}/${name}`, snapshot.pr.baseRefName, runGh, false);
+      for (const name of required) requiredNames.add(name);
+      requiredInventory = [...requiredNames];
+    } catch {
+      requiredInventory = null;
+    }
+  }
   const head = snapshot.pr.headRefOid;
 
   const checksData = await runGh(["api", `repos/${owner}/${name}/commits/${head}/check-runs?per_page=100`]);
@@ -434,7 +442,7 @@ export async function fetchSnapshot(repo, prNumber, runGh = gh, { forVerificatio
   ];
   // A failed read leaves `ci` out, and the gate keeps waiting for checks.
   const ci = checkRuns.length === 0 ? await ciSigns(repo, snapshot.pr.baseRefName, runGh).catch(() => null) : null;
-  return { ...snapshot, checkRuns, truncated, ...(ci ? { ci } : {}), ...(forVerification ? { requiredChecks: [...requiredNames] } : {}) };
+  return { ...snapshot, checkRuns, truncated, ...(ci ? { ci } : {}), ...(forVerification ? { requiredChecks: requiredInventory } : {}) };
 }
 
 async function readGraphql({ owner, name }, prNumber, runGh) {
@@ -578,9 +586,10 @@ function readOptional(runGh, args) {
 
 // Branch protection and rulesets can each require checks. A failure other than a missing feature
 // stops the gate, since missing names would let a failing required check pass as a note.
-async function requiredChecks(repo, base, runGh) {
-  const branch = await readOptional(runGh, ["api", `${repo}/branches/${base}`]);
-  const rules = await readOptional(runGh, ["api", `${repo}/rules/branches/${base}`]);
+async function requiredChecks(repo, base, runGh, allowMissingFeatures = true) {
+  const read = allowMissingFeatures ? (args) => readOptional(runGh, args) : runGh;
+  const branch = await read(["api", `${repo}/branches/${base}`]);
+  const rules = await read(["api", `${repo}/rules/branches/${base}`]);
   return new Set([
     ...(branch?.protection?.required_status_checks?.contexts ?? []),
     ...(Array.isArray(rules) ? rules : [])
