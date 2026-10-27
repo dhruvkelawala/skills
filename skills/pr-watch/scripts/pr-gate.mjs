@@ -33,6 +33,7 @@
 // with no checks waits for them, unless `ci` shows the repository has no CI at all.
 //
 // Options:
+//   forVerification: allow draft and approval-only merge states; all other readiness checks remain
 //   reviewers:      logins (with or without "[bot]") that must review the exact HEAD
 //   requestComment: text the orchestrator posts to ask a reviewer for a pass;
 //                   reviewer evidence older than the newest such comment is stale
@@ -80,21 +81,23 @@ export function evaluateGate(snapshot, options = {}) {
   if (!SHA_RE.test(head)) blocked.push("PR HEAD is missing or invalid");
   if (!SHA_RE.test(expectedHead)) blocked.push("Expected HEAD is missing or invalid");
   else if (expectedHead !== head) blocked.push(`PR HEAD ${head} does not match expected HEAD ${expectedHead}`);
-  if (pr.isDraft) blocked.push("PR is a draft");
+  if (pr.isDraft && !options.forVerification) blocked.push("PR is a draft");
   if (pr.mergeable === false) blocked.push("PR has merge conflicts");
   else if (pr.mergeable !== true) pending.push("PR mergeability is unknown");
-  if (pr.mergeStateStatus === "BEHIND") pending.push("PR branch is behind its base");
+  const mergeState = options.forVerification && ["DRAFT", "BLOCKED"].includes(pr.mergeStateStatus)
+    ? "CLEAN" : pr.mergeStateStatus;
+  if (mergeState === "BEHIND") pending.push("PR branch is behind its base");
   else if (
-    pr.mergeStateStatus === "UNKNOWN"
-      || pr.mergeStateStatus === "HAS_HOOKS"
-      || pr.mergeStateStatus === "BLOCKED"
-      || !pr.mergeStateStatus
+    mergeState === "UNKNOWN"
+      || mergeState === "HAS_HOOKS"
+      || mergeState === "BLOCKED"
+      || !mergeState
   ) {
-    pending.push(`PR merge state is ${pr.mergeStateStatus ?? "not settled"}`);
-  } else if (pr.mergeStateStatus !== "CLEAN" && pr.mergeStateStatus !== "UNSTABLE") {
+    pending.push(`PR merge state is ${mergeState ?? "not settled"}`);
+  } else if (mergeState !== "CLEAN" && mergeState !== "UNSTABLE") {
     // UNSTABLE only means some check did not pass; the check loop below decides
     // whether that check counts.
-    blocked.push(`PR merge state is ${pr.mergeStateStatus}`);
+    blocked.push(`PR merge state is ${mergeState}`);
   }
   if (snapshot?.truncated) pending.push("GitHub collections were truncated; readiness cannot be proven");
   if (pr.reviewDecision === "CHANGES_REQUESTED") blocked.push("Review decision is CHANGES_REQUESTED");
@@ -287,6 +290,7 @@ function usage() {
     "  --allow-no-checks        A HEAD with no CI contexts counts as clean",
     "  --ignore-check NAME      Leave a named check out of the gate (repeatable, case-insensitive)",
     "  --held-file PATH         Items held until \"post\" (held.mjs); what they answer stops blocking",
+    "  --for-verification      Allow draft and pending approval; keep checks, reviewers and findings",
     "  --json                   Print { state, reasons, threads } JSON",
     "  --watch                  Poll until blocked or 3 unchanged clean observations (default 30 min)",
     "  --timeout-seconds N      Watch deadline in seconds (default 1800)",
@@ -300,7 +304,7 @@ function usage() {
 export function parseArgs(argv) {
   const args = {
     repo: null, pr: null, expectedHead: null, reviewers: [], requestComment: null,
-    allowNoChecks: false, ignoreChecks: [], json: false, watch: false, help: false,
+    allowNoChecks: false, ignoreChecks: [], forVerification: false, json: false, watch: false, help: false,
   };
   let i = 0;
   const value = (flag) => {
@@ -328,6 +332,7 @@ export function parseArgs(argv) {
       case "--allow-no-checks": args.allowNoChecks = true; break;
       case "--ignore-check": args.ignoreChecks.push(value(arg)); break;
       case "--held-file": args.heldFile = value(arg); break;
+      case "--for-verification": args.forVerification = true; break;
       case "--json": args.json = true; break;
       case "--watch": args.watch = true; break;
       case "--timeout-seconds": args.timeoutSeconds = positiveInt(arg); break;
@@ -703,6 +708,7 @@ async function main(argv) {
     allowNoChecks: args.allowNoChecks,
     ignoreChecks: args.ignoreChecks,
     held: args.heldFile ? readHeld(args.heldFile) : [],
+    forVerification: args.forVerification,
   };
   const loadSnapshot = async () => {
     const snapshot = await fetchSnapshot(repo, args.pr);

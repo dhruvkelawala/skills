@@ -50,6 +50,43 @@ test("ready: open, at expected HEAD, mergeable, checks green, no threads", () =>
   assert.deepEqual(evaluateGate(baseSnapshot()), { state: "ready", reasons: [], threads: [] });
 });
 
+test("verification on a draft waits for its configured reviewer to cover the pushed head", () => {
+  const snapshot = withPr({ isDraft: true, mergeStateStatus: "DRAFT" });
+  const options = { reviewers: [BOT], forVerification: true };
+  assert.equal(evaluateGate(snapshot, { reviewers: [BOT] }).state, "blocked");
+  const waiting = evaluateGate(snapshot, options);
+  assert.equal(waiting.state, "pending");
+  assert.ok(waiting.reasons.some((reason) => reason.includes("has not reviewed the current HEAD")));
+  snapshot.reviews = [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }];
+  assert.equal(evaluateGate(snapshot, options).state, "ready");
+});
+
+test("verification can precede human approval while merge readiness still waits", () => {
+  const snapshot = withPr({ mergeStateStatus: "BLOCKED", reviewDecision: "REVIEW_REQUIRED" });
+  assert.equal(evaluateGate(snapshot).state, "pending");
+  assert.equal(evaluateGate(snapshot, { forVerification: true }).state, "ready");
+});
+
+test("verification readiness keeps source, check, finding and incomplete-data blockers", async (t) => {
+  const cases = [
+    ["different pushed head", withPr({ headRefOid: OTHER }), {}, "blocked"],
+    ["closed PR", withPr({ state: "CLOSED" }), {}, "blocked"],
+    ["merge conflict", withPr({ mergeable: false }), {}, "blocked"],
+    ["base drift", withPr({ mergeStateStatus: "BEHIND" }), {}, "pending"],
+    ["unknown mergeability", withPr({ mergeable: null }), {}, "pending"],
+    ["change request", withPr({ reviewDecision: "CHANGES_REQUESTED" }), {}, "blocked"],
+    ["unresolved finding", baseSnapshot({ reviewThreads: [{ id: "finding", author: BOT, body: "A real bug", isResolved: false }] }), {}, "blocked"],
+    ["unfinished CI", baseSnapshot({ checkRuns: [{ name: "ci", status: "IN_PROGRESS", required: true }] }), {}, "pending"],
+    ["failed CI", baseSnapshot({ checkRuns: [{ name: "ci", status: "COMPLETED", conclusion: "FAILURE", required: true }] }), {}, "blocked"],
+    ["truncated data", baseSnapshot({ truncated: true }), {}, "pending"],
+    ["unknown threads", baseSnapshot({ threadsUnknown: "GraphQL quota" }), {}, "pending"],
+    ["held reply", baseSnapshot(), { held: [{ kind: "comment", review: "review", to: "teammate" }] }, "pending"],
+  ];
+  for (const [name, snapshot, options, state] of cases) {
+    await t.test(name, () => assert.equal(evaluateGate(snapshot, { ...options, forVerification: true }).state, state));
+  }
+});
+
 test("pending: checks still running", () => {
   const result = evaluateGate(baseSnapshot({ checkRuns: [{ name: "ci", status: "IN_PROGRESS", conclusion: null }] }));
   assert.equal(result.state, "pending");
@@ -472,7 +509,8 @@ test("multiple reviewers must each cover HEAD", () => {
 // --- CLI parsing ------------------------------------------------------------
 
 test("parseArgs collects repeated reviewers and lowercases the head", () => {
-  const args = parseArgs(["--repo", "o/r", "--pr", "4", "--expected-head", HEAD.toUpperCase(), "--reviewer", "a", "--reviewer", "b", "--allow-no-checks"]);
+  const args = parseArgs(["--repo", "o/r", "--pr", "4", "--expected-head", HEAD.toUpperCase(), "--reviewer", "a", "--reviewer", "b", "--allow-no-checks", "--for-verification"]);
+  assert.equal(args.forVerification, true);
   assert.deepEqual(args.reviewers, ["a", "b"]);
   assert.equal(args.expectedHead, HEAD);
   assert.equal(args.allowNoChecks, true);
@@ -791,6 +829,23 @@ function fakeClock() {
   let t = 0;
   return { now: () => t, wait: async (ms) => { t += ms; } };
 }
+
+test("watch: draft verification waits for reviewer coverage before confirming readiness", async () => {
+  const clock = fakeClock();
+  let observations = 0;
+  const seen = [];
+  const result = await watchGate({
+    loadSnapshot: async () => ({
+      ...withPr({ isDraft: true, mergeStateStatus: "DRAFT" }),
+      reviews: observations++ < 2 ? [] : [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }],
+    }),
+    options: { forVerification: true, reviewers: [BOT] },
+    timeoutMs: 10_000, intervalMs: 1_000, ...clock,
+    onObservation: (o) => seen.push(o.state),
+  });
+  assert.equal(result.state, "ready");
+  assert.deepEqual(seen, ["pending", "pending", "pending", "pending", "ready"]);
+});
 
 test("watch: ready only after three unchanged clean observations", async () => {
   const clock = fakeClock();
