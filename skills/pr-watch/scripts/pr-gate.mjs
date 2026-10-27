@@ -166,7 +166,7 @@ export function evaluateGate(snapshot, options = {}) {
   }
 
   for (const reviewer of options.reviewers ?? []) {
-    const verdict = reviewerVerdict(snapshot, head, reviewer, options.requestComment);
+    const verdict = reviewerVerdict(snapshot, head, reviewer, options.requestComment, options.forVerification);
     if (verdict.blocked) blocked.push(verdict.blocked);
     if (verdict.pending) pending.push(verdict.pending);
   }
@@ -204,7 +204,7 @@ function unansweredReviews(snapshot) {
 // reactions) left a comment or a "+1" reaction newer than both the HEAD commit
 // and the newest request comment. An "eyes" reaction newer than any "+1" means
 // it is still working. Anything older than that floor is stale evidence.
-function reviewerVerdict(snapshot, head, reviewer, requestComment) {
+function reviewerVerdict(snapshot, head, reviewer, requestComment, forVerification) {
   const isReviewer = (login) => sameLogin(login, reviewer);
   const label = `Reviewer ${reviewer}`;
   const pr = snapshot?.pr ?? {};
@@ -218,6 +218,24 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment) {
     .filter((r) => isReviewer(r.author) && String(r.commitId ?? "").toLowerCase() === head);
   if (headReviews.some((r) => r.state === "CHANGES_REQUESTED")) {
     return { blocked: `${label} requested changes on the current HEAD` };
+  }
+  if (forVerification && sameLogin(reviewer, "chatgpt-codex-connector")) {
+    const summary = (snapshot?.comments ?? []).findLast((c) =>
+      isReviewer(c.author) && String(c.body ?? "").includes("<!-- codex-review-state:v1 "));
+    if (summary) {
+      let state;
+      try {
+        state = JSON.parse(summary.body.match(/<!-- codex-review-state:v1 (\{[^\n]*\}) -->/)?.[1]);
+      } catch {
+        return { pending: `${label} review result is unknown` };
+      }
+      const reviews = [state.code_review, state.security_review].filter((r) => r?.commit_sha === head && r.status);
+      if (reviews.length === 0) return { pending: `${label} has not reviewed the current HEAD` };
+      if (reviews.some((r) => r.status !== "completed")) return { pending: `${label} is reviewing the current HEAD` };
+      if (reviews.some((r) => r.has_unresolved_findings === true)) return { blocked: `${label} reports unresolved findings on the current HEAD` };
+      if (reviews.some((r) => r.has_unresolved_findings !== false)) return { pending: `${label} review result is unknown` };
+      return {};
+    }
   }
   if (headReviews.length > 0) return {};
 

@@ -409,6 +409,29 @@ test("pending: configured reviewer has not covered the current HEAD", () => {
   assert.ok(result.reasons.some((r) => r.includes("review-bot")));
 });
 
+test("verification waits for the current-head Codex summary to finish without unresolved findings", () => {
+  const codex = "chatgpt-codex-connector[bot]";
+  const summary = (commit_sha, status, has_unresolved_findings, security = null) =>
+    '<!-- codex-review-state:v1 ' + JSON.stringify({
+      code_review: { commit_sha, status, has_unresolved_findings },
+      security_review: security,
+    }) + ' -->';
+  const cases = [
+    [summary(HEAD, "running", null), "pending"],
+    [summary(HEAD, "completed", false), "ready"],
+    [summary(HEAD, "completed", true), "blocked"],
+    [summary(OTHER, "completed", false), "pending"],
+    ['<!-- codex-review-state:v1 invalid -->', "pending"],
+    [summary(HEAD, "completed", false, { commit_sha: HEAD, status: "running", has_unresolved_findings: null }), "pending"],
+  ];
+  for (const [body, expected] of cases) {
+    const snapshot = baseSnapshot({
+      comments: [{ author: codex, body, createdAt: REQUESTED_AT }],
+    });
+    assert.equal(evaluateGate(snapshot, { reviewers: [codex], forVerification: true }).state, expected, body);
+  }
+});
+
 test("ready: reviewer posted a review object bound to HEAD", () => {
   const result = evaluateGate(baseSnapshot({
     reviews: [{ author: BOT, commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }],
