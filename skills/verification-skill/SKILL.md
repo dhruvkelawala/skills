@@ -16,11 +16,28 @@ Invoke as `/verification-skill create [app]` or `/verification-skill check [veri
 
 `.agents/skills/verify-<app>/SKILL.md` has `name: verify-<app>`, a description that names the app, its surface and when to use it, and these sections, each built from commands that ran:
 
+- **Hazards.** These five, each with the step or guard that keeps it in this app:
+  - Kill only what this run started.
+  - Never drive production. Name the environments a run may drive, and guard the rest so the guard fails closed: a run that can't tell where it points stops.
+  - Never touch the user's own install or data. When a run needs the user's own device, back their data up first.
+  - Never print env values, tokens or URLs that carry credentials. Print a variable's name and whether it is set.
+  - Bind servers to loopback, and have doctor prove it.
+- **Isolation.** The inventory, a table of every resource a run touches that another run or the user could also hold: ports, including ones compiled into a build, started by a test harness such as a `webServer`, or used for hot reload; driver sessions and daemons, and their state folders; simulators and devices; data folders; services that allow one connection at a time; and test accounts and channels. Each row says how a run claims the resource, such as a port from a range named in an env var or a session named for the run, what the run does when it's busy, how it releases it, and what doctor checks. A run writes each identity it claims or creates, such as a port, a process group, a simulator's UDID or a folder's path, to an ownership file in its own folder, which Doctor and Cleanup read.
 - **Launch.** Exact setup and launch commands from an empty data folder to a usable state, environment variable names (never secret values), the readiness signal, the build being run, and teardown. A server or UI runs as one instance this run owns. A CLI or TUI gets a fresh isolated session for each drive.
-- **Doctor.** A read-only check that the instance is the one this run owns, on the expected build, port and profile, ready, and signed in when it needs to be. Run it before driving and after anything surprising. Relaunch a stuck UI even when its process looks healthy.
+- **Doctor.** A read-only check that the instance is the one this run owns, on the expected build, port and profile, ready, and signed in when it needs to be, plus each check in the inventory's doctor column. Run it before driving and after anything surprising. Relaunch a stuck UI even when its process looks healthy.
 - **Drive.** Literal commands and selectors from the repo, the starting state, waits on observable conditions, and assertions. Match labels as rendered, and prefer stable handles to coordinates. Judge each result by [What counts as a pass](#what-counts-as-a-pass).
 - **Evidence.** Capture the action and the resulting state through the real user path, plus a second view of any side effect, such as a written file or row. Record the revision, feature ID and entry point. Mock only at an existing production boundary and say so. When the safe path is a dry-run mode, observe what it skips (files, network, git) instead of trusting its name. Keep captures at an ignored or external path and link `EVIDENCE.md` for PR proof.
 - **Cleanup.** Stop only the processes this run started, by their recorded handle, including after failed attempts. Captures survive every teardown, including the harness's own.
+
+An inventory has this shape, with the app's own resources and names:
+
+| Resource | How a run claims it | When it's busy | How it's released | What doctor checks |
+| --- | --- | --- | --- | --- |
+| Dev server port, also the harness's `webServer` and the hot-reload port built into the app | the first free port in the range `VERIFY_PORTS` names | takes the next free port | its process group is killed | it answers on 127.0.0.1 only, from the recorded group |
+| Driver session and daemon | named `verify-<run id>`, its state folder in the run's folder | new each run | daemon stopped, state folder deleted | the session and daemon are the recorded ones |
+| Simulator | created as `Verify <run id>` | new each run | deleted by its recorded UDID | it is booted, with the recorded UDID |
+| Build or derived-data folder | the run's own path | new each run | deleted | the installed build came from it |
+| Service that allows one connection per token | a lock named for the token | refuses, naming the run that holds it | lock removed once the connection closes | the lock names this run |
 
 Ship a helper script only when the repo's harness cannot express a recipe. Make it executable, show its invocation in the skill, and give non-trivial logic a runnable check.
 
