@@ -15,6 +15,7 @@
 //   pr:            { state, isDraft, mergeable, mergeStateStatus, reviewDecision,
 //                    headRefOid, expectedHead, headCommittedAt, author, baseRefName }
 //   checkRuns:     [{ name, status: "QUEUED"|"IN_PROGRESS"|"COMPLETED", conclusion, required }]
+//   requiredChecks: required check names, including ones not yet reported; read for verification
 //   truncated:     true when any GitHub collection exceeded one page
 //   reviewThreads: [{ id, replyTo, lastCommentId, isResolved, isOutdated, path, line, author,
 //                     authorType, body, lastAuthor, commenters: [{ login, type }], commentersTruncated }]
@@ -84,20 +85,16 @@ export function evaluateGate(snapshot, options = {}) {
   if (pr.isDraft && !options.forVerification) blocked.push("PR is a draft");
   if (pr.mergeable === false) blocked.push("PR has merge conflicts");
   else if (pr.mergeable !== true) pending.push("PR mergeability is unknown");
-  const mergeState = options.forVerification && ["DRAFT", "BLOCKED"].includes(pr.mergeStateStatus)
-    ? "CLEAN" : pr.mergeStateStatus;
-  if (mergeState === "BEHIND") pending.push("PR branch is behind its base");
-  else if (
-    mergeState === "UNKNOWN"
-      || mergeState === "HAS_HOOKS"
-      || mergeState === "BLOCKED"
-      || !mergeState
-  ) {
-    pending.push(`PR merge state is ${mergeState ?? "not settled"}`);
-  } else if (mergeState !== "CLEAN" && mergeState !== "UNSTABLE") {
-    // UNSTABLE only means some check did not pass; the check loop below decides
-    // whether that check counts.
-    blocked.push(`PR merge state is ${mergeState}`);
+  const mergeState = pr.mergeStateStatus;
+  const awaitingApproval = mergeState === "BLOCKED" && pr.reviewDecision === "REVIEW_REQUIRED";
+  const verificationState = options.forVerification && (mergeState === "DRAFT" || awaitingApproval);
+  if (!verificationState) {
+    if (mergeState === "BEHIND") pending.push("PR branch is behind its base");
+    else if (["UNKNOWN", "HAS_HOOKS", "BLOCKED"].includes(mergeState) || !mergeState) {
+      pending.push(`PR merge state is ${mergeState ?? "not settled"}`);
+    } else if (mergeState !== "CLEAN" && mergeState !== "UNSTABLE") {
+      blocked.push(`PR merge state is ${mergeState}`);
+    }
   }
   if (snapshot?.truncated) pending.push("GitHub collections were truncated; readiness cannot be proven");
   if (pr.reviewDecision === "CHANGES_REQUESTED") blocked.push("Review decision is CHANGES_REQUESTED");
@@ -140,8 +137,18 @@ export function evaluateGate(snapshot, options = {}) {
 
   const notes = [];
   const ignored = new Set((options.ignoreChecks ?? []).map((name) => String(name).toLowerCase()));
+  if (options.forVerification) {
+    if (!Array.isArray(snapshot.requiredChecks)) pending.push("Required checks are unknown");
+    else for (const name of snapshot.requiredChecks) {
+      if (!ignored.has(name.toLowerCase()) && !checkRuns.some((run) => run.name === name)) {
+        pending.push(`Required check "${name}" has not reported on head commit`);
+      }
+    }
+  }
   const counted = checkRuns.filter((run) => !ignored.has(String(run.name).toLowerCase()));
-  const requiredOnly = counted.some((run) => run.required === true);
+  const requiredOnly = counted.some((run) => run.required === true)
+    || (options.forVerification && Array.isArray(snapshot.requiredChecks)
+      && snapshot.requiredChecks.some((name) => !ignored.has(name.toLowerCase())));
   if (checkRuns.length === 0) {
     if (hasNoCi(snapshot?.ci)) notes.push("No CI in this repository, so there are no checks to wait on");
     else if (!options.allowNoChecks) pending.push("No check runs found on head commit");
@@ -290,7 +297,7 @@ function usage() {
     "  --allow-no-checks        A HEAD with no CI contexts counts as clean",
     "  --ignore-check NAME      Leave a named check out of the gate (repeatable, case-insensitive)",
     "  --held-file PATH         Items held until \"post\" (held.mjs); what they answer stops blocking",
-    "  --for-verification      Allow draft and pending approval; keep checks, reviewers and findings",
+    "  --for-verification       Allow draft and pending approval; keep checks, reviewers and findings",
     "  --json                   Print { state, reasons, threads } JSON",
     "  --watch                  Poll until blocked or 3 unchanged clean observations (default 30 min)",
     "  --timeout-seconds N      Watch deadline in seconds (default 1800)",
@@ -392,13 +399,16 @@ function isRateLimited(error) {
   return /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
 }
 
-export async function fetchSnapshot(repo, prNumber, runGh = gh) {
+export async function fetchSnapshot(repo, prNumber, runGh = gh, { forVerification = false } = {}) {
   const read = await readGraphql(repo, prNumber, runGh).catch((error) => {
     if (!isRateLimited(error)) throw error;
     return readRest(repo, prNumber, runGh);
   });
   const { owner, name } = repo;
-  const { requiredNames, ...snapshot } = read;
+  const { requiredNames: reportedRequired, ...snapshot } = read;
+  const requiredNames = forVerification
+    ? new Set([...reportedRequired, ...await requiredChecks(`repos/${owner}/${name}`, snapshot.pr.baseRefName, runGh)])
+    : reportedRequired;
   const head = snapshot.pr.headRefOid;
 
   const checksData = await runGh(["api", `repos/${owner}/${name}/commits/${head}/check-runs?per_page=100`]);
@@ -424,7 +434,7 @@ export async function fetchSnapshot(repo, prNumber, runGh = gh) {
   ];
   // A failed read leaves `ci` out, and the gate keeps waiting for checks.
   const ci = checkRuns.length === 0 ? await ciSigns(repo, snapshot.pr.baseRefName, runGh).catch(() => null) : null;
-  return { ...snapshot, checkRuns, truncated, ...(ci ? { ci } : {}) };
+  return { ...snapshot, checkRuns, truncated, ...(ci ? { ci } : {}), ...(forVerification ? { requiredChecks: [...requiredNames] } : {}) };
 }
 
 async function readGraphql({ owner, name }, prNumber, runGh) {
@@ -711,7 +721,7 @@ async function main(argv) {
     forVerification: args.forVerification,
   };
   const loadSnapshot = async () => {
-    const snapshot = await fetchSnapshot(repo, args.pr);
+    const snapshot = await fetchSnapshot(repo, args.pr, gh, options);
     snapshot.pr.expectedHead = args.expectedHead;
     return snapshot;
   };

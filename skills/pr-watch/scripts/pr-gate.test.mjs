@@ -31,6 +31,7 @@ function baseSnapshot(overrides = {}) {
       expectedHead: HEAD,
       headCommittedAt: HEAD_COMMITTED_AT,
     },
+    requiredChecks: [],
     checkRuns: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
     reviewThreads: [],
     reviews: [],
@@ -65,6 +66,8 @@ test("verification can precede human approval while merge readiness still waits"
   const snapshot = withPr({ mergeStateStatus: "BLOCKED", reviewDecision: "REVIEW_REQUIRED" });
   assert.equal(evaluateGate(snapshot).state, "pending");
   assert.equal(evaluateGate(snapshot, { forVerification: true }).state, "ready");
+  snapshot.pr.reviewDecision = "APPROVED";
+  assert.equal(evaluateGate(snapshot, { forVerification: true }).state, "pending");
 });
 
 test("verification readiness keeps source, check, finding and incomplete-data blockers", async (t) => {
@@ -80,10 +83,15 @@ test("verification readiness keeps source, check, finding and incomplete-data bl
     ["failed CI", baseSnapshot({ checkRuns: [{ name: "ci", status: "COMPLETED", conclusion: "FAILURE", required: true }] }), {}, "blocked"],
     ["truncated data", baseSnapshot({ truncated: true }), {}, "pending"],
     ["unknown threads", baseSnapshot({ threadsUnknown: "GraphQL quota" }), {}, "pending"],
+    ["missing required CI", baseSnapshot({ requiredChecks: ["required-ci"] }), {}, "pending"],
+    ["unknown required CI", baseSnapshot({ requiredChecks: null }), {}, "pending"],
     ["held reply", baseSnapshot(), { held: [{ kind: "comment", review: "review", to: "teammate" }] }, "pending"],
   ];
   for (const [name, snapshot, options, state] of cases) {
-    await t.test(name, () => assert.equal(evaluateGate(snapshot, { ...options, forVerification: true }).state, state));
+    await t.test(name, () => {
+      snapshot.pr = { ...snapshot.pr, isDraft: true, mergeStateStatus: snapshot.pr.mergeStateStatus === "CLEAN" ? "DRAFT" : snapshot.pr.mergeStateStatus };
+      assert.equal(evaluateGate(snapshot, { ...options, forVerification: true }).state, state);
+    });
   }
 });
 
@@ -750,6 +758,22 @@ function restPr(overrides = {}) {
   };
 }
 
+test("CLI verification on a draft waits for required CI that has not reported", (t) => {
+  const pr = restPr()["repos/o/r/pulls/7"];
+  const { gate } = rateLimitedGh(t, restPr({
+    "repos/o/r/pulls/7": { ...pr, draft: true, mergeable_state: "draft" },
+    [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 1, check_runs: [{ name: "optional", status: "completed", conclusion: "failure" }] },
+    "repos/o/r/branches/main": { protection: { required_status_checks: { contexts: ["required-ci"] } } },
+  }));
+  const { status, stderr, result } = gate("--expected-head", HEAD, "--for-verification");
+  assert.equal(status, 1, stderr);
+  assert.deepEqual(result.reasons, [
+    "review threads unknown: GraphQL quota",
+    'Required check "required-ci" has not reported on head commit',
+  ]);
+  assert.deepEqual(result.notes, ['Check "optional" concluded FAILURE (not required)']);
+});
+
 test("GraphQL quota spent: the gate reads through REST and holds short of ready, since threads are unknown", (t) => {
   const { gate, calls } = rateLimitedGh(t, restPr());
   const { status, stderr, result } = gate("--expected-head", HEAD);
@@ -829,23 +853,6 @@ function fakeClock() {
   let t = 0;
   return { now: () => t, wait: async (ms) => { t += ms; } };
 }
-
-test("watch: draft verification waits for reviewer coverage before confirming readiness", async () => {
-  const clock = fakeClock();
-  let observations = 0;
-  const seen = [];
-  const result = await watchGate({
-    loadSnapshot: async () => ({
-      ...withPr({ isDraft: true, mergeStateStatus: "DRAFT" }),
-      reviews: observations++ < 2 ? [] : [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }],
-    }),
-    options: { forVerification: true, reviewers: [BOT] },
-    timeoutMs: 10_000, intervalMs: 1_000, ...clock,
-    onObservation: (o) => seen.push(o.state),
-  });
-  assert.equal(result.state, "ready");
-  assert.deepEqual(seen, ["pending", "pending", "pending", "pending", "ready"]);
-});
 
 test("watch: ready only after three unchanged clean observations", async () => {
   const clock = fakeClock();

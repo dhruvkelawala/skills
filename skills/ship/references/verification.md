@@ -14,10 +14,10 @@ Use this before every new verifier, including a replacement after repairs. `ship
      [--ignore-check <name>]... [--held-file <path>]
    ```
 
-   This allows a draft or pending human approval. It still requires the configured reviewers to cover this head, the CI that pr-watch counts to pass, and findings to be handled. Held replies and unknown or truncated data still hold it. Keep pr-watch's existing no-CI and optional-check rules; verification adds no bypass.
+   This allows a draft or pending human approval. It still requires the configured reviewers to cover this head, the CI that pr-watch counts to pass, and findings to be handled. Held replies and unknown or truncated data still hold it. Keep pr-watch's existing no-CI and optional-check rules.
 3. On a finding, batch the accepted repairs, push, and start at step 1. On pending checks or reviewer coverage, use pr-watch to request the configured bot once per head and watch for its result. Held replies return to the user for "post". If a configured bot cannot review drafts, report that blocker to the user; changing draft status or dropping the reviewer needs their decision. Launch no child until the gate returns `ready`.
 
-Readiness is an observation at this head, not a promise that no later finding will arrive. T3 uses one gate run per wake; no extra quiet interval or polling loop is required.
+Use one gate run per T3 wake, as pr-watch does.
 
 ## Reuse before launching
 
