@@ -33,7 +33,7 @@ Do each step once.
 3. Fix each accepted finding, one commit each with the focused tests, and record it as the [repair budget](pr-thread.md#repair-budget) says, with `--asked` for a human reviewer's clear request. Or decide to reject it with a reason.
 4. Run `/verify` at the new head.
 5. Push only this branch: `git push origin <branch>`, with `--force-with-lease` after a rebase.
-6. Answer the reviewers. Reply on each thread, and resolve it after its fix is pushed or its rejection is posted. For a `kind: "review"` entry, post one PR comment that answers it point by point.
+6. Answer the reviewers. Reply on each thread, and resolve it after its fix is pushed or its rejection is posted. For a `kind: "review"` entry, post one PR comment that answers it point by point. Each answer opens with pr-watch's [label](../../pr-watch/SKILL.md#the-label), and passes `node <issue-to-pr>/../pr-watch/scripts/held.mjs check --body-file <file>` before it posts, where `<issue-to-pr>` is the folder that holds this file's `references` folder.
 7. Refresh the PR body for the new head, listing the repairs as not re-reviewed, [check it](pr-body.md#the-check), and update it with `gh pr edit --body-file` (REST: as in the predecessor case, step 5).
 8. Re-request review: `gh pr edit <n> --add-reviewer <login>` (REST: `gh api -X POST repos/{owner}/{repo}/pulls/<n>/requested_reviewers -f "reviewers[]=<login>"`) for a human, or the request comment for a bot.
 

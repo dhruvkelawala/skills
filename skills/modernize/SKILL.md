@@ -48,7 +48,7 @@ A PR isn't current just because Git reports no conflicts.
 
 - **MODERNIZE.** The goal still matters and the code is still the right shape. Go on to step 4.
 - **REWORK.** The goal still matters, but a rebase would keep the wrong code. Name the smallest rewrite that would work, and stop before any push, unless the user also asked for the rework.
-- **CLOSE.** The PR is superseded, obsolete, pointed the wrong way, or no longer worth its cost. Name the evidence and stop. Close it only on the user's word, with a comment that gives the evidence, labelled as [pr-watch](../pr-watch/SKILL.md#who-hears-from-you) labels a reply.
+- **CLOSE.** The PR is superseded, obsolete, pointed the wrong way, or no longer worth its cost. Name the evidence and stop. Close it only on the user's word, with a comment that gives the evidence and opens with pr-watch's [label](../pr-watch/SKILL.md#the-label), checked as that section says.
 
 Age is not evidence, and the work already in the PR is no reason to keep it. Say CLOSE when the evidence says so.
 

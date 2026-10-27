@@ -5,6 +5,7 @@
 //   held.mjs hold --file F --thread ID --reply-to COMMENT_ID --seen COMMENT_ID --to LOGIN --body-file PATH
 //   held.mjs hold --file F --review ID --to LOGIN --body-file PATH
 //   held.mjs post --file F --repo owner/name --pr N --record PATH
+//   held.mjs check --body-file PATH
 //
 // The file is a JSON list of items in the order they were held:
 //   { kind: "reply", thread, replyTo, seen, to, body }   a reply in a review thread, then resolving it;
@@ -13,7 +14,8 @@
 //   { kind: "resolve", thread, seen, to, url }            left by a post whose reply went out but whose
 //                                                        resolve did not; seen and url are the reply's
 // Holding again for the same thread or review replaces the earlier item. `hold` refuses a draft that
-// does not open with pr-watch's label, or that holds a secret.
+// does not open with pr-watch's label, or that holds a secret. `check` runs the same check on text
+// that goes out without being held, such as a review or a reply to a bot.
 //
 // `post` sends the items in order and removes each from the file once GitHub accepts it, so a failed
 // post can run again without sending anything twice. It appends one line per send to the run record.
@@ -30,6 +32,7 @@ const USAGE = [
   "usage: held.mjs hold --file F --thread ID --reply-to COMMENT_ID --seen COMMENT_ID --to LOGIN --body-file PATH",
   "       held.mjs hold --file F --review ID --to LOGIN --body-file PATH",
   "       held.mjs post --file F --repo owner/name --pr N --record PATH",
+  "       held.mjs check --body-file PATH",
 ].join("\n");
 const RESOLVE = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }";
 const LAST_COMMENT = "query($id:ID!){ node(id:$id){ ... on PullRequestReviewThread{ comments(last:1){ nodes{ databaseId author{ login } } } } } }";
@@ -183,6 +186,12 @@ function gh(args) {
 async function main(argv) {
   try {
     const args = parseArgs(argv);
+    if (args.command === "check") {
+      if (!args["body-file"]) throw new Error("--body-file is required");
+      checkDraft(readFileSync(args["body-file"], "utf8"));
+      console.log("the draft opens with the label and holds no secret");
+      return 0;
+    }
     if (!args.file) throw new Error("--file is required");
     const { file } = args;
     if (args.command === "post") return post(file, args);

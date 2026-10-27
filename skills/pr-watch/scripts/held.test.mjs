@@ -115,7 +115,7 @@ test("a person's thread: hold keeps the drafted reply off GitHub, and the gate t
   assert.deepEqual(after.json, { state: "pending", reasons: ['1 item(s) to people held until "post"'], threads: [] });
 });
 
-test("hold refuses a draft without the label or with a secret, and holds nothing", (t) => {
+test("hold and check refuse a draft without the label or with a secret, and hold nothing", (t) => {
   const gh = stubGh(t, {});
   const held = gh.file("held.json");
   const token = "gh" + "p_" + "aB3dE5gH7j".repeat(4);
@@ -123,12 +123,18 @@ test("hold refuses a draft without the label or with a secret, and holds nothing
     ["Renamed to joinAll in 1a2b3c4.", /must open with the label/],
     [`${LABEL}Renamed it, and checked with ${token}.`, /line 4: a GitHub token/],
   ]) {
-    const hold = gh.run(HELD, ["hold", "--file", held, "--review", "PRR_h", "--to", "reviewer", "--body-file", gh.file("draft.md", body)]);
-    assert.equal(hold.status, 2, hold.stdout);
-    assert.match(hold.stderr, error);
-    assert.ok(!hold.stderr.includes(token), "the refusal never repeats the secret");
+    const draft = gh.file("draft.md", body);
+    for (const args of [["hold", "--file", held, "--review", "PRR_h", "--to", "reviewer", "--body-file", draft], ["check", "--body-file", draft]]) {
+      const refused = gh.run(HELD, args);
+      assert.equal(refused.status, 2, `${args[0]}: ${refused.stdout}`);
+      assert.match(refused.stderr, error);
+      assert.ok(!refused.stderr.includes(token), "the refusal never repeats the secret");
+    }
   }
   assert.equal(existsSync(held), false);
+  const passed = gh.run(HELD, ["check", "--body-file", gh.file("draft.md", `${LABEL}Renamed to joinAll in 1a2b3c4.`)]);
+  assert.equal(passed.status, 0, passed.stderr);
+  assert.deepEqual(gh.calls(), [], "checking makes no GitHub call");
 });
 
 // --- post ---------------------------------------------------------------------
