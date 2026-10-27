@@ -14,8 +14,9 @@ const daysAgo = (days) => new Date(Date.now() - days * DAY).toISOString().replac
 const hoursAfter = (iso, hours) => new Date(Date.parse(iso) + hours * 60 * 60 * 1000).toISOString().replace(/\.\d+Z$/, "Z");
 
 // Runs the morning script against a GitHub world served by the fake gh on PATH, with HOME holding the
-// issue-to-pr run records this machine has.
-function run(t, world, runRecords = []) {
+// issue-to-pr run records this machine has and the report's repos.txt. With `at`, the script's clock reads that
+// moment, in UTC.
+function run(t, world, { runRecords = [], repos, at, args = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "day-morning-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "world.json"), JSON.stringify(world));
@@ -26,12 +27,26 @@ function run(t, world, runRecords = []) {
     mkdirSync(join(dir, "home", ".agent", "issue-to-pr", record.split("/")[0]), { recursive: true });
     writeFileSync(join(dir, "home", ".agent", "issue-to-pr", `${record}.md`), "stage: implemented\n");
   }
-  const env = { ...process.env, HOME: join(dir, "home"), PATH: `${join(dir, "bin")}:${process.env.PATH}`, FAKE_GH_WORLD: join(dir, "world.json") };
-  return spawnSync(process.execPath, [morningPath], { encoding: "utf8", env });
+  if (repos !== undefined) {
+    mkdirSync(join(dir, "home", ".agent", "day"), { recursive: true });
+    writeFileSync(join(dir, "home", ".agent", "day", "repos.txt"), repos);
+  }
+  const clock = [];
+  if (at) {
+    writeFileSync(join(dir, "clock.mjs"), `const Real = Date;
+globalThis.Date = class extends Real {
+  constructor(...a) { super(...(a.length ? a : [${Date.parse(at)}])); }
+  static now() { return ${Date.parse(at)}; }
+};
+`);
+    clock.push("--import", join(dir, "clock.mjs"));
+  }
+  const env = { ...process.env, HOME: join(dir, "home"), PATH: `${join(dir, "bin")}:${process.env.PATH}`, FAKE_GH_WORLD: join(dir, "world.json"), TZ: "UTC" };
+  return spawnSync(process.execPath, [...clock, morningPath, ...args], { encoding: "utf8", env });
 }
 
-function morning(t, world, runRecords) {
-  const result = run(t, world, runRecords);
+function morning(t, world, options) {
+  const result = run(t, world, options);
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
@@ -65,7 +80,7 @@ test("builds to start are ready, unblocked, unstarted issues in your repos or in
       },
       "maker/old": { archived: true, issues: [ready(9)] },
     },
-  }, ["app/5"]);
+  }, { runRecords: ["app/5"] });
   assert.deepEqual(builds, [
     { repo: "maker/app", number: 2, url: "https://github.com/maker/app/issues/2", title: "issue 2", blocking: 2, createdAt: d2 },
     { repo: "team/svc", number: 40, url: "https://github.com/team/svc/issues/40", title: "issue 40", blocking: 0, createdAt: d5 },
@@ -116,6 +131,90 @@ test("going stale lists your open PRs with no update for 14 days, the one that w
     { repo: "maker/app", number: 20, url: "https://github.com/maker/app/pull/20", title: "pr 20", draft: true, updatedAt: d15, quietDays: 15 },
     { repo: "maker/app", number: 21, url: "https://github.com/maker/app/pull/21", title: "pr 21", draft: false, updatedAt: d20, quietDays: 20 },
   ]);
+});
+
+test("your open PRs are the ones updated in the last 14 days, updated last first, with their newest checks, review and conflicts", (t) => {
+  const [h2, d1, d3, d5, d9] = [daysAgo(2 / 24), daysAgo(1), daysAgo(3), daysAgo(5), daysAgo(9)];
+  const ci = (conclusion) => ({ name: `ci-${conclusion}`, status: "completed", conclusion });
+  const { active } = morning(t, {
+    me: "maker",
+    repos: {
+      "maker/app": {
+        pulls: [
+          pull(60, {
+            updatedAt: d1, conflicts: true,
+            checks: [ci("success"), { name: "lint", status: "in_progress" }, ci("failure")],
+            reviews: [
+              { author: "alice", at: d3, state: "CHANGES_REQUESTED", body: "Split this." },
+              { author: "dave", at: d3, state: "APPROVED", body: "" },
+              { author: "alice", at: d1, state: "COMMENTED", body: "Thanks." },
+            ],
+          }),
+          pull(61, {
+            updatedAt: h2,
+            checks: [ci("success"), { name: "e2e", status: "queued" }],
+            reviews: [{ author: "bob", at: d3, state: "CHANGES_REQUESTED", body: "" }, { author: "bob", at: d1, state: "APPROVED", body: "" }],
+          }),
+          pull(62, { updatedAt: d3, draft: true, reviewers: ["carol"] }),
+          pull(63, {
+            updatedAt: d5,
+            checks: [{ name: "review", status: "completed", conclusion: "cancelled" }, ci("success"), ci("skipped"), ci("neutral"), { name: "review", status: "completed", conclusion: "success" }],
+            statuses: [{ context: "deploy", state: "success" }],
+          }),
+          pull(64, { updatedAt: d9, checks: [ci("success")], statuses: [{ context: "deploy", state: "error" }] }),
+          pull(65, { updatedAt: daysAgo(15) }),
+          pull(66, { updatedAt: d1, author: "teammate" }),
+        ],
+      },
+    },
+  });
+  const line = (number, updatedAt, standing, draft = false) => ({ repo: "maker/app", number, url: `https://github.com/maker/app/pull/${number}`, title: `pr ${number}`, draft, updatedAt, ...standing });
+  assert.deepEqual(active, [
+    line(61, h2, { checks: "pending", review: "approved", conflicts: false }),
+    line(60, d1, { checks: "failing", review: "changes requested", conflicts: true }),
+    line(62, d3, { checks: "none", review: "requested", conflicts: false }, true),
+    line(63, d5, { checks: "passing", review: "none", conflicts: false }),
+    line(64, d9, { checks: "failing", review: "none", conflicts: false }),
+  ]);
+});
+
+test("when repos.txt names repositories, every list holds only theirs", (t) => {
+  const missing = "## What's missing\n- which screen loses people\n";
+  const merged = daysAgo(2);
+  const repo = (name) => ({
+    issues: [ready(1), issue(2, { body: missing })],
+    pulls: [
+      pull(3, { updatedAt: daysAgo(1) }),
+      pull(4, { updatedAt: daysAgo(20) }),
+      pull(5, { state: "merged", mergedAt: merged, updatedAt: hoursAfter(merged, 1), comments: [{ author: "alice", at: hoursAfter(merged, 1), body: `${name} breaks.` }] }),
+    ],
+  });
+  const world = { me: "maker", repos: { "maker/app": repo("app"), "maker/web": repo("web"), "maker/dropped": repo("dropped") } };
+  const lists = morning(t, world, { repos: "# what the report tracks\nMaker/App\n\nmaker/web   # the site\n" });
+  for (const [name, items] of Object.entries(lists)) assert.deepEqual(items.map((i) => i.repo), ["maker/app", "maker/web"], `${name} lists ${items.map((i) => i.repo)}`);
+});
+
+// The report filters pr-review's queue by --repos, so it must print the same repositories the lists keep.
+test("a repository marked weekdays counts Monday to Friday and is left out on Saturday and Sunday", (t) => {
+  const world = { me: "maker", repos: { "maker/work": { issues: [ready(1)] }, "maker/side": { issues: [ready(2)] } } };
+  const repos = "maker/work weekdays\nmaker/side\n";
+  for (const [at, kept] of [
+    ["2026-10-30T23:30:00Z", ["maker/work", "maker/side"]],
+    ["2026-10-31T10:00:00Z", ["maker/side"]],
+    ["2026-11-01T23:30:00Z", ["maker/side"]],
+    ["2026-11-02T00:30:00Z", ["maker/work", "maker/side"]],
+  ]) {
+    assert.deepEqual(morning(t, world, { repos, at }).builds.map((b) => b.repo).sort(), [...kept].sort(), `builds at ${at}`);
+    assert.deepEqual(morning(t, world, { repos, at, args: ["--repos"] }), kept, `--repos at ${at}`);
+  }
+  assert.equal(morning(t, world, { args: ["--repos"] }), null, "--repos with no repos.txt");
+});
+
+test("a repos.txt line that is not owner/name, optionally followed by weekdays, exits 2 and names the line", (t) => {
+  const result = run(t, { me: "maker", repos: {} }, { repos: "maker/app weekday\n" });
+  assert.equal(result.status, 2, result.stdout);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /^morning: .*repos\.txt: "maker\/app weekday" is not owner\/name/m);
 });
 
 test("late comments are what people and review bots wrote on your PRs after they merged in the last 7 days, newest first", (t) => {

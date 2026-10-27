@@ -2,7 +2,10 @@
 // - three ready builds (#31 unblocks #35, so it ranks first; then #32, older than #33), #35 blocked by #31, and
 //   #34 almost ready, missing two things;
 // - two teammate PRs that ask for maker's review, #7 and a layer #5 stacked on it, so the queue starts at #7;
-// - maker's own PR #20, quiet for 20 days, and no late comments, so that section is empty;
+// - maker's own PRs: #21, updated hours ago with its checks failing, and #20, quiet for 20 days; and no late comments,
+//   so that section is empty;
+// - maker/legacy, missing from the report's repos.txt, with a ready build, a stale PR and a teammate PR that asks
+//   for maker's review again, which would top the queue if the report kept it;
 // - last night's record, with one run still stopped and one restarted since, and an older record from 3 days ago.
 export const ME = "maker";
 export const REPO = "maker/app";
@@ -12,6 +15,7 @@ export const LAYER = 5;
 export const PR_HEAD = "7e57c0de7e57c0de7e57c0de7e57c0de7e57c0de";
 export const LAYER_HEAD = "5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e";
 export const BUILDS = [31, 32, 33];
+export const UNTRACKED = "maker/legacy";
 export const PROJECT = { id: "project-app", title: "app" };
 export const STOPPED = { threadId: "thread-stopped", title: "Build #12: cache layer" };
 export const RESTARTED = { threadId: "thread-restarted", title: "Build #14: retry budget" };
@@ -44,6 +48,21 @@ export function world(now) {
           { number: PR, title: "Retry fetches on a 5xx", author: "teammate", requested: true, base: "main", head: "retry-on-5xx", sha: PR_HEAD, additions: 64, deletions: 3, files: 4, createdAt: ago(1), updatedAt: ago(0.4) },
           { number: LAYER, title: "Log each retry", author: "teammate", requested: true, base: "retry-on-5xx", head: "log-retries", sha: LAYER_HEAD, additions: 12, deletions: 0, files: 2, createdAt: ago(1), updatedAt: ago(0.4) },
           { number: 20, title: "Move the config loader to TOML", author: ME, base: "main", head: "toml-config", sha: "2020202020202020202020202020202020202020", createdAt: ago(25), updatedAt: ago(20) },
+          {
+            number: 21, title: "Stream the export as CSV", author: ME, base: "main", head: "csv-export", sha: "2121212121212121212121212121212121212121", createdAt: ago(2), updatedAt: ago(0.2),
+            checks: [{ name: "ci", status: "completed", conclusion: "failure" }],
+          },
+        ],
+      },
+      [UNTRACKED]: {
+        pushedAt: ago(1),
+        issues: [ready(3, "Port the importer to the new API", { createdAt: ago(5) })],
+        pulls: [
+          { number: 4, title: "Drop the old importer", author: ME, base: "main", head: "drop-importer", createdAt: ago(30), updatedAt: ago(25) },
+          {
+            number: 6, title: "Rename the importer flags", author: "teammate", requested: true, base: "main", head: "importer-flags", sha: "6060606060606060606060606060606060606060",
+            additions: 4, deletions: 2, files: 1, createdAt: ago(3), updatedAt: ago(0.3), reviews: [{ author: ME, at: ago(2), state: "COMMENTED", body: "", commit: "5050505050505050505050505050505050505050" }],
+          },
         ],
       },
     },

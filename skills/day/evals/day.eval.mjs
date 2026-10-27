@@ -11,14 +11,14 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, st
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BUILDS, OLD_STOP, PR, PR_HEAD, PROJECT, REPO, REPO_URL, RESTARTED, STOPPED, nightRecords, world } from "./fixture.mjs";
+import { BUILDS, OLD_STOP, PR, PR_HEAD, PROJECT, REPO, REPO_URL, RESTARTED, STOPPED, UNTRACKED, nightRecords, world } from "./fixture.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillsDir = dirname(dirname(evalsDir));
 const { jobs } = JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8"));
 const prepModel = jobs["teammate-prep"].use.model;
 const TOOLS = "Bash,Read,Write,Edit,Glob,Grep,Skill,ToolSearch,mcp__t3-code";
-const SECTIONS = ["Builds to start", "Almost ready", "Review queue", "Going stale", "Late comments", "Stopped last night", "Strain"];
+const SECTIONS = ["Builds to start", "Almost ready", "Review queue", "Your open PRs", "Going stale", "Late comments", "Stopped last night", "Strain"];
 const GB_IN_KIB = 1e9 / 1024;
 
 const readLog = (file) => (existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -29,8 +29,9 @@ function script(path, body) {
   chmodSync(path, 0o755);
 }
 
-// The chain's world: the user's checkout of maker/app (the app project's root), HOME with the night records, the
-// skills under the chain's own config dir, gh and T3 faked, and a machine with 38 GB free and normal memory.
+// The chain's world: the user's checkout of maker/app (the app project's root), HOME with the night records and the
+// report's repos.txt, the skills under the chain's own config dir, gh and T3 faked, and a machine with 38 GB free
+// and normal memory.
 function scratch() {
   const now = Date.now();
   const root = mkdtempSync(join(tmpdir(), "day-eval-"));
@@ -40,6 +41,7 @@ function scratch() {
   execFileSync("git", ["-C", c.work, "remote", "add", "origin", `${REPO_URL}.git`]);
   writeFileSync(join(c.fake, "world.json"), JSON.stringify(world(now)));
   for (const { name, text } of nightRecords(now)) writeFileSync(join(c.home, ".agent", "day", name), text);
+  writeFileSync(join(c.home, ".agent", "day", "repos.txt"), `${REPO}\n`);
 
   cpSync(skillsDir, join(c.config, "skills"), { recursive: true, filter: (src) => basename(src) !== "evals" });
   script(join(c.bin, "gh"), `exec "${process.execPath}" "${join(evalsDir, "fake-gh.mjs")}" "$@"`);
@@ -116,7 +118,7 @@ function describeTurn(t, r) {
 }
 
 describe("day morning", { concurrency: true }, () => {
-  test("the report has the seven sections in order, each with its lines, and leaves out an empty one", async (t) => {
+  test("the report has the eight sections in order, each with its lines, and leaves out an empty one and an untracked repository", async (t) => {
     const r = await morning().report;
     describeTurn(t, r);
     const report = reportOf(r);
@@ -130,7 +132,9 @@ describe("day morning", { concurrency: true }, () => {
     assert.deepEqual(lines("Builds to start", "issues"), BUILDS, `${r.name}: builds to start are not #31, #32, #33 in the script's order`);
     assert.deepEqual(lines("Almost ready", "issues"), [34], `${r.name}: almost ready does not list #34 alone`);
     assert.deepEqual(lines("Review queue", "pull"), [PR, 5], `${r.name}: the review queue is not #${PR}, then #5 stacked on it`);
+    assert.deepEqual(lines("Your open PRs", "pull"), [21], `${r.name}: your open PRs does not list #21 alone`);
     assert.deepEqual(lines("Going stale", "pull"), [20], `${r.name}: going stale does not list #20 alone`);
+    assert.ok(!report.text.includes(`github.com/${UNTRACKED}/`), `${r.name}: lists ${UNTRACKED}, which repos.txt does not track`);
     const stopped = sectionText(report.text, "Stopped last night");
     assert.ok(stopped.includes(`t3-thread://v1/${STOPPED.threadId}`), `${r.name}: the run still stopped is not listed`);
     for (const gone of [RESTARTED, OLD_STOP]) assert.ok(!stopped.includes(gone.threadId), `${r.name}: lists ${gone.threadId}, restarted or from an older night`);

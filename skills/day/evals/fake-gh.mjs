@@ -1,7 +1,7 @@
 // Stands in for gh in day's tests and eval. It answers from a world in the JSON file $FAKE_GH_WORLD: the user's
-// login, and each repository's issues and PRs with their comments and reviews. It models the calls the morning script
-// and pr-review's queue script make (REST search, REST lists with --paginate --slurp, `gh search prs`) and the REST
-// reads an agent makes about one repository, issue or PR. $FAKE_GH_LOG, when set, gets one line per call.
+// login, and each repository's issues and PRs with their comments, reviews and checks. It models the calls the
+// morning script and pr-review's queue script make (REST search, REST lists with --paginate --slurp, `gh search prs`)
+// and the REST reads an agent makes about one repository, issue or PR. $FAKE_GH_LOG, when set, gets one line per call.
 // A call it does not model exits 1, so a caller can't read a made-up success.
 //
 // World: { me, repos: { "<owner>/<name>": { archived, gone, defaultBranch, pushedAt, issues: [issue], pulls: [pull] } } }
@@ -9,8 +9,11 @@
 //         repository the user lost access to.
 //   issue: { number, title, author, state, labels, body, createdAt, updatedAt, involves, blockedBy, blocking }
 //   pull:  { number, title, author, state ("open" | "merged" | "closed"), draft, body, base, head, sha, createdAt,
-//            updatedAt, mergedAt, requested, additions, deletions, files, comments, reviewComments, reviews }
+//            updatedAt, mergedAt, requested, reviewers, conflicts, additions, deletions, files, comments,
+//            reviewComments, reviews, checks, statuses }
+//          requested: the PR asks for the user's review. reviewers: the logins it asks, as its author sees them.
 //   comment: { author, at, body }   review: { author, at, state, body, commit }
+//   check: { name, status, conclusion }, in the order they ran   status: { context, state }
 import { appendFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
@@ -56,6 +59,7 @@ const pullRest = (repo, p) => ({
   base: { ref: p.base ?? "main", repo: { full_name: repo, archived: Boolean(repos[repo].archived) } },
   head: { ref: p.head ?? `branch-${p.number}`, sha: p.sha ?? `sha${p.number}`, repo: { full_name: repo } },
   additions: p.additions ?? 0, deletions: p.deletions ?? 0, changed_files: p.files ?? 1,
+  mergeable: !p.conflicts, requested_reviewers: (p.reviewers ?? []).map(user), requested_teams: [],
 });
 // A search hit is an issue-shaped item; a PR's carries pull_request with its merge time.
 const pullHit = (repo, p) => ({
@@ -124,6 +128,13 @@ function api(path) {
   if (kind === "pulls" && pull && !sub) return print(pullRest(repo, pull));
   if (kind === "pulls" && pull && sub === "comments") return printList(since((pull.reviewComments ?? []).map(commentRest(url)), query));
   if (kind === "pulls" && pull && sub === "reviews") return printList((pull.reviews ?? []).map(reviewRest(url)));
+  // A commit is a PR's head; check runs page as objects, each holding its runs.
+  const head = kind === "commits" && (r.pulls ?? []).find((p) => (p.sha ?? `sha${p.number}`) === number);
+  if (head && sub === "check-runs") {
+    const page = { total_count: (head.checks ?? []).length, check_runs: (head.checks ?? []).map((c, i) => ({ id: i + 1, name: c.name, status: c.status, conclusion: c.conclusion ?? null })) };
+    return print(has("--slurp") ? [page] : page);
+  }
+  if (head && sub === "status") return print({ sha: number, total_count: (head.statuses ?? []).length, statuses: head.statuses ?? [] });
   fail(`fake gh: api ${route} is not modelled`);
 }
 

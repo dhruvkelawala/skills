@@ -8,7 +8,7 @@ Run it from a thread on the machine where T3 runs new threads, since the T3 tool
 
 The report posts with the review queue's first PR already prepped, so its review can start at once. Its reviewers and its guide take minutes, so start them before anything else.
 
-1. Run `node <skills-dir>/pr-review/scripts/queue.mjs` without `--repo`, so it covers every repository. It prints pr-review's queue as JSON, in the order to review it. When the queue is empty, go to step 2.
+1. Run `node <skills-dir>/pr-review/scripts/queue.mjs` without `--repo`, so it covers every repository. It prints pr-review's queue as JSON, in the order to review it. Then run `node <skill-dir>/scripts/morning.mjs --repos`, which prints the [repositories the report tracks](#choose-the-repositories) today, or `null` when it tracks every one. Keep only the queue entries whose `repo` it names, compared without case. When the queue is then empty, go to step 2.
 2. Take the first entry. Its prep record is `$HOME/.agent/pr-review/<repository name>/<number>.md`. When that record names the entry's `head`, the PR is already prepped.
 3. Otherwise start its prep exactly as pr-review's background prep starts the next PR's ([pr-review step 3](../pr-review/SKILL.md#3-walk-one-pr-at-a-time), "The next PR's prep runs while the user reads"): one async `delegate_task` child on the `teammate-prep` job in `<skills-dir>/models.json`, since the queue holds none of the user's own PRs. Keep its `taskId`.
 
@@ -18,13 +18,13 @@ The report posts with the review queue's first PR already prepped, so its review
 
 While the prep runs, gather each section's lines.
 
-1. **The GitHub lists.** Run `node <skill-dir>/scripts/morning.mjs`. It prints `builds`, `almostReady`, `stale` and `lateComments` as JSON, and its header says what each one holds and in what order. When it exits with code 2, a reading failed, and the report says so in one line with the error, in place of those four sections.
+1. **The GitHub lists.** Run `node <skill-dir>/scripts/morning.mjs`. It prints `builds`, `almostReady`, `active`, `stale` and `lateComments` as JSON, and its header says what each one holds and in what order. It keeps only the [repositories the report tracks](#choose-the-repositories) today. When it exits with code 2, a reading failed, and the report says so in one line with the error, in place of those five sections.
 2. **Stopped last night.** Read the newest [night record](SKILL.md#the-night-record) in `~/.agent/day/` written in the last 24 hours. Its name holds the date and time it was written. After a night with no goodnight check there is none, and nothing is listed. For each line under its "Stopped" heading, read the thread with `t3_thread_read`. A run in its `recentRuns` requested after the line's stop time means the thread has restarted, whoever restarted it, so leave that line out.
 3. **The strain line.** Run `node <skill-dir>/scripts/strain.mjs` as [night mode's step 2](SKILL.md#2-check-the-strain) says, with a command timeout of at least 6 minutes.
-4. **Progress pages.** A project can keep a `progress-report` skill at `.agents/skills/progress-report/`, which draws how far it is from its next release as one page. For each project from `t3_project_list` (follow `nextCursor` until it is null), take its `workspaceRoot` and its repository's default branch from `gh api repos/<owner>/<repo> --jq .default_branch`. Run `git -C <workspaceRoot> fetch -q origin <branch>`, then extract the skill from that branch into a new empty folder with `git -C <workspaceRoot> archive origin/<branch> .agents/skills/progress-report | tar -x -C <folder>`, so a checkout left on an old branch still runs today's skill. When the archive fails, the project has no progress page. Otherwise follow `<folder>/.agents/skills/progress-report/SKILL.md`, running its script from `<folder>` with `<workspaceRoot>` as the working directory, and keep the page it writes. When the build fails, keep its error for one line in the report.
-5. **A reason on each line.** For each build the report lists, write why it ranks there in a few words, from what it unblocks, its repository and its age, such as "unblocks #35". For each almost-ready issue, name its first gap. For each PR with late comments, say what the comments ask.
+4. **Progress pages.** A project can keep a `progress-report` skill at `.agents/skills/progress-report/`, which draws how far it is from its next release as one page. For each project from `t3_project_list` (follow `nextCursor` until it is null) whose repository the report tracks today, take its `workspaceRoot` and its repository's default branch from `gh api repos/<owner>/<repo> --jq .default_branch`. Run `git -C <workspaceRoot> fetch -q origin <branch>`, then extract the skill from that branch into a new empty folder with `git -C <workspaceRoot> archive origin/<branch> .agents/skills/progress-report | tar -x -C <folder>`, so a checkout left on an old branch still runs today's skill. When the archive fails, the project has no progress page. Otherwise follow `<folder>/.agents/skills/progress-report/SKILL.md`, running its script from `<folder>` with `<workspaceRoot>` as the working directory, and keep the page it writes. When the build fails, keep its error for one line in the report.
+5. **A reason on each line.** For each build the report lists, write why it ranks there in a few words, from what it unblocks, its repository and its age, such as "unblocks #35". For each almost-ready issue, name its first gap. For each of your open PRs, say where it stands from its `checks`, `review`, `conflicts` and `draft`, such as "checks failing" or "approved, checks pass". For each PR with late comments, say what the comments ask.
 
-**Complete when:** you hold the four lists or the line saying they could not be read, the stopped lines, the strain line or nothing, and each project's progress page or the error from building it.
+**Complete when:** you hold the five lists or the line saying they could not be read, the stopped lines, the strain line or nothing, and each tracked project's progress page or the error from building it.
 
 ## 3. Post the report
 
@@ -49,24 +49,28 @@ Review queue
 5. [app#7: Retry fetches on a 5xx](https://github.com/<owner>/app/pull/7) · teammate · 67 lines · prepped: 1 P1, tour in its Guide tab
 6. [app#5: Log each retry](https://github.com/<owner>/app/pull/5) · teammate · 12 lines · sits on #7
 
+Your open PRs
+7. [app#21: Stream the export as CSV](https://github.com/<owner>/app/pull/21) · checks failing
+8. [app#19: Cache the schema per request](https://github.com/<owner>/app/pull/19) · approved, checks pass
+
 Going stale
-7. [app#20: Move the config loader to TOML](https://github.com/<owner>/app/pull/20) · quiet 20 days
+9. [app#20: Move the config loader to TOML](https://github.com/<owner>/app/pull/20) · quiet 20 days
 
 Late comments
-8. [app#81: Retry budget](https://github.com/<owner>/app/pull/81) · merged 3 days ago · alice says the empty case breaks on main
+10. [app#81: Retry budget](https://github.com/<owner>/app/pull/81) · merged 3 days ago · alice says the empty case breaks on main
 
 Stopped last night
-9. [Build #12: cache layer](t3-thread://v1/<threadId>) · stopped at stage 2, building criterion 2 of 3
+11. [Build #12: cache layer](t3-thread://v1/<threadId>) · stopped at stage 2, building criterion 2 of 3
 
 Strain: 38 GB free on disk, biggest ~/Library (300 GB, of which ~/Library/Developer 120 GB).
 Progress page for web could not be built: linear: not signed in.
 
-Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, `/modernize https://github.com/<owner>/app/pull/20` says whether line 7 should still land, and "go on 9" restarts a stopped run.
+Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, `/modernize https://github.com/<owner>/app/pull/20` says whether line 9 should still land, and "go on 11" restarts a stopped run.
 ````
 
 - The sections come in this order, under these names. Leave out a section with nothing in it, and its count in the first line.
 - Number every line in one sequence, so a reply can name any line.
-- **Builds to start** and **Going stale** list their first 10 in the script's order, then count the rest in one line.
+- **Builds to start**, **Your open PRs** and **Going stale** list their first 10 in the script's order, then count the rest in one line. Your open PRs are the ones updated in the last 14 days, and the rest are going stale, so each of your open PRs is on one line.
 - The last line offers `/modernize <its URL>` for the first **Going stale** PR, which rebases it or says why it should change or close.
 - **Review queue** lists every PR in the queue's order. The first one's line gives its prep: the findings by priority and where its tour is, or why it has no guide. If that PR changes before its review, pr-review preps it again, because its prep record no longer names the PR's head. The last line offers `/pr-review <its URL>`, which reviews it from its prep in this thread. A bare `/pr-review` reviews this thread's own branch, and `/pr-review queue` walks only this project's queue, so the report offers neither.
 - Link each issue and PR by its GitHub URL, which for a PR opens T3's PR panel beside the thread, and each thread as `[title](t3-thread://v1/<threadId>)` with the `threadId` exactly as T3 returns it. Never link a local file or localhost.
@@ -103,3 +107,14 @@ A scheduled task runs on the T3 server of the thread that creates it, and each r
 - `title`: `Morning report`
 
 Leave `bindToCurrentThread` at its default, so the reports and the replies that start builds stay in that thread. Tell the user the `nextRunAt` the tool returns.
+
+## Choose the repositories
+
+`~/.agent/day/repos.txt` lists the repositories the report tracks, one `owner/name` to a line. A line ending in `weekdays` drops that repository on Saturday and Sunday, by the machine's clock, such as a work repository. A `#` starts a comment. With no file, or a file with no repositories, the report tracks every repository.
+
+```text
+argentlabs/fluper-mario weekdays
+dhruvkelawala/visaroy
+```
+
+When the user asks to track or drop a repository, edit its line, and run `morning.mjs --repos` to check the file reads. A line it cannot read makes the script exit with code 2 and name the line. Archiving a repository on GitHub also drops it, but makes it read-only.

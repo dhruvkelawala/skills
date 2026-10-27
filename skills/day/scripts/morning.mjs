@@ -1,25 +1,31 @@
 #!/usr/bin/env node
 // The GitHub half of day's morning report, printed as JSON:
 //
-//   morning.mjs
+//   morning.mjs [--repos]
 //
 //   builds        open issues labelled ready-for-agent with no open blocker, that no open PR closes and no
 //                 issue-to-pr run record on this machine has started, ranked by the open issues each one blocks,
 //                 then by the repository pushed to last, then oldest first
 //   almostReady   open unlabelled issues with ticket's "## What's missing" section, and its gaps
+//   active        your open PRs updated in the last 14 days, the one updated last first, with their checks (failing,
+//                 pending, passing or none), their review (changes requested, approved, requested or none) and
+//                 whether they conflict with their base
 //   stale         your open PRs with no update for 14 days, the one that went quiet last first
 //   lateComments  your PRs merged in the last 7 days that a person commented on or a bot reviewed after the merge,
 //                 newest first
 //
-// An issue counts when it is in one of your repositories or involves you. Archived repositories are skipped.
+// An issue counts when it is in one of your repositories or involves you. Archived repositories are skipped. When
+// ~/.agent/day/repos.txt names repositories, one owner/name to a line, only those count, and one whose line ends in
+// "weekdays" counts only Monday to Friday. --repos prints the repositories that count today, or null when every one
+// does, and reads nothing from GitHub.
 // It reads GitHub through search and REST calls only, so it never spends the GraphQL quota that every agent on the
 // account shares. Exit codes: 0 printed, 2 a reading failed.
 
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { parseArgs, promisify } from "node:util";
 
 const execFileP = promisify(execFile);
 
@@ -28,15 +34,36 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const STALE_DAYS = 14;
 const LATE_DAYS = 7;
 const EXCERPT_CHARS = 280;
-// Each merged PR takes three reads, and a busy week merges well over a hundred PRs.
+// Each merged PR takes three reads and each active one four, and a busy week merges well over a hundred PRs.
 const PARALLEL_READS = 8;
+// The same conclusions pr-watch's gate lets through.
+const PASSING = new Set(["success", "neutral", "skipped"]);
+
+const REPOS_FILE = join(homedir(), ".agent", "day", "repos.txt");
+// The repositories that count today, or null when every one does. main sets it before any read.
+let tracked = null;
 
 const gh = async (...args) => (await execFileP("gh", args, { maxBuffer: 1 << 28 })).stdout.trim();
 const pages = async (endpoint) => JSON.parse(await gh("api", "--paginate", "--slurp", endpoint));
 const list = async (endpoint) => (await pages(endpoint)).flat();
-const search = async (q) => (await pages(`search/issues?q=${encodeURIComponent(q)}&per_page=100`)).flatMap((page) => page.items);
+// Every list starts from a search, so keeping only the tracked repositories here keeps the rest out of every list.
+const search = async (q) =>
+  (await pages(`search/issues?q=${encodeURIComponent(q)}&per_page=100`)).flatMap((page) => page.items).filter((item) => !tracked || tracked.some((r) => same(r, repoOf(item))));
 const same = (a, b) => (a ?? "").toLowerCase() === (b ?? "").toLowerCase();
 const repoOf = (item) => item.repository_url.split("/").slice(-2).join("/");
+
+// The repositories repos.txt names, without the weekday-only ones on Saturday and Sunday in this machine's time zone,
+// or null when it names none. A # starts a comment.
+function trackedToday() {
+  const lines = existsSync(REPOS_FILE) ? readFileSync(REPOS_FILE, "utf8").split("\n").map((line) => line.replace(/#.*/, "").trim()).filter(Boolean) : [];
+  if (!lines.length) return null;
+  const weekend = [0, 6].includes(new Date().getDay());
+  return lines.flatMap((line) => {
+    const [repo, when, ...rest] = line.split(/\s+/);
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || (when && when !== "weekdays") || rest.length) throw new Error(`${REPOS_FILE}: "${line}" is not owner/name, optionally followed by weekdays`);
+    return weekend && when ? [] : [repo];
+  });
+}
 
 // Your repositories, and other repositories' issues that involve you, such as a team repo's issues you wrote.
 async function yours(q, me) {
@@ -84,15 +111,44 @@ function gaps(body) {
   return section.split(/^#{1,6}\s/m)[0].split("\n").map((line) => line.match(/^\s*[-*]\s+(.+)/)?.[1].trim()).filter(Boolean);
 }
 
-async function stale(me, now) {
+// Your open PRs, split into the active ones and the ones gone stale.
+async function yourPulls(me, now) {
   const quietSince = now - STALE_DAYS * DAY_MS;
-  return (await search(`is:pr is:open archived:false author:${me}`))
+  const open = (await search(`is:pr is:open archived:false author:${me}`)).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const fields = (p) => ({ repo: repoOf(p), number: p.number, url: p.html_url, title: p.title, draft: Boolean(p.draft), updatedAt: p.updated_at });
+  const active = await inBatches(open.filter((p) => Date.parse(p.updated_at) >= quietSince), async (p) => ({ ...fields(p), ...(await standing(repoOf(p), p.number)) }));
+  const stale = open
     .filter((p) => Date.parse(p.updated_at) < quietSince)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-    .map((p) => ({
-      repo: repoOf(p), number: p.number, url: p.html_url, title: p.title, draft: Boolean(p.draft), updatedAt: p.updated_at,
-      quietDays: Math.floor((now - Date.parse(p.updated_at)) / DAY_MS),
-    }));
+    .map((p) => ({ ...fields(p), quietDays: Math.floor((now - Date.parse(p.updated_at)) / DAY_MS) }));
+  return { active, stale };
+}
+
+// Where one PR stands: its checks at its head, its review, and whether it conflicts with its base.
+async function standing(repo, number) {
+  const pull = JSON.parse(await gh("api", `repos/${repo}/pulls/${number}`));
+  const [reviews, runs, status] = await Promise.all([
+    list(`repos/${repo}/pulls/${number}/reviews?per_page=100`),
+    pages(`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`),
+    gh("api", `repos/${repo}/commits/${pull.head.sha}/status?per_page=100`).then(JSON.parse),
+  ]);
+  // A rerun adds a check run under the same name, and only the newest one counts, as on the PR's page. The combined
+  // status already keeps only the newest status for each context.
+  const newest = new Map();
+  for (const r of runs.flatMap((page) => page.check_runs).sort((a, b) => a.id - b.id)) newest.set(r.name, r);
+  const results = [
+    ...[...newest.values()].map((r) => (r.status !== "completed" ? "pending" : PASSING.has(r.conclusion) ? "passing" : "failing")),
+    ...status.statuses.map((s) => (s.state === "pending" ? "pending" : s.state === "success" ? "passing" : "failing")),
+  ];
+  // A reviewer's last approval or change request stands until they review again; a comment changes neither.
+  const decided = new Map();
+  for (const r of reviews) if (["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(r.state)) decided.set(r.user?.login, r.state);
+  const states = [...decided.values()];
+  const waiting = (pull.requested_reviewers?.length ?? 0) + (pull.requested_teams?.length ?? 0) > 0;
+  return {
+    checks: ["failing", "pending", "passing"].find((s) => results.includes(s)) ?? "none",
+    review: states.includes("CHANGES_REQUESTED") ? "changes requested" : states.includes("APPROVED") ? "approved" : waiting ? "requested" : "none",
+    conflicts: pull.mergeable === false,
+  };
 }
 
 async function lateComments(me, now) {
@@ -132,11 +188,23 @@ async function inBatches(items, read) {
 }
 
 async function main() {
+  let args;
   try {
+    args = parseArgs({ options: { repos: { type: "boolean" } } }).values;
+  } catch {
+    process.stderr.write("usage: morning.mjs [--repos]\n");
+    return 2;
+  }
+  try {
+    tracked = trackedToday();
+    if (args.repos) {
+      process.stdout.write(`${JSON.stringify(tracked)}\n`);
+      return 0;
+    }
     const me = await gh("api", "user", "--jq", ".login");
     const now = Date.now();
-    const [ready, close, quiet, late] = await Promise.all([builds(me), almostReady(me), stale(me, now), lateComments(me, now)]);
-    process.stdout.write(`${JSON.stringify({ builds: ready, almostReady: close, stale: quiet, lateComments: late }, null, 2)}\n`);
+    const [ready, close, { active, stale }, late] = await Promise.all([builds(me), almostReady(me), yourPulls(me, now), lateComments(me, now)]);
+    process.stdout.write(`${JSON.stringify({ builds: ready, almostReady: close, active, stale, lateComments: late }, null, 2)}\n`);
     return 0;
   } catch (error) {
     // A failed gh call's message holds the command and gh's own error on separate lines; the report wants one.
