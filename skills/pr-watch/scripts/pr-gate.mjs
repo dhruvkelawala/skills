@@ -602,10 +602,19 @@ function readOptional(runGh, args) {
   });
 }
 
+// A private repository on a plan without a feature gets a 403 that says to upgrade. That plan has
+// nothing for the feature to require, unlike a 403 for a token that may not read it.
+function readUnlessPlanLacks(runGh, args) {
+  return runGh(args).catch((error) => {
+    if (/Upgrade to GitHub \w+ or make this repository public[^\n]*\(HTTP 403\)/.test(error?.stderr ?? "")) return null;
+    throw error;
+  });
+}
+
 // Branch protection and rulesets can each require checks. A failure other than a missing feature
 // stops the gate, since missing names would let a failing required check pass as a note.
 async function requiredChecks(repo, base, runGh, allowMissingFeatures = true) {
-  const read = allowMissingFeatures ? (args) => readOptional(runGh, args) : runGh;
+  const read = allowMissingFeatures ? (args) => readOptional(runGh, args) : (args) => readUnlessPlanLacks(runGh, args);
   const branch = await read(["api", `${repo}/branches/${base}`]);
   const rules = await read(["api", `${repo}/rules/branches/${base}`]);
   return new Set([
