@@ -38,7 +38,7 @@ function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base =
 
 // One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
 // create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
-function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef } = {}) {
+function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, inventory = "succeeds" } = {}) {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -87,6 +87,7 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef } =
     FAKE_SKILLS_REPO: join(root, "skills"),
     FAKE_VERDICTS: "covered,partly,missing",
     FAKE_XCRUN_STATE: simulators,
+    FAKE_DEVICE_INVENTORY: inventory,
   };
   const args = ["demo", "--runs", String(runs)];
   if (agent !== "default") args.push("--agent", agent);
@@ -162,6 +163,13 @@ test("--runs 2 appends one section with two scores, their mean and spread", () =
   assert.match(demo.section, /Spread 0\.5 \(1\.5 to 2\)/);
   assert.match(demo.section, /Run 1: Score 1\.5 of 3/);
   assert.match(demo.section, /Run 2: Score 2 of 3/);
+});
+
+test("device discovery failure refuses build destinations and still passes simulator commands", () => {
+  const demo = runDemo("succeeds", { agent: "codex", inventory: "fails" });
+  assert.equal(demo.status, 0, demo.output);
+  for (const a of demo.agents) assert.deepEqual(a.devices, { install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 1 });
+  assert.match(demo.guardLog, /could not identify physical devices/);
 });
 
 describe("a run", () => {

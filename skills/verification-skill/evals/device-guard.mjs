@@ -31,7 +31,10 @@ function guard({ tools, log }, tool, args) {
   };
   if (args.includes("devicectl") && (args.includes("device") || args.includes("--device"))) return refuse("physical-device operations are disabled");
   const simulator = tool === "xcrun" && args.includes("simctl");
-  const readOnly = args.length === 0 || args.includes("--find") || args.includes("-find") || args.includes("-version") || args.includes("--version") || args.includes("-license");
+  const readOnly = args.length === 0
+    || (args.length === 1 && ["-version", "--version", "-help", "--help"].includes(args[0]))
+    || (tool === "xcrun" && args.length === 2 && ["--find", "-find"].includes(args[0]))
+    || (tool === "xcodebuild" && args.join(" ") === "-license check");
   if (!simulator && !readOnly) {
     const inventory = spawnSync(tools.xcrun, ["xcdevice", "list"], { encoding: "utf8", timeout: 30_000, maxBuffer: 4 << 20 });
     let devices;
