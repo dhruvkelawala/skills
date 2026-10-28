@@ -39,7 +39,7 @@ An inventory has this shape, with the app's own resources and names:
 | Build or derived-data folder | the run's own path | new each run | deleted | the installed build came from it |
 | Service that allows one connection per token | a lock named for the token | refuses, naming the run that holds it | lock removed once the connection closes | the lock names this run |
 
-Ship a helper script only when the repo's harness cannot express a recipe. Make it executable, show its invocation in the skill, and give non-trivial logic a runnable check.
+Put deterministic steps in tested [scripts](#scripts), and call them from the skill. Keep judgment in prose: what to drive, which states matter and what counts as proof.
 
 `features/README.md` is the index. It holds the baseline state, driving conventions, a `What counts as a pass` section, how to report proof and skips, a link to each feature file on disk, and a short `Not mapped yet` list of features no replay has driven, each with its reason. Each feature file has an H1, a short paragraph on what the user sees, and exactly these H2s in this order:
 
@@ -49,6 +49,27 @@ Ship a helper script only when the repo's harness cannot express a recipe. Make 
 4. `Gotchas`: focus, timing, prerequisites, destructive effects and harness limits.
 
 [The example map](references/feature-map-example/README.md) and its two feature files show the shape. Copy the shape, not the commands.
+
+## Scripts
+
+Script each deterministic step that is easy to get wrong: launch and readiness, doctor, claiming ports, seeding and cleaning fixtures, credential setup, and publishing. Reuse the repo's scripts and harness where they implement the step; add the missing behaviour under the verify skill's `scripts/` folder. Keep feature actions and assertions in the driving harness.
+
+For a web app, create includes an executable launch-and-doctor script with `launch`, `doctor` and `cleanup` commands and a runnable test. That script owns port claiming from the isolation inventory, readiness, the process group and ownership file, and Cleanup's survivor check. Implement the existing Hazards, Isolation, Launch, Doctor and Cleanup rules there. The skill's Launch, Doctor and Cleanup sections call it with an explicit run ID or ownership-file path, so each call selects its own instance. Other deterministic steps can share the script or have their own helper.
+
+Every script:
+
+- Runs without prompts, supports side-effect-free `--help`, and documents its inputs, prerequisites and exit codes. Exit zero only on success; distinguish a failed check or operation from invalid usage.
+- Keeps secrets out of commands, logs and errors, including child-process output. Credential setup reads the repo's declared secret source, checks variable names and presence, and writes only to this run's private storage.
+- Has a runnable behaviour test and an exact test command in the skill. Test its success and failure paths through its CLI, using scratch resources and stubs at external boundaries, without real secrets or API quota. For launch, cover a busy port, exhausted port range, readiness failure, stopped and stale instances, and cleanup after a partial launch. Check that cleanup removes owned descendants and created resources, preserves a different run and captures, fails on survivors, and can run twice.
+
+Run this portability checklist for every script and record the commands and results:
+
+- **Clean PATH.** Run the script and its test in a non-login shell with a PATH containing only the host's safety wrappers first, declared prerequisite directories, repo-local tools and system tools. Exclude unrelated global installations and shell startup files. Name each prerequisite and where it comes from; a missing tool fails with its name and setup command.
+- **GNU and BSD.** Prefer the repo runtime's filesystem, temporary-directory and process APIs. Exercise any platform-sensitive utility calls with both GNU and BSD tools, especially `mktemp`, `sed`, `date`, `readlink` and `ps`. Use a common invocation or a tested capability check. Record an unavailable platform under `Not checked` rather than claiming it passed.
+- **Real paths.** Resolve both paths before an entry-point comparison or ownership check. Test invoking through a symlink, including macOS `/tmp` resolving to `/private/tmp`, and from another working directory.
+- **Quota fallback.** For each API-backed helper, force quota exhaustion in its test and prove a bounded fallback that preserves the operation, such as REST when GitHub's GraphQL quota is exhausted. When no safe equivalent is available, keep the local artifact and exit nonzero with the blocked operation and retry instructions. Keep credentials out of diagnostics and never silently skip publishing. For a helper with no external API, record why this check does not apply.
+
+Complete when each applicable step has a script the skill calls, every script's test ran, and every checklist item has a recorded result or an explicit `Not checked` limitation.
 
 ## What counts as a pass
 
