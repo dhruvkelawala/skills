@@ -7,6 +7,12 @@ import { fileURLToPath } from "node:url";
 const SKILLS = fileURLToPath(new URL(".", import.meta.url));
 const { jobs } = JSON.parse(readFileSync(join(SKILLS, "models.json"), "utf8"));
 
+test("Codex builds use the high-effort independent verifier and retain the reviewer switch", () => {
+  assert.equal(jobs.verifier.onCodexThread.model, "claude-opus-5-5");
+  assert.equal(jobs.verifier.onCodexThread.effort, "high");
+  assert.equal(jobs.reviewers.use.model, "claude-opus-5-5");
+});
+
 const skillText = readdirSync(SKILLS, { recursive: true })
   .filter((path) => path.endsWith(".md"))
   .map((path) => ({ path, text: readFileSync(join(SKILLS, path), "utf8") }));

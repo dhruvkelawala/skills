@@ -31,6 +31,7 @@ function baseSnapshot(overrides = {}) {
       expectedHead: HEAD,
       headCommittedAt: HEAD_COMMITTED_AT,
     },
+    requiredChecks: [],
     checkRuns: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
     reviewThreads: [],
     reviews: [],
@@ -48,6 +49,50 @@ function withPr(overrides) {
 
 test("ready: open, at expected HEAD, mergeable, checks green, no threads", () => {
   assert.deepEqual(evaluateGate(baseSnapshot()), { state: "ready", reasons: [], threads: [] });
+});
+
+test("verification on a draft waits for its configured reviewer to cover the pushed head", () => {
+  const snapshot = withPr({ isDraft: true, mergeStateStatus: "DRAFT" });
+  const options = { reviewers: [BOT], forVerification: true };
+  assert.equal(evaluateGate(snapshot, { reviewers: [BOT] }).state, "blocked");
+  const waiting = evaluateGate(snapshot, options);
+  assert.equal(waiting.state, "pending");
+  assert.ok(waiting.reasons.some((reason) => reason.includes("has not reviewed the current HEAD")));
+  snapshot.reviews = [{ author: BOT, authorType: "Bot", commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }];
+  assert.equal(evaluateGate(snapshot, options).state, "ready");
+});
+
+test("verification can precede human approval while merge readiness still waits", () => {
+  const snapshot = withPr({ mergeStateStatus: "BLOCKED", reviewDecision: "REVIEW_REQUIRED" });
+  assert.equal(evaluateGate(snapshot).state, "pending");
+  assert.equal(evaluateGate(snapshot, { forVerification: true }).state, "ready");
+  snapshot.pr.reviewDecision = "APPROVED";
+  assert.equal(evaluateGate(snapshot, { forVerification: true }).state, "pending");
+});
+
+test("verification readiness keeps source, check, finding and incomplete-data blockers", async (t) => {
+  const cases = [
+    ["different pushed head", withPr({ headRefOid: OTHER }), {}, "blocked"],
+    ["closed PR", withPr({ state: "CLOSED" }), {}, "blocked"],
+    ["merge conflict", withPr({ mergeable: false }), {}, "blocked"],
+    ["base drift", withPr({ mergeStateStatus: "BEHIND" }), {}, "pending"],
+    ["unknown mergeability", withPr({ mergeable: null }), {}, "pending"],
+    ["change request", withPr({ reviewDecision: "CHANGES_REQUESTED" }), {}, "blocked"],
+    ["unresolved finding", baseSnapshot({ reviewThreads: [{ id: "finding", author: BOT, body: "A real bug", isResolved: false }] }), {}, "blocked"],
+    ["unfinished CI", baseSnapshot({ checkRuns: [{ name: "ci", status: "IN_PROGRESS", required: true }] }), {}, "pending"],
+    ["failed CI", baseSnapshot({ checkRuns: [{ name: "ci", status: "COMPLETED", conclusion: "FAILURE", required: true }] }), {}, "blocked"],
+    ["truncated data", baseSnapshot({ truncated: true }), {}, "pending"],
+    ["unknown threads", baseSnapshot({ threadsUnknown: "GraphQL quota" }), {}, "pending"],
+    ["missing required CI", baseSnapshot({ requiredChecks: ["required-ci"] }), {}, "pending"],
+    ["unknown required CI", baseSnapshot({ requiredChecks: null }), {}, "pending"],
+    ["held reply", baseSnapshot(), { held: [{ kind: "comment", review: "review", to: "teammate" }] }, "pending"],
+  ];
+  for (const [name, snapshot, options, state] of cases) {
+    await t.test(name, () => {
+      snapshot.pr = { ...snapshot.pr, isDraft: true, mergeStateStatus: snapshot.pr.mergeStateStatus === "CLEAN" ? "DRAFT" : snapshot.pr.mergeStateStatus };
+      assert.equal(evaluateGate(snapshot, { ...options, forVerification: true }).state, state);
+    });
+  }
 });
 
 test("pending: checks still running", () => {
@@ -364,6 +409,29 @@ test("pending: configured reviewer has not covered the current HEAD", () => {
   assert.ok(result.reasons.some((r) => r.includes("review-bot")));
 });
 
+test("verification waits for the current-head Codex summary to finish without unresolved findings", () => {
+  const codex = "chatgpt-codex-connector[bot]";
+  const summary = (commit_sha, status, has_unresolved_findings, security = null) =>
+    '<!-- codex-review-state:v1 ' + JSON.stringify({
+      code_review: { commit_sha, status, has_unresolved_findings },
+      security_review: security,
+    }) + ' -->';
+  const cases = [
+    [summary(HEAD, "running", null), "pending"],
+    [summary(HEAD, "completed", false), "ready"],
+    [summary(HEAD, "completed", true), "blocked"],
+    [summary(OTHER, "completed", false), "pending"],
+    ['<!-- codex-review-state:v1 invalid -->', "pending"],
+    [summary(HEAD, "completed", false, { commit_sha: HEAD, status: "running", has_unresolved_findings: null }), "pending"],
+  ];
+  for (const [body, expected] of cases) {
+    const snapshot = baseSnapshot({
+      comments: [{ author: codex, body, createdAt: REQUESTED_AT }],
+    });
+    assert.equal(evaluateGate(snapshot, { reviewers: [codex], forVerification: true }).state, expected, body);
+  }
+});
+
 test("ready: reviewer posted a review object bound to HEAD", () => {
   const result = evaluateGate(baseSnapshot({
     reviews: [{ author: BOT, commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }],
@@ -472,7 +540,8 @@ test("multiple reviewers must each cover HEAD", () => {
 // --- CLI parsing ------------------------------------------------------------
 
 test("parseArgs collects repeated reviewers and lowercases the head", () => {
-  const args = parseArgs(["--repo", "o/r", "--pr", "4", "--expected-head", HEAD.toUpperCase(), "--reviewer", "a", "--reviewer", "b", "--allow-no-checks"]);
+  const args = parseArgs(["--repo", "o/r", "--pr", "4", "--expected-head", HEAD.toUpperCase(), "--reviewer", "a", "--reviewer", "b", "--allow-no-checks", "--for-verification"]);
+  assert.equal(args.forVerification, true);
   assert.deepEqual(args.reviewers, ["a", "b"]);
   assert.equal(args.expectedHead, HEAD);
   assert.equal(args.allowNoChecks, true);
@@ -711,6 +780,26 @@ function restPr(overrides = {}) {
     ...overrides,
   };
 }
+
+test("CLI verification on a draft holds for unreported or unreadable required CI", (t) => {
+  const pr = restPr()["repos/o/r/pulls/7"];
+  const cases = [
+    [[], 'Required check "required-ci" has not reported on head commit', "failure"],
+    [{ httpError: "Resource not accessible by integration (HTTP 403)" }, "Required checks are unknown", "success"],
+  ];
+  for (const [rules, reason, conclusion] of cases) {
+    const { gate } = rateLimitedGh(t, restPr({
+      "repos/o/r/pulls/7": { ...pr, draft: true, mergeable_state: "draft" },
+      [`repos/o/r/commits/${HEAD}/check-runs`]: { total_count: 1, check_runs: [{ name: "optional", status: "completed", conclusion }] },
+      "repos/o/r/branches/main": { protection: { required_status_checks: { contexts: ["required-ci"] } } },
+      "repos/o/r/rules/branches/main": rules,
+    }));
+    const { status, stderr, result } = gate("--expected-head", HEAD, "--for-verification");
+    assert.equal(status, 1, stderr);
+    assert.deepEqual(result.reasons, ["review threads unknown: GraphQL quota", reason]);
+    if (conclusion === "failure") assert.deepEqual(result.notes, ['Check "optional" concluded FAILURE (not required)']);
+  }
+});
 
 test("GraphQL quota spent: the gate reads through REST and holds short of ready, since threads are unknown", (t) => {
   const { gate, calls } = rateLimitedGh(t, restPr());

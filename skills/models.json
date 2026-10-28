@@ -8,7 +8,7 @@
   "jobs": {
     "reviewers": {
       "for": "/code-review's two reviewers",
-      "use": { "driver": "claudeAgent", "model": "claude-fable-5-1" },
+      "use": { "driver": "claudeAgent", "model": "claude-opus-5-5" },
       "ifUnavailable": "thread"
     },
     "second-opinion": {
@@ -20,7 +20,7 @@
     "verifier": {
       "for": "ship verify's independent verdict on a risky PR, or when the user says verify",
       "onClaudeThread": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
-      "onCodexThread": { "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "xhigh" },
+      "onCodexThread": { "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "high" },
       "onTeammatePr": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
       "ifUnavailable": "wait"
     },
