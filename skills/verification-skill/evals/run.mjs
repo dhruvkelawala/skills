@@ -339,9 +339,9 @@ function agent(run, phase, prompt, schema) {
       }
       try {
         resolvePhase({
-        model: run.model?.model ?? events.find((e) => e.type === "system" && e.subtype === "init")?.model ?? "an unknown model",
-        minutes: Math.round((Date.now() - started) / 60_000),
-        output: run.driver === "codex" && schema ? JSON.parse(readFileSync(lastMessage, "utf8")) : result.structured_output,
+          model: run.model?.model ?? events.find((e) => e.type === "system" && e.subtype === "init")?.model ?? "an unknown model",
+          minutes: Math.round((Date.now() - started) / 60_000),
+          output: run.driver === "codex" && schema ? JSON.parse(readFileSync(lastMessage, "utf8")) : result.structured_output,
         });
       } catch {
         reject(new Error(`${phase}: cannot read structured output, transcript ${transcript}`));

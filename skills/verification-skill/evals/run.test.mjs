@@ -17,7 +17,7 @@ const LESSONS = ["Pin the toolchain (abb228b0).", "Wait for an element before me
 const GUARDED_DEVICES = {
   install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0,
   simulatorOutput: '["simctl","install","DEMO-UDID","demo.app"]',
-  simulatorBuildOutput: '["-destination","platform=iOS Simulator,id=DEMO-UDID","build"]',
+  simulatorBuildOutput: '["-sdk","iphonesimulator","-destination","platform=iOS Simulator,id=DEMO-UDID","build"]',
 };
 
 const scratch = [];

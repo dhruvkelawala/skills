@@ -30,7 +30,11 @@ function guard({ tools, log }, tool, args) {
     return 1;
   };
   if (args.includes("devicectl") && (args.includes("device") || args.includes("--device"))) return refuse("physical-device operations are disabled");
-  const simulator = tool === "xcrun" && args.includes("simctl");
+  const command = [...args];
+  while (command[0]?.startsWith("-")) {
+    if (["--sdk", "-sdk", "--toolchain", "-toolchain"].includes(command.shift())) command.shift();
+  }
+  const simulator = tool === "xcrun" && command[0] === "simctl";
   const readOnly = args.length === 0
     || (args.length === 1 && ["-version", "--version", "-help", "--help"].includes(args[0]))
     || (tool === "xcrun" && args.length === 2 && ["--find", "-find"].includes(args[0]))
@@ -46,10 +50,16 @@ function guard({ tools, log }, tool, args) {
       return refuse("could not identify physical devices");
     }
     const text = args.join(" ").toLowerCase();
-    for (const device of devices.filter((d) => d.simulator === false)) {
-      if ([device.identifier, device.name].some((value) => value && text.includes(value.toLowerCase()))) return refuse("command names a physical device");
-    }
     const destinations = args.flatMap((arg, i) => arg === "-destination" ? [args[i + 1] ?? ""] : arg.startsWith("-destination=") ? [arg.slice(13)] : []);
+    const names = destinations.flatMap((d) => d.split(",").filter((p) => p.startsWith("name=")).map((p) => p.slice(5)));
+    for (let i = 0; i < args.length; i++) {
+      if (["--device", "-w"].includes(args[i])) names.push(args[i + 1] ?? "");
+      if (args[i].startsWith("--device=")) names.push(args[i].slice(9));
+    }
+    for (const device of devices.filter((d) => d.simulator === false)) {
+      if ((device.identifier && text.includes(device.identifier.toLowerCase()))
+        || (device.name && names.some((n) => n.toLowerCase() === device.name.toLowerCase()))) return refuse("command names a physical device");
+    }
     if (destinations.some((d) => /(?:^|,)platform=(?:iOS|tvOS|watchOS|visionOS)(?:,|$)/i.test(d))) return refuse("destination selects physical hardware");
   }
   const result = spawnSync(tools[tool], args, { stdio: "inherit" });

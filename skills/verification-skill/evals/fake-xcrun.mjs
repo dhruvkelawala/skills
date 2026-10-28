@@ -7,7 +7,7 @@ const file = process.env.FAKE_XCRUN_STATE;
 const states = JSON.parse(readFileSync(file, "utf8"));
 if (tool === "xcdevice" && command === "list") {
   if (process.env.FAKE_DEVICE_INVENTORY === "fails") process.exit(1);
-  console.log(JSON.stringify([{ identifier: "PHYSICAL-DEVICE-ID", name: "Demo phone", simulator: false, available: false }, { identifier: "DEMO-UDID", simulator: true }]));
+  console.log(JSON.stringify([{ identifier: "PHYSICAL-DEVICE-ID", name: "iPhone", simulator: false, available: false }, { identifier: "DEMO-UDID", simulator: true }]));
   process.exit(0);
 }
 if (tool !== "simctl") process.exit(0);
