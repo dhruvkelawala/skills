@@ -14,6 +14,11 @@ const skillsDir = dirname(dirname(evalsDir));
 const runner = (dir, args = [], env = process.env) => spawnSync(process.execPath, [join(dir, "run.mjs"), ...args], { encoding: "utf8", env });
 const git = (cwd, ...a) => execFileSync("git", ["-c", "user.name=eval", "-c", "user.email=eval@example.com", "-c", "core.hooksPath=/dev/null", ...a], { cwd, encoding: "utf8" }).trim();
 const LESSONS = ["Pin the toolchain (abb228b0).", "Wait for an element before measuring it (#12).", "Kill the whole process group (#540, #545)."];
+const GUARDED_DEVICES = {
+  install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0,
+  simulatorOutput: '["simctl","install","DEMO-UDID","demo.app"]',
+  simulatorBuildOutput: '["-destination","platform=iOS Simulator,id=DEMO-UDID","build"]',
+};
 
 const scratch = [];
 after(() => scratch.forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -38,7 +43,7 @@ function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base =
 
 // One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
 // create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
-function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, inventory = "succeeds" } = {}) {
+function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, inventory = "succeeds", cleanupFailure = false } = {}) {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -89,6 +94,11 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, in
     FAKE_XCRUN_STATE: simulators,
     FAKE_DEVICE_INVENTORY: inventory,
   };
+  if (cleanupFailure) {
+    const loader = join(root, "fail-remove.mjs");
+    writeFileSync(loader, `import fs from "node:fs";\nimport { syncBuiltinESMExports } from "node:module";\nimport { basename } from "node:path";\nconst remove = fs.rmSync;\nfs.rmSync = (path, ...args) => {\n  if (/^verification-skill-eval-[^/]+$/.test(basename(String(path)))) throw Object.assign(new Error("simulated removal failure"), { code: "EPERM" });\n  return remove(path, ...args);\n};\nsyncBuiltinESMExports();\n`);
+    env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import ${loader}`;
+  }
   const args = ["demo", "--runs", String(runs)];
   if (agent !== "default") args.push("--agent", agent);
   if (skillRef) args.push("--skill-ref", skillRef);
@@ -150,7 +160,7 @@ test("Codex is the default, with isolated homes, linked sign-in, configured mode
   assert.notEqual(demo.seen.push, 0);
   for (const pid of demo.seen.strays) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
   assert.ok(!existsSync(demo.seen.cwd));
-  assert.deepEqual(demo.agents.map((a) => a.devices), Array(2).fill({ install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0 }));
+  assert.deepEqual(demo.agents.map((a) => a.devices), Array(2).fill(GUARDED_DEVICES));
   assert.match(demo.guardLog, /refused/);
 });
 
@@ -168,7 +178,7 @@ test("--runs 2 appends one section with two scores, their mean and spread", () =
 test("device discovery failure refuses build destinations and still passes simulator commands", () => {
   const demo = runDemo("succeeds", { agent: "codex", inventory: "fails" });
   assert.equal(demo.status, 0, demo.output);
-  for (const a of demo.agents) assert.deepEqual(a.devices, { install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 1 });
+  for (const a of demo.agents) assert.deepEqual(a.devices, { ...GUARDED_DEVICES, simulatorBuild: 1, simulatorBuildOutput: "" });
   assert.match(demo.guardLog, /could not identify physical devices/);
 });
 
@@ -192,7 +202,7 @@ describe("a run", () => {
     assert.deepEqual(seen.skills.filter((f) => f.endsWith("SKILL.md")), [join("verification-skill", "SKILL.md")]);
     assert.ok(seen.skills.includes(join("evidence", "references", "surfaces.md")), "a file the skill links to is missing");
     assert.deepEqual(seen.skills.filter((f) => f.includes("evals")), [], "the agent can read the eval's lessons");
-    assert.deepEqual(seen.devices, { install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0 });
+    assert.deepEqual(seen.devices, GUARDED_DEVICES);
     assert.match(demo.guardLog, /refused/);
   });
 
@@ -239,4 +249,18 @@ test("a malformed Codex grade removes the checkout and appends no result", () =>
   assert.equal(demo.status, 1);
   assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there after the grade could not be read");
   assert.doesNotMatch(demo.section, /^## demo,/m);
+});
+
+for (const create of ["succeeds", "fails"]) test(`cleanup failure stops a batch whose create ${create}, retaining the original error`, () => {
+  const demo = runDemo(create, { agent: "codex", runs: 2, cleanupFailure: true });
+  try {
+    assert.equal(demo.status, 1);
+    assert.doesNotMatch(demo.section, /^## demo,/m, "cleanup failure still appended the batch");
+    assert.equal(demo.agents.length, create === "succeeds" ? 2 : 1, "a subsequent run started after failed cleanup");
+    assert.match(demo.output, /simulated removal failure/);
+    if (create === "fails") assert.match(demo.output, /create: the agent run failed/);
+    for (const pid of demo.seen.strays) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  } finally {
+    for (const a of demo.agents) rmSync(dirname(a.cwd), { recursive: true, force: true });
+  }
 });

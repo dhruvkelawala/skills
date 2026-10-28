@@ -17,6 +17,7 @@ if (command === "list") {
 } else if (command === "boot" || command === "shutdown") {
   writeFileSync(file, JSON.stringify({ ...states, [udid]: command === "boot" ? "Booted" : "Shutdown" }));
 } else if (command === "install") {
+  console.log(JSON.stringify(process.argv.slice(2)));
   process.exit(0);
 } else {
   process.exit(1);

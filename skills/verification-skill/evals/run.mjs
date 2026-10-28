@@ -98,6 +98,7 @@ async function runCase(kase, options) {
   console.log(`${kase.name}: starting load ${load.join(", ")}`);
   console.log(`${kase.name}: run folder ${run.dir}, checkout ${run.checkout}`);
   let changed = null;
+  let failure;
   try {
     console.log(`${kase.name}: create is running`);
     const create = await agent(run, "create", "/verification-skill create");
@@ -111,23 +112,25 @@ async function runCase(kase, options) {
     writeFileSync(join(run.dir, "result.json"), JSON.stringify({ driver: run.driver, skill: run.skill, load, score: result.points, create, grade, createLeft, gradeLeft }, null, 2));
     console.log(`${kase.name}: ${result.score} at skill ${run.skill}, create on ${create.model}, the grade on ${grade.model}.`);
     return { run, result, load, create, grade, createLeft, gradeLeft };
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
-    await cleanUp(run, changed);
+    await cleanUp(run, changed, failure);
   }
 }
 
-// Every step runs even when an earlier one fails, so a process that won't stop can't keep the checkout on disk. A
-// failure here is printed rather than thrown, so it can't hide the error that ended the run.
-async function cleanUp(run, changed) {
+async function cleanUp(run, changed, failure) {
   const steps = { "stop its processes": () => sweep(run), "keep what create wrote": () => changed ?? keepChanges(run), "delete the temp folder": () => removeWork(run) };
+  const errors = [];
   for (const [step, action] of Object.entries(steps)) {
     try {
       await action();
     } catch (error) {
-      console.error(`${run.id}: could not ${step}: ${error.message}`);
-      process.exitCode = 1;
+      errors.push(new Error(`${run.id}: could not ${step}: ${error.message}`, { cause: error }));
     }
   }
+  if (errors.length) throw new AggregateError(failure ? [failure, ...errors] : errors, `${run.id}: cleanup failed`, { cause: failure });
 }
 
 function caseNames() {
