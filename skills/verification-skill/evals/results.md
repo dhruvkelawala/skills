@@ -2,6 +2,10 @@
 
 Each section is one run of `run.mjs <case>`: the date, the skill's commit, the score and each lesson's verdict. A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The case repos are private, so the grader's quotes and replay notes stay in the run folder.
 
+# Earlier results on Claude
+
+These sections ran on Claude. They do not compare with Codex scores.
+
 ## visaroy, 2026-10-25, skill 5084b3d
 
 Score 7.5 of 19 (39%). Create took 14 min, and the grade 2 min.
@@ -625,3 +629,7 @@ Left behind, and stopped by the eval: after create: nothing; after the grade: ib
 | 11. Don't assume the seeded layout; wait for an element before measuring it (3010b086, d33d24db, 0ccfe514). | covered |
 | 12. A measurement must require that something was measured (a42ae484, d0ce329c). | covered |
 | 13. Catch short-lived states from video, and stop recorders in a `finally` (7fb75647). | partly |
+
+# Codex results
+
+Each section below names the driver, pinned skill commit, three individual scores, their mean and spread, and starting load per run.
