@@ -7,6 +7,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { probeDevices } from "./fake-device-probe.mjs";
 
 const emit = (event) => console.log(JSON.stringify(event));
 const git = (...args) => spawnSync("git", args, { encoding: "utf8" }).stdout.trim();
@@ -17,6 +18,7 @@ const idle = ["-e", "setInterval(() => {}, 1000)"];
 emit({ type: "system", subtype: "init", model: "fake-model" });
 
 if (process.argv.includes("--json-schema")) {
+  log({ phase: "grade", developerDir: process.env.DEVELOPER_DIR });
   const verdicts = process.env.FAKE_VERDICTS.split(",");
   const step = (result) => ({ result, note: "" });
   emit({
@@ -34,6 +36,8 @@ if (process.argv.includes("--json-schema")) {
   stray.unref();
   bare.unref();
   log({
+    phase: "create", developerDir: process.env.DEVELOPER_DIR,
+    devices: probeDevices(),
     cwd: process.cwd(),
     head: git("rev-parse", "HEAD"),
     commits: git("log", "--all", "--format=%H").split("\n"),

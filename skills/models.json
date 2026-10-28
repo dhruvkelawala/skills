@@ -6,6 +6,11 @@
     "`ifUnavailable` says what happens when the model can't run. `thread` runs the job on the thread's model, and the run record or the report says so. `wait` runs nothing in its place and tells the user. `skip` runs the job without that member, and the report says so."
   ],
   "jobs": {
+    "eval": {
+      "for": "verification-skill eval create and grader agents",
+      "use": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+      "ifUnavailable": "wait"
+    },
     "reviewers": {
       "for": "/code-review's two reviewers",
       "use": { "driver": "claudeAgent", "model": "claude-opus-5-5" },

@@ -14,6 +14,11 @@ const skillsDir = dirname(dirname(evalsDir));
 const runner = (dir, args = [], env = process.env) => spawnSync(process.execPath, [join(dir, "run.mjs"), ...args], { encoding: "utf8", env });
 const git = (cwd, ...a) => execFileSync("git", ["-c", "user.name=eval", "-c", "user.email=eval@example.com", "-c", "core.hooksPath=/dev/null", ...a], { cwd, encoding: "utf8" }).trim();
 const LESSONS = ["Pin the toolchain (abb228b0).", "Wait for an element before measuring it (#12).", "Kill the whole process group (#540, #545)."];
+const GUARDED_DEVICES = {
+  install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0,
+  simulatorOutput: '["simctl","install","DEMO-UDID","demo.app"]',
+  simulatorBuildOutput: '["-sdk","iphonesimulator","-destination","platform=iOS Simulator,id=DEMO-UDID","build"]',
+};
 
 const scratch = [];
 after(() => scratch.forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -24,20 +29,21 @@ function scratchSkills() {
   scratch.push(root);
   cpSync(join(skillsDir, "verification-skill"), join(root, "skills", "verification-skill"), { recursive: true });
   cpSync(join(skillsDir, "evidence", "references", "surfaces.md"), join(root, "skills", "evidence", "references", "surfaces.md"));
+  cpSync(join(skillsDir, "models.json"), join(root, "skills", "models.json"));
   return { root, evals: join(root, "skills", "verification-skill", "evals") };
 }
 
-function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base = "a".repeat(40) } = {}) {
+function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base = "a".repeat(40), toolchain } = {}) {
   mkdirSync(join(evals, "cases"), { recursive: true });
   writeFileSync(
     join(evals, "cases", `${name}.md`),
-    `# ${name}\n\n- Repo: acme/${name}\n- Checkout: ${checkout}\n- Base: ${base}\n\n## Lessons\n\n${lessons.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n`,
+    `# ${name}\n\n- Repo: acme/${name}\n- Checkout: ${checkout}\n- Base: ${base}\n${toolchain ? `- Toolchain: ${toolchain}\n` : ""}\n## Lessons\n\n${lessons.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n`,
   );
 }
 
 // One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
 // create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
-function runDemo(create = "succeeds") {
+function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, inventory = "succeeds", cleanupFailure = false, toolchain } = {}) {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -54,15 +60,24 @@ function runDemo(create = "succeeds") {
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "add the hand-fixed verify skill");
   git(repo, "remote", "add", "origin", "https://github.com/acme/demo.git");
-  writeCase(evals, "demo", LESSONS, { checkout: repo, base });
+  const developerDir = toolchain ? join(root, "Xcode from case.app", "Contents", "Developer") : undefined;
+  if (toolchain === "present") mkdirSync(developerDir, { recursive: true });
+  writeCase(evals, "demo", LESSONS, { checkout: repo, base, toolchain: developerDir && `DEVELOPER_DIR=${developerDir}` });
 
   const home = join(root, "home");
   const bin = join(root, "bin");
   mkdirSync(home);
+  mkdirSync(join(home, ".codex"));
+  writeFileSync(join(home, ".codex", "auth.json"), "fake sign-in\n");
   mkdirSync(bin);
-  for (const [name, script] of [["claude", "fake-claude.mjs"], ["xcrun", "fake-xcrun.mjs"]]) {
+  for (const [name, script] of [["claude", "fake-claude.mjs"], ["codex", "fake-codex.mjs"], ["xcrun", "fake-xcrun.mjs"], ["xcodebuild", "fake-xcodebuild.mjs"]]) {
     writeFileSync(join(bin, name), `#!/bin/sh\nexec "${process.execPath}" "${join(evalsDir, script)}" "$@"\n`);
     chmodSync(join(bin, name), 0o755);
+  }
+  if (toolchain) {
+    const gitPath = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+    writeFileSync(join(bin, "git"), `#!/bin/sh\nunset DEVELOPER_DIR\nexec "${gitPath}" "$@"\n`);
+    chmodSync(join(bin, "git"), 0o755);
   }
   const simulators = join(root, "simulators.json");
   writeFileSync(simulators, JSON.stringify({ "DEMO-UDID": "Shutdown" }));
@@ -71,11 +86,13 @@ function runDemo(create = "succeeds") {
   const skillCommit = git(join(root, "skills"), "rev-parse", "--short", "HEAD");
   const env = {
     ...process.env,
+    ...(toolchain ? { DEVELOPER_DIR: join(root, "default-Xcode") } : {}),
     CLAUDECODE: "1",
     CLAUDE_CODE_CHILD_SESSION: "1",
     CLAUDE_CODE_SESSION_ID: "the-enclosing-session",
     CLAUDE_CODE_OAUTH_TOKEN: "eval-oauth-token",
     HOME: home,
+    CODEX_HOME: join(home, ".codex"),
     PATH: `${bin}:${process.env.PATH}`,
     FAKE_CASE_REPO: repo,
     FAKE_CLAUDE_LOG: log,
@@ -83,16 +100,32 @@ function runDemo(create = "succeeds") {
     FAKE_SKILLS_REPO: join(root, "skills"),
     FAKE_VERDICTS: "covered,partly,missing",
     FAKE_XCRUN_STATE: simulators,
+    FAKE_DEVICE_INVENTORY: inventory,
   };
-  const { status, stdout, stderr } = runner(evals, ["demo"], env);
+  if (cleanupFailure) {
+    const loader = join(root, "fail-remove.mjs");
+    writeFileSync(loader, `import fs from "node:fs";\nimport { syncBuiltinESMExports } from "node:module";\nimport { basename } from "node:path";\nconst remove = fs.rmSync;\nfs.rmSync = (path, ...args) => {\n  if (/^verification-skill-eval-[^/]+$/.test(basename(String(path)))) throw Object.assign(new Error("simulated removal failure"), { code: "EPERM" });\n  return remove(path, ...args);\n};\nsyncBuiltinESMExports();\n`);
+    env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import ${loader}`;
+  }
+  const args = ["demo", "--runs", String(runs)];
+  if (agent !== "default") args.push("--agent", agent);
+  if (skillRef) args.push("--skill-ref", skillRef);
+  const { status, stdout, stderr } = runner(evals, args, env);
   const results = existsSync(join(evals, "results.md")) ? readFileSync(join(evals, "results.md"), "utf8") : "";
-  const runs = join(home, ".cache", "verification-skill-evals");
+  const runFolders = join(home, ".cache", "verification-skill-evals");
   return {
     status,
     output: `${stdout}${stderr}`,
     section: results.slice(results.lastIndexOf("\n## ") + 1),
+    results,
     seen: existsSync(log) ? JSON.parse(readFileSync(log, "utf8").split("\n")[0]) : {},
-    runDir: existsSync(runs) ? join(runs, readdirSync(runs)[0]) : null,
+    agents: existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) : [],
+    runDir: existsSync(runFolders) ? join(runFolders, readdirSync(runFolders)[0]) : null,
+    guardLog: existsSync(runFolders) ? readdirSync(runFolders).map((d) => {
+      const f = join(runFolders, d, "device-guard.log");
+      return existsSync(f) ? readFileSync(f, "utf8") : "";
+    }).join("\n") : "",
+    developerDir,
     skillCommit,
     repo,
     base,
@@ -119,6 +152,65 @@ describe("cases", () => {
   });
 });
 
+test("Codex is the default, with isolated homes, linked sign-in, configured model and a structured grade", () => {
+  const demo = runDemo("succeeds", { agent: "default" });
+  assert.equal(demo.status, 0, demo.output);
+  assert.deepEqual(demo.agents.map((a) => a.phase), ["create", "grade"], demo.output);
+  assert.equal(new Set(demo.agents.map((a) => a.home)).size, 2);
+  for (const a of demo.agents) {
+    assert.equal(a.linkedAuth, true);
+    assert.equal(a.model, "gpt-6.1-sol");
+    assert.equal(a.effort, 'model_reasoning_effort="xhigh"');
+    assert.ok(a.skills.includes(join("verification-skill", "SKILL.md")));
+  }
+  assert.match(demo.section, /Driver: codex/);
+  assert.match(demo.section, /Score 1\.5 of 3 \(50%\)/);
+  assert.notEqual(demo.seen.gh, 0);
+  assert.notEqual(demo.seen.push, 0);
+  for (const pid of demo.seen.strays) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  assert.ok(!existsSync(demo.seen.cwd));
+  assert.deepEqual(demo.agents.map((a) => a.devices), Array(2).fill(GUARDED_DEVICES));
+  assert.match(demo.guardLog, /refused/);
+});
+
+test("--runs 2 appends one section with two scores, their mean and spread", () => {
+  const demo = runDemo("succeeds", { agent: "codex", runs: 2, skillRef: "HEAD" });
+  assert.equal(demo.status, 0, demo.output);
+  assert.deepEqual(demo.agents.map((a) => a.phase), ["create", "grade", "create", "grade"]);
+  assert.equal(demo.results.match(/^## demo,/gm)?.length, 1);
+  assert.match(demo.section, /Mean 1\.75 of 3/);
+  assert.match(demo.section, /Spread 0\.5 \(1\.5 to 2\)/);
+  assert.match(demo.section, /Run 1: Score 1\.5 of 3/);
+  assert.match(demo.section, /Run 2: Score 2 of 3/);
+});
+
+test("device discovery failure refuses build destinations and still passes simulator commands", () => {
+  const demo = runDemo("succeeds", { agent: "codex", inventory: "fails" });
+  assert.equal(demo.status, 0, demo.output);
+  for (const a of demo.agents) assert.deepEqual(a.devices, { ...GUARDED_DEVICES, simulatorBuild: 1, simulatorBuildOutput: "" });
+  assert.match(demo.guardLog, /could not identify physical devices/);
+});
+
+for (const agent of ["codex", "claude"]) {
+  test(`a ${agent} case toolchain overrides the caller's Xcode for create and grading`, () => {
+    const demo = runDemo("succeeds", { agent, toolchain: "present" });
+    assert.equal(demo.status, 0, demo.output);
+    assert.deepEqual(demo.agents.map((a) => [a.phase, a.developerDir]), [
+      ["create", demo.developerDir],
+      ["grade", demo.developerDir],
+    ]);
+  });
+
+  test(`a missing toolchain refuses a ${agent} case before either agent starts`, () => {
+    const demo = runDemo("succeeds", { agent, toolchain: "missing" });
+    assert.equal(demo.status, 2, demo.output);
+    assert.ok(demo.output.includes(demo.developerDir), demo.output);
+    assert.deepEqual(demo.agents, []);
+    assert.equal(demo.runDir, null);
+    assert.doesNotMatch(demo.results, /^## demo,/m);
+  });
+}
+
 describe("a run", () => {
   const today = new Date().toLocaleDateString("en-CA");
   let demo;
@@ -139,12 +231,14 @@ describe("a run", () => {
     assert.deepEqual(seen.skills.filter((f) => f.endsWith("SKILL.md")), [join("verification-skill", "SKILL.md")]);
     assert.ok(seen.skills.includes(join("evidence", "references", "surfaces.md")), "a file the skill links to is missing");
     assert.deepEqual(seen.skills.filter((f) => f.includes("evals")), [], "the agent can read the eval's lessons");
+    assert.deepEqual(seen.devices, GUARDED_DEVICES);
+    assert.match(demo.guardLog, /refused/);
   });
 
   test("appends the grader's score to results.md, with the date and the commit of the skill it ran", () => {
     const { section } = demo;
     assert.match(section, new RegExp(`^## demo, ${today}, skill ${demo.skillCommit}$`, "m"), demo.output);
-    assert.match(section, /^Score 1\.5 of 3 \(50%\)/m);
+    assert.match(section, /Run 1: Score 1\.5 of 3 \(50%\)/m);
     assert.match(section, /^\| 1\. Pin the toolchain \(abb228b0\)\. \| covered \|$/m);
     assert.match(section, /^\| 2\. Wait for an element before measuring it \(#12\)\. \| partly \|$/m);
     assert.match(section, /^\| 3\. Kill the whole process group \(#540, #545\)\. \| missing \|$/m);
@@ -162,10 +256,10 @@ describe("a run", () => {
   });
 });
 
-describe("a run whose create agent dies", () => {
+for (const agent of ["claude", "codex"]) describe(`a ${agent} run whose create agent dies`, () => {
   let demo;
   before(() => {
-    demo = runDemo("fails");
+    demo = runDemo("fails", { agent });
   });
 
   test("still shuts down the simulator it booted, stops its processes, keeps what it wrote, removes the checkout and scores nothing", () => {
@@ -177,4 +271,25 @@ describe("a run whose create agent dies", () => {
     assert.equal(demo.status, 1);
     assert.match(demo.output, /create: the agent run failed/);
   });
+});
+
+test("a malformed Codex grade removes the checkout and appends no result", () => {
+  const demo = runDemo("bad-grade", { agent: "codex" });
+  assert.equal(demo.status, 1);
+  assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there after the grade could not be read");
+  assert.doesNotMatch(demo.section, /^## demo,/m);
+});
+
+for (const create of ["succeeds", "fails"]) test(`cleanup failure stops a batch whose create ${create}, retaining the original error`, () => {
+  const demo = runDemo(create, { agent: "codex", runs: 2, cleanupFailure: true });
+  try {
+    assert.equal(demo.status, 1);
+    assert.doesNotMatch(demo.section, /^## demo,/m, "cleanup failure still appended the batch");
+    assert.equal(demo.agents.length, create === "succeeds" ? 2 : 1, "a subsequent run started after failed cleanup");
+    assert.match(demo.output, /simulated removal failure/);
+    if (create === "fails") assert.match(demo.output, /create: the agent run failed/);
+    for (const pid of demo.seen.strays) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  } finally {
+    for (const a of demo.agents) rmSync(dirname(a.cwd), { recursive: true, force: true });
+  }
 });
