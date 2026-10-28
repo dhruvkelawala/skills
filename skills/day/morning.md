@@ -4,6 +4,8 @@ The morning report puts the day's moves in one message: the builds to start, the
 
 Run it from a thread on the machine where T3 runs new threads, since the T3 tools see that server's threads and the builds start there. `<skill-dir>` is the folder holding this file, and `<skills-dir>` is the real directory that holds it, `cd -P <skill-dir>/.. && pwd`.
 
+For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). Keep using the queue and morning scripts for their selection and ordering rules.
+
 ## 1. Start the first review's prep
 
 The report posts with the review queue's first PR already prepped, so its review can start at once. Its reviewers and its guide take minutes, so start them before anything else.

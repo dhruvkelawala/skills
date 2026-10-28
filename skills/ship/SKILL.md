@@ -11,6 +11,8 @@ Invoke as `/ship verify <pr>` or `/ship land <bottom-pr> [--force]`, adding `--t
 
 Choose `--trusted` and `--repo` once at the start, as `$FLAGS`, and pass the same `$FLAGS` to every `run` and `verdict check` in this invocation. A later check with fewer flags trusts more people than the first one did.
 
+For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). Use the script below for its merge and verdict checks.
+
 `$SHIP` is `scripts/ship.mjs` in this skill's directory. Run it from inside the target repository. The script reads and plans, and makes two writes: the verdict comment that `verdict record` posts, and the pinned merge that `merge` makes. Every rebase and retarget is yours to do, and you merge one PR at a time. It refuses a flag it does not know, a flag with no value and a stray argument, and it refuses an archived repository before reading any PR, so a dropped project's PRs never show up.
 
 Each GitHub call in the script tries GraphQL first. When the GraphQL quota that every agent on the account shares is spent, it makes the same call through REST and says so on stderr. REST has no review decision, so until the quota resets no PR shows as approved. REST also shows a classic protection rule's details only to admins, so a protected default branch counts as asking for a review. A PR that needs a human approval waits. A PR on an unprotected default branch still lands on the request to land, and `merge --force` refuses until the quota resets.

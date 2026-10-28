@@ -9,7 +9,7 @@ Invoke as `/pr-watch [PR number | URL] [--reviewer <login>]... [--request-commen
 
 The loop checks the PR with the gate script, repairs what it reports, republishes, and then asks T3 to wake the thread when the PR changes. The gate only reads GitHub, so every push and comment comes from you.
 
-`gh pr` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one of your calls fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
+For GitHub calls, use GraphQL or REST within the shared [API limits](references/github-api.md). `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
 
 ## Configure
 

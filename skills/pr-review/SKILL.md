@@ -10,6 +10,8 @@ The reviewers find the problems, and you explain them. On every PR, `/code-revie
 
 Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue [--mine]]`.
 
+For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). Keep using the queue script for its ordering and selection rules.
+
 | Argument | What it reviews |
 | --- | --- |
 | none | The current branch's PR, or the branch changes when there is no PR |

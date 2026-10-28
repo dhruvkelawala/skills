@@ -18,13 +18,15 @@ Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<pr
 - `--body-file` supplies a prepared PR body. apr uses it as written apart from filling the autoreview line. `/issue-to-pr` passes one built from its template.
 - `--run-record` names an `/issue-to-pr` run record. When it holds a clean autoreview for the current tree, step 4 reuses that result instead of reviewing again.
 
+For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md).
+
 ## 1. Resolve inputs once
 
 1. **Helper.** The review helper is the `autoreview` script. Resolve the first that exists and keep it as `$AUTOREVIEW`:
    `.agents/skills/autoreview/scripts/autoreview`, `.claude/skills/autoreview/scripts/autoreview`, `$AGENTS_HOME/skills/autoreview/scripts/autoreview`, `~/.agents/skills/autoreview/scripts/autoreview`, `~/.claude/skills/autoreview/scripts/autoreview`. If none exists and review was not skipped, stop, because autoreview is required and an inline review cannot replace it.
 2. **Engine and model.** Read the `second-opinion` job from the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`). The chosen entry gives `--model <model>`, plus `--thinking <effort>` when it names an effort. A model or effort the user names replaces these. Keep the flags as `$ENGINE_FLAGS`. The engine and model stay fixed for the whole run. On capacity, rate-limit or latency errors, retry the same command up to three times, then report the blocker. Only the helper's own documented account-access retry may change the model. That retry cannot be switched off, and the helper announces it on stderr as `retrying with <model>`. The model it ran is that one when the line appears, and otherwise the one on its `model:` line.
 3. **Base.** `--base` if given. Otherwise the predecessor branch's remote-tracking ref when stacked, else the remote default branch from `gh repo view --json defaultBranchRef` (REST: `gh api repos/{owner}/{repo} --jq .default_branch`). Record the resolved base SHA with `git rev-parse`.
-4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker. `gh pr` and `gh repo view` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
+4. **GitHub.** `gh --version` and `gh auth status` must succeed, and `git remote get-url origin` must point at an accessible GitHub repository. Otherwise stop and name the blocker. `gh api` fills `{owner}`, `{repo}` and `{branch}` from the current checkout.
 
 ## 2. Confirm scope
 
