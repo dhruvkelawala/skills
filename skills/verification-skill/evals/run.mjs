@@ -11,6 +11,7 @@ import { appendFileSync, chmodSync, closeSync, cpSync, existsSync, mkdirSync, mk
 import { homedir, loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { installDeviceGuard } from "./device-guard.mjs";
 
 const evalsDir = dirname(fileURLToPath(import.meta.url));
 const skillDir = dirname(evalsDir);
@@ -27,7 +28,7 @@ const MARKER = "VERIFICATION_SKILL_EVAL_RUN";
 const MINUTES = { create: 180, grade: 90 };
 const POINTS = { covered: 1, partly: 0.5, missing: 0 };
 const REPLAY = ["launch", "doctor", "drive", "cleanup"];
-const UNATTENDED = "Nobody can answer questions during this run.";
+const UNATTENDED = "Nobody can answer questions during this run. Use simulators only. Never install on, launch on, or modify a physical device or its data. Keep the eval wrappers first on PATH; never bypass them with absolute tool paths. Use non-login shells so startup files do not replace PATH.";
 const GH_OFF = '#!/bin/sh\necho "gh is off in this eval, so nothing reaches the case repo on GitHub" >&2\nexit 1\n';
 // An empty pushInsteadOf prefix matches every URL, so git rewrites each push, to GitHub or to the case repo on disk,
 // into a path that can't exist. Fetches are untouched. It goes after any git config the caller passes the same way.
@@ -73,11 +74,14 @@ async function runBatch(kase, options) {
 async function waitForIdle() {
   for (;;) {
     if (interrupted) throw new Error(`stopped by ${interrupted}`);
-    const rows = spawnSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8" });
+    const rows = spawnSync("ps", ["-axww", "-o", "pid=,ppid=,command="], { encoding: "utf8" });
     if (rows.status !== 0) throw new Error("cannot check running builds before eval");
-    const busy = rows.stdout.split("\n").some((line) => {
-      const [, pid, command] = line.match(/^\s*(\d+)\s+(.*)$/) ?? [];
-      if (!command || Number(pid) === process.pid) return false;
+    const processes = rows.stdout.split("\n").map((line) => line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean);
+    const parents = new Map(processes.map(([, pid, ppid]) => [Number(pid), Number(ppid)]));
+    const ancestors = new Set();
+    for (let pid = process.pid; pid > 1 && !ancestors.has(pid); pid = parents.get(pid) ?? 1) ancestors.add(pid);
+    const busy = processes.some(([, pid, , command]) => {
+      if (ancestors.has(Number(pid))) return false;
       return /evals\/run\.mjs|(?:^|[ /])cargo(?:\s|$)|expo\s+run/.test(command)
         || (/(?:^|[ /])xcodebuild(?:\s|$)/.test(command) && !/-license\s+check/.test(command));
     });
@@ -191,35 +195,36 @@ function prepare(kase, { agent: driver, skill, skillRef }) {
     for (const ref of git(checkout, "for-each-ref", "--format=%(refname)").split("\n").filter(Boolean)) git(checkout, "update-ref", "-d", ref);
     rmSync(join(checkout, ".git", "logs"), { recursive: true, force: true });
 
-  const bin = join(work, "bin");
-  mkdirSync(bin);
-  writeFileSync(join(bin, "gh"), GH_OFF);
-  chmodSync(join(bin, "gh"), 0o755);
-  const configs = { create: join(work, `${driver}-create`), grade: join(work, `${driver}-grade`) };
-  const source = join(work, "source");
-  const repoRoot = git(skillsDir, "rev-parse", "--show-toplevel");
-  if (skillRef) {
-    mkdirSync(source);
-    const archive = spawnSync("git", ["-C", repoRoot, "archive", skill, relative(repoRoot, skillsDir) || "."], { maxBuffer: 32 << 20 });
-    if (archive.status !== 0) throw new Error("cannot archive the pinned skill");
-    const unpack = spawnSync("tar", ["-xf", "-", "-C", source], { input: archive.stdout });
-    if (unpack.status !== 0) throw new Error("cannot unpack the pinned skill");
-  }
-  for (const config of Object.values(configs)) {
-    copySkill(join(config, "skills"), skillRef ? join(source, relative(repoRoot, skillDir)) : skillDir);
-    if (driver === "codex") {
-      const auth = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "auth.json");
-      if (existsSync(auth)) symlinkSync(auth, join(config, "auth.json"));
+    const bin = join(work, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "gh"), GH_OFF);
+    chmodSync(join(bin, "gh"), 0o755);
+    installDeviceGuard(bin, join(dir, "device-guard.log"));
+    const configs = { create: join(work, `${driver}-create`), grade: join(work, `${driver}-grade`) };
+    const source = join(work, "source");
+    const repoRoot = git(skillsDir, "rev-parse", "--show-toplevel");
+    if (skillRef) {
+      mkdirSync(source);
+      const archive = spawnSync("git", ["-C", repoRoot, "archive", skill, relative(repoRoot, skillsDir) || "."], { maxBuffer: 32 << 20 });
+      if (archive.status !== 0) throw new Error("cannot archive the pinned skill");
+      const unpack = spawnSync("tar", ["-xf", "-", "-C", source], { input: archive.stdout });
+      if (unpack.status !== 0) throw new Error("cannot unpack the pinned skill");
     }
-  }
-  rmSync(source, { recursive: true, force: true });
-  const model = driver === "codex" ? JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.eval.use : null;
-  const env = (phase) => {
-    const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], ...(driver === "codex" ? { CODEX_HOME: configs[phase] } : {}), PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
-    for (const key of SESSION_MARKERS) delete vars[key];
-    return vars;
-  };
-  return { id, dir, work, checkout, env, skill, driver, model, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
+    for (const config of Object.values(configs)) {
+      copySkill(join(config, "skills"), skillRef ? join(source, relative(repoRoot, skillDir)) : skillDir);
+      if (driver === "codex") {
+        const auth = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "auth.json");
+        if (existsSync(auth)) symlinkSync(auth, join(config, "auth.json"));
+      }
+    }
+    rmSync(source, { recursive: true, force: true });
+    const model = driver === "codex" ? JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.eval.use : null;
+    const env = (phase) => {
+      const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], ...(driver === "codex" ? { CODEX_HOME: configs[phase] } : {}), PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
+      for (const key of SESSION_MARKERS) delete vars[key];
+      return vars;
+    };
+    return { id, dir, work, checkout, env, skill, driver, model, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
   } catch (error) {
     rmSync(work, { recursive: true, force: true });
     throw error;
@@ -309,7 +314,13 @@ function agent(run, phase, prompt, schema) {
       timedOut = true;
       stopGroup(child);
     }, MINUTES[phase] * 60_000);
-    child.on("error", reject);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      running = null;
+      closeSync(out);
+      closeSync(err);
+      reject(error);
+    });
     child.on("exit", (code) => {
       clearTimeout(timer);
       running = null;
@@ -323,11 +334,15 @@ function agent(run, phase, prompt, schema) {
         reject(new Error(`${phase}: the agent run failed (exit ${code}${why}), transcript ${transcript}`));
         return;
       }
-      resolvePhase({
+      try {
+        resolvePhase({
         model: run.model?.model ?? events.find((e) => e.type === "system" && e.subtype === "init")?.model ?? "an unknown model",
         minutes: Math.round((Date.now() - started) / 60_000),
         output: run.driver === "codex" && schema ? JSON.parse(readFileSync(lastMessage, "utf8")) : result.structured_output,
-      });
+        });
+      } catch {
+        reject(new Error(`${phase}: cannot read structured output, transcript ${transcript}`));
+      }
     });
   });
 }

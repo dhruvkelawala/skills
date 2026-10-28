@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { probeDevices } from "./fake-device-probe.mjs";
 
 const args = process.argv.slice(2);
 const option = (name) => args[args.indexOf(name) + 1];
@@ -14,6 +15,7 @@ const home = process.env.CODEX_HOME;
 const files = (dir) => readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => relative(dir, join(e.parentPath, e.name)));
 const git = (...a) => spawnSync("git", a, { encoding: "utf8" }).stdout.trim();
 const seen = {
+  devices: probeDevices(),
   phase, home, linkedAuth: lstatSync(join(home, "auth.json")).isSymbolicLink(),
   skills: files(join(home, "skills")), model: option("--model"), effort: option("-c"), cwd: process.cwd(),
   gh: spawnSync("gh", ["pr", "list"]).status,
@@ -31,6 +33,13 @@ if (phase === "create") {
   writeFileSync(".agents/skills/verify-demo/SKILL.md", "---\nname: verify-demo\n---\n\n# Verify demo\n");
   mkdirSync(".claude/skills", { recursive: true });
   symlinkSync("../../.agents/skills/verify-demo", ".claude/skills/verify-demo");
+  if (process.env.FAKE_CREATE === "fails") {
+    spawnSync("xcrun", ["simctl", "boot", "DEMO-UDID"]);
+    appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify(seen)}\n`);
+    emit({ type: "item.completed", item: { type: "command_execution", command: "xcrun simctl boot DEMO-UDID", aggregated_output: "", exit_code: 0 } });
+    process.stdout.write('{"type":"item.');
+    process.exit(1);
+  }
   emit({ type: "item.completed", item: { type: "agent_message", text: "Created verify-demo" } });
 } else {
   const schema = JSON.parse(readFileSync(option("--output-schema"), "utf8"));
@@ -43,7 +52,7 @@ if (phase === "create") {
     lessons: verdicts.split(",").map((verdict, i) => ({ lesson: i + 1, verdict, file: "", quote: "", why: "" })),
     replay: { launch: step, doctor: step, drive: step, cleanup: step },
   };
-  writeFileSync(option("--output-last-message"), JSON.stringify(grade));
+  writeFileSync(option("--output-last-message"), process.env.FAKE_CREATE === "bad-grade" ? "not JSON" : JSON.stringify(grade));
   emit({ type: "item.completed", item: { type: "agent_message", text: JSON.stringify(grade) } });
 }
 appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify(seen)}\n`);

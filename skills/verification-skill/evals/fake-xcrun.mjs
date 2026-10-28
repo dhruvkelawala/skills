@@ -5,12 +5,18 @@ import { readFileSync, writeFileSync } from "node:fs";
 const [tool, command, udid] = process.argv.slice(2);
 const file = process.env.FAKE_XCRUN_STATE;
 const states = JSON.parse(readFileSync(file, "utf8"));
-if (tool !== "simctl") process.exit(1);
+if (tool === "xcdevice" && command === "list") {
+  console.log(JSON.stringify([{ identifier: "PHYSICAL-DEVICE-ID", name: "Demo phone", simulator: false, available: false }, { identifier: "DEMO-UDID", simulator: true }]));
+  process.exit(0);
+}
+if (tool !== "simctl") process.exit(0);
 if (command === "list") {
   const devices = Object.entries(states).map(([id, state]) => ({ udid: id, name: `Demo ${id}`, state }));
   console.log(JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-27-0": devices } }));
 } else if (command === "boot" || command === "shutdown") {
   writeFileSync(file, JSON.stringify({ ...states, [udid]: command === "boot" ? "Booted" : "Shutdown" }));
+} else if (command === "install") {
+  process.exit(0);
 } else {
   process.exit(1);
 }

@@ -63,7 +63,7 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef } =
   mkdirSync(join(home, ".codex"));
   writeFileSync(join(home, ".codex", "auth.json"), "fake sign-in\n");
   mkdirSync(bin);
-  for (const [name, script] of [["claude", "fake-claude.mjs"], ["codex", "fake-codex.mjs"], ["xcrun", "fake-xcrun.mjs"]]) {
+  for (const [name, script] of [["claude", "fake-claude.mjs"], ["codex", "fake-codex.mjs"], ["xcrun", "fake-xcrun.mjs"], ["xcodebuild", "fake-xcodebuild.mjs"]]) {
     writeFileSync(join(bin, name), `#!/bin/sh\nexec "${process.execPath}" "${join(evalsDir, script)}" "$@"\n`);
     chmodSync(join(bin, name), 0o755);
   }
@@ -102,6 +102,10 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef } =
     seen: existsSync(log) ? JSON.parse(readFileSync(log, "utf8").split("\n")[0]) : {},
     agents: existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) : [],
     runDir: existsSync(runFolders) ? join(runFolders, readdirSync(runFolders)[0]) : null,
+    guardLog: existsSync(runFolders) ? readdirSync(runFolders).map((d) => {
+      const f = join(runFolders, d, "device-guard.log");
+      return existsSync(f) ? readFileSync(f, "utf8") : "";
+    }).join("\n") : "",
     skillCommit,
     repo,
     base,
@@ -145,6 +149,8 @@ test("Codex is the default, with isolated homes, linked sign-in, configured mode
   assert.notEqual(demo.seen.push, 0);
   for (const pid of demo.seen.strays) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
   assert.ok(!existsSync(demo.seen.cwd));
+  assert.deepEqual(demo.agents.map((a) => a.devices), Array(2).fill({ install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0 }));
+  assert.match(demo.guardLog, /refused/);
 });
 
 test("--runs 2 appends one section with two scores, their mean and spread", () => {
@@ -178,6 +184,8 @@ describe("a run", () => {
     assert.deepEqual(seen.skills.filter((f) => f.endsWith("SKILL.md")), [join("verification-skill", "SKILL.md")]);
     assert.ok(seen.skills.includes(join("evidence", "references", "surfaces.md")), "a file the skill links to is missing");
     assert.deepEqual(seen.skills.filter((f) => f.includes("evals")), [], "the agent can read the eval's lessons");
+    assert.deepEqual(seen.devices, { install: 1, process: 1, build: 1, xcrunBuild: 1, simulator: 0, simulatorBuild: 0 });
+    assert.match(demo.guardLog, /refused/);
   });
 
   test("appends the grader's score to results.md, with the date and the commit of the skill it ran", () => {
@@ -201,10 +209,10 @@ describe("a run", () => {
   });
 });
 
-describe("a run whose create agent dies", () => {
+for (const agent of ["claude", "codex"]) describe(`a ${agent} run whose create agent dies`, () => {
   let demo;
   before(() => {
-    demo = runDemo("fails");
+    demo = runDemo("fails", { agent });
   });
 
   test("still shuts down the simulator it booted, stops its processes, keeps what it wrote, removes the checkout and scores nothing", () => {
@@ -216,4 +224,11 @@ describe("a run whose create agent dies", () => {
     assert.equal(demo.status, 1);
     assert.match(demo.output, /create: the agent run failed/);
   });
+});
+
+test("a malformed Codex grade removes the checkout and appends no result", () => {
+  const demo = runDemo("bad-grade", { agent: "codex" });
+  assert.equal(demo.status, 1);
+  assert.ok(!existsSync(demo.seen.cwd), "the checkout is still there after the grade could not be read");
+  assert.doesNotMatch(demo.section, /^## demo,/m);
 });

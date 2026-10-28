@@ -7,6 +7,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { probeDevices } from "./fake-device-probe.mjs";
 
 const emit = (event) => console.log(JSON.stringify(event));
 const git = (...args) => spawnSync("git", args, { encoding: "utf8" }).stdout.trim();
@@ -34,6 +35,7 @@ if (process.argv.includes("--json-schema")) {
   stray.unref();
   bare.unref();
   log({
+    devices: probeDevices(),
     cwd: process.cwd(),
     head: git("rev-parse", "HEAD"),
     commits: git("log", "--all", "--format=%H").split("\n"),
