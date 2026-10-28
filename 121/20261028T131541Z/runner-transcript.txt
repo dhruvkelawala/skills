@@ -1,0 +1,202 @@
+# Verification-skill eval CLI capture
+After source: 268d1181818db2d27abcf020f52afac686f038b1; before source: 03556085f20495eede42294b955da52a7e05b974.
+Synthetic demo case with fake Codex, Claude, xcrun and xcodebuild. No live agents, credentials or physical devices are used. Scratch paths are replaced with placeholders.
+
+## Before: default driver and device commands
+$ node skills/verification-skill/evals/run.mjs demo --runs 1
+demo: run folder <scratch>/home/.cache/verification-skill-evals/demo-20261028T131519Z, checkout <run-temp>/checkout
+demo: create is running
+demo: grading 2 changed files
+demo: 1.5 of 3 (50%) at skill 34ae3b7, create on fake-model, the grade on fake-model. Results in <scratch>/skills/verification-skill/evals/results.md
+Exit: 0
+Agent observations:
+[
+  {
+    "phase": "create",
+    "driver": "claude",
+    "model": "fake-model",
+    "developerDir": "<scratch>/default-Xcode"
+  },
+  {
+    "phase": "grade",
+    "driver": "claude",
+    "model": "fake-model",
+    "developerDir": "<scratch>/default-Xcode"
+  }
+]
+Fake Apple tool exit statuses and forwarded simulator arguments:
+{
+  "install": 0,
+  "process": 0,
+  "build": 0,
+  "xcrunBuild": 0,
+  "simulator": 0,
+  "simulatorOutput": "[\"simctl\",\"install\",\"DEMO-UDID\",\"demo.app\"]",
+  "simulatorBuild": 0,
+  "simulatorBuildOutput": "[\"-sdk\",\"iphonesimulator\",\"-destination\",\"platform=iOS Simulator,id=DEMO-UDID\",\"build\"]"
+}
+Appended results:
+## demo, 2026-10-28, skill 34ae3b7
+
+Score 1.5 of 3 (50%). Create took 0 min, and the grade 0 min.
+Replay: launch passed, doctor passed, drive failed, cleanup passed.
+Left behind, and stopped by the eval: after create: node, node; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the toolchain (abb228b0). | covered |
+| 2. Wait for an element before measuring it (#12). | partly |
+| 3. Kill the whole process group (#540, #545). | missing |
+
+## After: default Codex, two sequential runs and the case toolchain
+$ node skills/verification-skill/evals/run.mjs demo --runs 2 --skill-ref HEAD
+demo: starting load 4.9013671875, 6.22705078125, 11.58154296875
+demo: run folder <scratch>/home/.cache/verification-skill-evals/demo-20261028T131521Z, checkout <run-temp>/checkout
+demo: create is running
+demo: grading 2 changed files
+demo: 1.5 of 3 (50%) at skill de77098492d954212483e1ab7bb4099811420998, create on gpt-6.1-sol, the grade on gpt-6.1-sol.
+demo: starting load 4.9013671875, 6.22705078125, 11.58154296875
+demo: run folder <scratch>/home/.cache/verification-skill-evals/demo-20261028T131524Z, checkout <run-temp>/checkout
+demo: create is running
+demo: grading 2 changed files
+demo: 2 of 3 (67%) at skill de77098492d954212483e1ab7bb4099811420998, create on gpt-6.1-sol, the grade on gpt-6.1-sol.
+demo: mean 1.75, spread 0.5. Results in <scratch>/skills/verification-skill/evals/results.md
+Exit: 0
+Agent observations:
+[
+  {
+    "phase": "create",
+    "driver": "codex",
+    "model": "gpt-6.1-sol",
+    "developerDir": "<scratch>/Xcode from case.app/Contents/Developer",
+    "linkedAuth": true
+  },
+  {
+    "phase": "grade",
+    "driver": "codex",
+    "model": "gpt-6.1-sol",
+    "developerDir": "<scratch>/Xcode from case.app/Contents/Developer",
+    "linkedAuth": true
+  },
+  {
+    "phase": "create",
+    "driver": "codex",
+    "model": "gpt-6.1-sol",
+    "developerDir": "<scratch>/Xcode from case.app/Contents/Developer",
+    "linkedAuth": true
+  },
+  {
+    "phase": "grade",
+    "driver": "codex",
+    "model": "gpt-6.1-sol",
+    "developerDir": "<scratch>/Xcode from case.app/Contents/Developer",
+    "linkedAuth": true
+  }
+]
+Fake Apple tool exit statuses and forwarded simulator arguments:
+{
+  "install": 1,
+  "process": 1,
+  "build": 1,
+  "xcrunBuild": 1,
+  "simulator": 0,
+  "simulatorOutput": "[\"simctl\",\"install\",\"DEMO-UDID\",\"demo.app\"]",
+  "simulatorBuild": 0,
+  "simulatorBuildOutput": "[\"-sdk\",\"iphonesimulator\",\"-destination\",\"platform=iOS Simulator,id=DEMO-UDID\",\"build\"]"
+}
+Guard stderr log:
+2026-10-28T13:15:22.724Z xcrun refused by eval device guard: physical-device operations are disabled
+2026-10-28T13:15:22.750Z xcrun refused by eval device guard: physical-device operations are disabled
+2026-10-28T13:15:22.803Z xcodebuild refused by eval device guard: command names a physical device
+2026-10-28T13:15:22.857Z xcrun refused by eval device guard: command names a physical device
+Appended results:
+## demo, 2026-10-28, skill de77098492d954212483e1ab7bb4099811420998
+
+Driver: codex. Runs: 2.
+Mean 1.75 of 3 (58%). Spread 0.5 (1.5 to 2).
+
+### Run 1: Score 1.5 of 3 (50%). Create took 0 min, and the grade 0 min.
+Starting load (1, 5, 15 min): 4.9013671875, 6.22705078125, 11.58154296875.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: node; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the toolchain (abb228b0). | covered |
+| 2. Wait for an element before measuring it (#12). | partly |
+| 3. Kill the whole process group (#540, #545). | missing |
+### Run 2: Score 2 of 3 (67%). Create took 0 min, and the grade 0 min.
+Starting load (1, 5, 15 min): 4.9013671875, 6.22705078125, 11.58154296875.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: node; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the toolchain (abb228b0). | covered |
+| 2. Wait for an element before measuring it (#12). | covered |
+| 3. Kill the whole process group (#540, #545). | missing |
+
+## After: explicit Claude also receives the case toolchain
+$ node skills/verification-skill/evals/run.mjs demo --runs 1 --agent claude
+demo: starting load 4.7490234375, 6.17333984375, 11.53125
+demo: run folder <scratch>/home/.cache/verification-skill-evals/demo-20261028T131526Z, checkout <run-temp>/checkout
+demo: create is running
+demo: grading 2 changed files
+demo: 1.5 of 3 (50%) at skill 4998dc7, create on fake-model, the grade on fake-model.
+demo: mean 1.5, spread 0. Results in <scratch>/skills/verification-skill/evals/results.md
+Exit: 0
+Agent observations:
+[
+  {
+    "phase": "create",
+    "driver": "claude",
+    "model": "fake-model",
+    "developerDir": "<scratch>/Xcode from case.app/Contents/Developer"
+  },
+  {
+    "phase": "grade",
+    "driver": "claude",
+    "model": "fake-model",
+    "developerDir": "<scratch>/Xcode from case.app/Contents/Developer"
+  }
+]
+Fake Apple tool exit statuses and forwarded simulator arguments:
+{
+  "install": 1,
+  "process": 1,
+  "build": 1,
+  "xcrunBuild": 1,
+  "simulator": 0,
+  "simulatorOutput": "[\"simctl\",\"install\",\"DEMO-UDID\",\"demo.app\"]",
+  "simulatorBuild": 0,
+  "simulatorBuildOutput": "[\"-sdk\",\"iphonesimulator\",\"-destination\",\"platform=iOS Simulator,id=DEMO-UDID\",\"build\"]"
+}
+Guard stderr log:
+2026-10-28T13:15:27.384Z xcrun refused by eval device guard: physical-device operations are disabled
+2026-10-28T13:15:27.410Z xcrun refused by eval device guard: physical-device operations are disabled
+2026-10-28T13:15:27.459Z xcodebuild refused by eval device guard: command names a physical device
+2026-10-28T13:15:27.508Z xcrun refused by eval device guard: command names a physical device
+Appended results:
+## demo, 2026-10-28, skill 4998dc7
+
+Driver: claude. Runs: 1.
+Mean 1.5 of 3 (50%). Spread 0 (1.5 to 1.5).
+
+### Run 1: Score 1.5 of 3 (50%). Create took 0 min, and the grade 0 min.
+Starting load (1, 5, 15 min): 4.7490234375, 6.17333984375, 11.53125.
+Replay: launch passed, doctor passed, drive failed, cleanup passed.
+Left behind, and stopped by the eval: after create: node, node; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the toolchain (abb228b0). | covered |
+| 2. Wait for an element before measuring it (#12). | partly |
+| 3. Kill the whole process group (#540, #545). | missing |
+
+## After: missing toolchain refuses before either agent starts
+$ node skills/verification-skill/evals/run.mjs demo --runs 1
+no toolchain at <scratch>/Xcode from case.app/Contents/Developer
+Exit: 2
+Agent observations:
+[]
+No case result appended.
