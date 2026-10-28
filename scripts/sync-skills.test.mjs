@@ -9,8 +9,6 @@ import { fileURLToPath } from "node:url";
 const script = fileURLToPath(new URL("./sync-skills.mjs", import.meta.url));
 const caseInsensitiveDisk = existsSync(script.toUpperCase());
 
-// A machine with Claude, Codex and Pi installed, a checkout of this repo that holds `apr` and `pr`,
-// and an upstream repo whose `grilling` changed after the commit the list pins.
 function machine(t, { agents = [".claude", ".codex", ".pi/agent"] } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "sync-skills-")));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -20,7 +18,7 @@ function machine(t, { agents = [".claude", ".codex", ".pi/agent"] } = {}) {
   const checkout = join(root, "checkout");
   mkdirSync(join(checkout, "scripts"), { recursive: true });
   copyFileSync(script, join(checkout, "scripts", "sync-skills.mjs"));
-  for (const name of ["apr", "pr"]) write(join(checkout, "skills", name, "SKILL.md"), `this repo's ${name}\n`);
+  for (const name of ["apr", "model-policy", "pr"]) write(join(checkout, "skills", name, "SKILL.md"), `this repo's ${name}\n`);
 
   const upstream = join(root, "upstream");
   mkdirSync(upstream);
@@ -95,22 +93,26 @@ test("a dry run prints every link, install, update and removal, and changes noth
   assert.equal(result.stdout, [
     "~/.agents/skills",
     `  link     apr -> ${own("apr")}`,
+    `  link     model-policy -> ${own("model-policy")}`,
     `  update   pr -> ${own("pr")} (was a folder)`,
     `  install  grilling from fixture/upstream@${m.pin.slice(0, 7)}`,
     "~/.claude/skills",
     `  link     apr -> ${own("apr")}`,
+    `  link     model-policy -> ${own("model-policy")}`,
     `  link     pr -> ${own("pr")}`,
     "  link     grilling -> ~/.agents/skills/grilling",
     "~/.codex/skills",
     `  link     apr -> ${own("apr")}`,
+    `  link     model-policy -> ${own("model-policy")}`,
     `  link     pr -> ${own("pr")}`,
     "  link     grilling -> ~/.agents/skills/grilling",
     "  remove   stray",
     "~/.pi/agent/skills",
     `  link     apr -> ${own("apr")}`,
+    `  link     model-policy -> ${own("model-policy")}`,
     `  link     pr -> ${own("pr")}`,
     "  link     grilling -> ~/.agents/skills/grilling",
-    "dry run: 13 changes, none made",
+    "dry run: 17 changes, none made",
     "",
   ].join("\n"));
   assert.deepEqual(snapshot(folders), before);
@@ -134,7 +136,7 @@ test("after a run every agent folder links this repo's skills into the checkout 
     assert.equal(linkTarget(join(folder, "apr")), join(m.checkout, "skills/apr"), folder);
     assert.equal(linkTarget(join(folder, "pr")), join(m.checkout, "skills/pr"), folder);
     assert.equal(readFileSync(join(folder, "pr/SKILL.md"), "utf8"), "this repo's pr\n", folder);
-    assert.equal(readFileSync(join(folder, "grilling/SKILL.md"), "utf8"), "grilling at the pin\n", folder);
+    assert.ok(readFileSync(join(folder, "grilling/SKILL.md"), "utf8").startsWith("grilling at the pin\n"), folder);
     if (folder !== m.folders.agents) assert.equal(linkTarget(join(folder, "grilling")), store, folder);
   }
   assert.equal(kind(store), "folder", "the shared folder holds the outside skill itself");
@@ -150,6 +152,35 @@ test("a second run changes nothing", (t) => {
   assert.equal(second.status, 0, second.stderr);
   assert.deepEqual(snapshot(Object.values(m.folders)), before);
   assert.equal(second.stdout, "nothing to change\n");
+});
+
+test("outside skills receive the shared model policy without changing pinned scripts or duplicating it on sync", (t) => {
+  const m = machine(t);
+  write(join(m.checkout, "skills/model-policy/SKILL.md"), "the local model policy\n");
+  const store = join(m.folders.agents, "grilling");
+  assert.equal(m.run().status, 0);
+  const installed = readFileSync(join(store, "SKILL.md"), "utf8");
+  assert.ok(installed.startsWith("grilling at the pin\n"));
+  const target = installed.match(/\]\(([^)]+model-policy\/SKILL\.md)\)/)?.[1];
+  assert.ok(target, "the installed skill points to the policy");
+  for (const folder of Object.values(m.folders)) {
+    assert.equal(readFileSync(join(folder, "grilling", target), "utf8"), "the local model policy\n");
+  }
+  assert.equal(readFileSync(join(store, "scripts/ask"), "utf8"), "#!/bin/sh\n");
+
+  const before = snapshot(Object.values(m.folders));
+  const second = m.run();
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(second.stdout, "nothing to change\n");
+  assert.deepEqual(snapshot(Object.values(m.folders)), before);
+
+  writeFileSync(join(store, "SKILL.md"), "grilling at the pin\n");
+  const dry = m.run(["--dry-run"]);
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), "grilling at the pin\n");
+  assert.match(dry.stdout, /update\s+grilling/);
+  assert.equal(m.run().status, 0);
+  assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), installed);
 });
 
 test("a skill that is not on the list is reported, and removed only with --remove-unlisted", (t) => {
@@ -187,6 +218,15 @@ test("a list or folder the script cannot honour stops it before anything changes
     ["uses a path as a name", list((m) => ({ "../escape": m.entry("grilling") })), /"\.\.\/escape" is not a skill name/],
     ["pins a commit the source does not have", list((m) => ({ grilling: m.entry("grilling", "0".repeat(40)) })), /grilling: cannot fetch 0{40} from file:\/\//],
     ["points at a folder with no SKILL.md", list((m) => ({ grilling: { ...m.entry("grilling"), skillPath: "skills/grilling/scripts/SKILL.md" } })), /grilling: fixture\/upstream@[0-9a-f]{7} has no skills\/grilling\/scripts\/SKILL\.md/],
+    ["points at a linked SKILL.md", (m) => {
+      const upstream = join(m.root, "upstream");
+      const skill = join(upstream, "skills/grilling/SKILL.md");
+      rmSync(skill);
+      symlinkSync("scripts/ask", skill);
+      execFileSync("git", ["commit", "--quiet", "-am", "link the skill"], { cwd: upstream });
+      const ref = execFileSync("git", ["rev-parse", "HEAD"], { cwd: upstream, encoding: "utf8" }).trim();
+      m.list({ grilling: m.entry("grilling", ref) });
+    }, /grilling: SKILL\.md must be a regular file/],
     ["finds an agent folder that links into this checkout", (m) => symlinkSync(join(m.checkout, "skills"), m.folders.claude), /~\/\.claude\/skills resolves into this checkout/],
     ["finds an agent folder that is this checkout", (m) => symlinkSync(m.checkout, m.folders.claude), /~\/\.claude\/skills resolves into this checkout/],
     ["finds an agent folder that holds this checkout", (m) => symlinkSync(m.root, m.folders.claude), /~\/\.claude\/skills holds this checkout/],
@@ -217,7 +257,7 @@ test("an agent folder that is the shared folder under another name is synced onc
 
     const store = join(m.folders.agents, "grilling");
     assert.equal(kind(store), "folder", `${label}: grilling stays a folder instead of a link to itself`);
-    assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), "grilling at the pin\n", label);
+    assert.ok(readFileSync(join(store, "SKILL.md"), "utf8").startsWith("grilling at the pin\n"), label);
     assert.equal(m.run().stdout, "nothing to change\n", label);
   }
 });

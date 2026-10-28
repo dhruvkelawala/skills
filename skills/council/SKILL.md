@@ -11,7 +11,7 @@ Invoke as `/council <question>` or `/council pr <n> [--merge]`, adding `--rounds
 
 ## Rules
 
-- **Members** are the `council` job's entries in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`). Every member sits every round, because a change made for one member's finding can break what another passed. When a member can't run, do what the job's `ifUnavailable` says. With fewer than two members sitting it is not a council: stop and tell the user.
+- **Members** start with the `council` job's entries in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`). Apply [model-policy](../model-policy/SKILL.md) when a member can't run. A council on one family can continue, with at least two fresh member contexts, using repeated models when needed and reporting that limit. Keep the resulting roster across rounds while its routes remain available, because a change made for one member's finding can break what another passed. If two independent members cannot run, report the council incomplete.
 - **One brief.** Every member gets the same brief in a round, so a disagreement comes from the model and not the prompt.
 - **Alone.** A member never sees another member's reply. The change log it reads in later rounds describes each point by its content, never by who raised it.
 - **Evidence decides.** Weigh each finding on its evidence, not on how many members raised it: one failing test outweighs two passes. A claim with no evidence is a lead, so check it yourself before acting on it.
@@ -57,7 +57,7 @@ Leave out the last two sections in round 1.
    **Done when** every section of the brief is filled and each check names one thing a member can prove or disprove, such as "whether a batch can be lost with no `batch_lost` log".
 2. **Convene.** Start every member in one message: `delegate_task` with `mode: "async"`, `role: "review"`, the member's target from the models file, the brief with its name filled in, the title `Council: <subject> (<member name>)` and the `clientRequestId` `council-<subject-slug>-r<R>-<member name>`. Members share this thread's checkout, so leave it on the commit the brief names until the round ends. Tell the user in one line who sits and what they check, then end the turn; each completion wakes the thread.
    **Done when** every sitting member has a task ID for this round.
-3. **Weigh.** Once every member of the round has returned, read each reply in full. A member that errored or timed out goes in the report and the round goes on without it. Accept each blocking finding by changing the position, or rebut it with evidence. Take a note only when it stays inside the scope.
+3. **Weigh.** Once every member of the round has returned, read each reply in full. An availability failure follows model-policy before the round completes. Give a replacement the same brief and any unresolved findings from the seat it replaces. Other errors and timeouts go in the report as incomplete reviews. Count the completed replies again; fewer than two leaves the council incomplete. Accept each blocking finding by changing the position, or rebut it with evidence. Take a note only when it stays inside the scope.
    **Done when** every blocking finding is accepted, rebutted or moved to follow-ups, and the change log for the next round says which and why.
 4. **Next round or stop.** Stop when no member returned FAIL or the round cap is reached. Otherwise run step 2 again with the next round number, a fresh `delegate_task` call per member, and the brief carrying the change log and that member's last reply. A round always starts as a new task, never as a `t3_thread_send` to a member's child thread.
 5. **Report**, in the shape below.
@@ -67,7 +67,7 @@ Leave out the last two sections in round 1.
 `/council pr <n>` puts the PR's head on trial. Everything above holds, with these changes.
 
 - **Pinned head.** Before convening, put this thread's checkout on the PR's head SHA. It already is when this thread owns the PR; otherwise check the head out detached, and stop to ask if the checkout has uncommitted work. A member's verdict covers the head SHA in its brief and nothing after it.
-- **Unanimous.** The PR passes only when every sitting member returns PASS or PASS+NOTES on the same head. You can rebut a FAIL, but it stands until that member withdraws it in a later round.
+- **Unanimous.** The PR passes only when at least two independent sitting members all return PASS or PASS+NOTES on the same head. An errored or timed-out review is not a pass. You can rebut a FAIL, but it stands until that member withdraws it in a later round, or its availability replacement explicitly verifies that the finding is resolved. Losing a provider never drops an unresolved blocking finding.
 - **Fixes.** Change the PR only when this thread owns it or the user asked to merge or fix it. Make the smallest fix each accepted blocking finding needs, test it, push it, and convene the next round on the new head. On a PR you may not change, the findings go to the user and the PR waits.
 - **Merge.** Merge only on `--merge` or the user's word, and only through [ship](../ship/SKILL.md) `land <n>`, which pins the merge to the head, confirms a one-way door and applies its rule B. The council's pass is not ship's verdict, so ship still runs `verify` where rule B asks for one. When the head ship would merge differs from the head the council passed, compare `git diff <base>...<head>` for the two: the same patch keeps the pass, and any other change needs another round.
 - **Stuck.** At the cap with a member still failing, merge nothing. Report each blocking finding and the cheapest change that would clear it.
@@ -85,7 +85,7 @@ Leave out the last two sections in round 1.
 **Changed:** <each change the council caused, with the finding behind it>
 **Dissent:** <each blocking finding you rebutted that its member never withdrew: who raised it, your evidence, its last word> | None.
 **Follow-ups:** <each out-of-scope finding in one line> | None.
-**Missing:** <a member that did not sit or did not reply, and why>
+**Missing:** <a member that did not sit or did not reply, and why; any replacement's actual model and the cross-family coverage lost>
 ```
 
 Leave out **Missing** when every member replied in every round.

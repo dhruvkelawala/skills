@@ -39,7 +39,7 @@ Stage reports go below the header, appended in order:
 - the contract
 - the brief
 - the build report
-- each review pass: the tree it reviewed, or the skip and its reason, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
+- each review pass: the tree it reviewed, or the skip and its reason, each reviewer's actual engine and model, any availability fallback and coverage limit, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
 - the evidence links, each with the head it was captured at
 - the verifier's verdict and the rule B reason it ran, or why it was skipped
 - each verification disposition, `reused`, `deferred` or `new`, with its reason, published head, criteria source and evidence; for a new child, its task, actual model and effort; for an interrupted attempt, the cancellation reason and validity limits of retained partial evidence

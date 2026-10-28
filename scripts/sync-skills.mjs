@@ -6,12 +6,13 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const USAGE = "usage: node scripts/sync-skills.mjs [--dry-run] [--remove-unlisted]";
+const MODEL_POLICY = Buffer.from("\n\n## Local model policy\n\nWhen selecting a model or starting a helper, read [model-policy](../model-policy/SKILL.md). It overrides this skill's engine preferences and model-availability stop rules, including after a launched attempt fails on quota or rate limits. Keep its review, scope and isolation requirements.\n");
 
 try {
   main(process.argv.slice(2));
@@ -192,11 +193,18 @@ function sameFiles(dir, files) {
       const path = join(dir, rel);
       if (entry.isDirectory()) walk(rel);
       else if (entry.isSymbolicLink()) installed.push(`${rel}\t120000 ${blobId(Buffer.from(readlinkSync(path)))}`);
-      else if (entry.isFile()) installed.push(`${rel}\t${statSync(path).mode & 0o100 ? "100755" : "100644"} ${blobId(readFileSync(path))}`);
+      else if (entry.isFile()) {
+        let contents = readFileSync(path);
+        if (rel === "SKILL.md") {
+          if (!contents.subarray(-MODEL_POLICY.length).equals(MODEL_POLICY)) return false;
+          contents = contents.subarray(0, -MODEL_POLICY.length);
+        }
+        installed.push(`${rel}\t${statSync(path).mode & 0o100 ? "100755" : "100644"} ${blobId(contents)}`);
+      }
     }
+    return true;
   };
-  walk("");
-  return installed.sort().join("\n") === pinned.join("\n");
+  return walk("") && installed.sort().join("\n") === pinned.join("\n");
 }
 
 function blobId(contents) {
@@ -213,6 +221,7 @@ function install(pinned, path) {
   const temp = join(dirname(path), `.${basename(path)}.sync-skills`);
   rmSync(temp, { recursive: true, force: true });
   writePinned(pinned, temp);
+  appendFileSync(join(temp, "SKILL.md"), MODEL_POLICY);
   rmSync(path, { recursive: true, force: true });
   renameSync(temp, path);
 }
@@ -238,6 +247,9 @@ function pinnedFiles(cache, skill) {
     .filter((file) => file.type === "blob");
   if (!files.some((file) => file.path === "SKILL.md")) {
     throw new Error(`${skill.name}: ${skill.source}@${skill.ref.slice(0, 7)} has no ${skill.skillPath}`);
+  }
+  if (files.find((file) => file.path === "SKILL.md").mode === "120000") {
+    throw new Error(`${skill.name}: SKILL.md must be a regular file to attach the local model policy`);
   }
   return { repo, files };
 }

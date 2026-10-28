@@ -1,15 +1,15 @@
 {
   "how": [
-    "Each job below runs on a fixed model. A skill names the job, as in the `verifier` job, and never a model. A helper with no job runs on the thread's model.",
+    "Each job below names a preferred model. A skill names the job, as in the `verifier` job, and never a model. Before selecting or replacing a model, follow model-policy/SKILL.md next to this file. A helper with no job runs on the thread's model.",
     "Take the job's `use` entry. A job with no `use` entry has `onCodexThread` for a thread on a GPT model and `onClaudeThread` for any other thread. On a PR someone else wrote, `onTeammatePr` wins when the job has one. A job with `members` runs every member, each as its own entry, and `name` labels that member in titles and reports.",
     "An entry with `engine` runs through the autoreview script as `--engine <engine> --model <model>`, plus `--thinking <effort>`. Any other entry goes through `delegate_task`: `target.model` is `model`, `target.providerInstanceId` is a provider instance from `orchestrator_capabilities` whose `driverKind` is `driver` and that lists the model, and `effort` goes in `target.options` under that model's effort option.",
-    "`ifUnavailable` says what happens when the model can't run. `thread` runs the job on the thread's model, and the run record or the report says so. `wait` runs nothing in its place and tells the user. `skip` runs the job without that member, and the report says so."
+    "`ifUnavailable` applies to missing models or providers, authentication failures, exhausted quota, rate limits and service or capacity errors. `thread` continues on the available family with fresh independent context; autoreview keeps its helper and evaluations restart as a separate batch on the available driver. `skip` omits unavailable council members, filling seats when needed to keep two independent members. Follow model-policy/SKILL.md for routing, retry limits, strict user choices and recording the fallback."
   ],
   "jobs": {
     "eval": {
-      "for": "verification-skill eval create and grader agents",
+      "for": "verification-skill evaluation batches, with separate scores per driver",
       "use": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
-      "ifUnavailable": "wait"
+      "ifUnavailable": "thread"
     },
     "reviewers": {
       "for": "/code-review's two reviewers",
@@ -17,20 +17,20 @@
       "ifUnavailable": "thread"
     },
     "second-opinion": {
-      "for": "autoreview, from the other model family than the thread's",
+      "for": "autoreview, preferably from the other model family than the thread's",
       "onClaudeThread": { "engine": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
       "onCodexThread": { "engine": "claude", "model": "claude-opus-5-5" },
-      "ifUnavailable": "wait"
+      "ifUnavailable": "thread"
     },
     "verifier": {
       "for": "ship verify's independent verdict on a risky PR, or when the user says verify",
       "onClaudeThread": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
       "onCodexThread": { "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "high" },
       "onTeammatePr": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
-      "ifUnavailable": "wait"
+      "ifUnavailable": "thread"
     },
     "council": {
-      "for": "the council's members, two models from each of two labs",
+      "for": "the council's preferred members, two models from each of two labs, with available-family fallback",
       "members": [
         { "name": "Opus", "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "xhigh" },
         { "name": "Fable", "driver": "claudeAgent", "model": "claude-fable-5-1", "effort": "xhigh" },
