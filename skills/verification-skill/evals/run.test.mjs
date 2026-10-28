@@ -38,7 +38,7 @@ function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base =
 
 // One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
 // create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
-function runDemo(create = "succeeds", { agent = "claude", runs = 1 } = {}) {
+function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef } = {}) {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -90,6 +90,7 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1 } = {}) {
   };
   const args = ["demo", "--runs", String(runs)];
   if (agent !== "default") args.push("--agent", agent);
+  if (skillRef) args.push("--skill-ref", skillRef);
   const { status, stdout, stderr } = runner(evals, args, env);
   const results = existsSync(join(evals, "results.md")) ? readFileSync(join(evals, "results.md"), "utf8") : "";
   const runFolders = join(home, ".cache", "verification-skill-evals");
@@ -97,6 +98,7 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1 } = {}) {
     status,
     output: `${stdout}${stderr}`,
     section: results.slice(results.lastIndexOf("\n## ") + 1),
+    results,
     seen: existsSync(log) ? JSON.parse(readFileSync(log, "utf8").split("\n")[0]) : {},
     agents: existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) : [],
     runDir: existsSync(runFolders) ? join(runFolders, readdirSync(runFolders)[0]) : null,
@@ -145,6 +147,17 @@ test("Codex is the default, with isolated homes, linked sign-in, configured mode
   assert.ok(!existsSync(demo.seen.cwd));
 });
 
+test("--runs 2 appends one section with two scores, their mean and spread", () => {
+  const demo = runDemo("succeeds", { agent: "codex", runs: 2, skillRef: "HEAD" });
+  assert.equal(demo.status, 0, demo.output);
+  assert.deepEqual(demo.agents.map((a) => a.phase), ["create", "grade", "create", "grade"]);
+  assert.equal(demo.results.match(/^## demo,/gm)?.length, 1);
+  assert.match(demo.section, /Mean 1\.75 of 3/);
+  assert.match(demo.section, /Spread 0\.5 \(1\.5 to 2\)/);
+  assert.match(demo.section, /Run 1: Score 1\.5 of 3/);
+  assert.match(demo.section, /Run 2: Score 2 of 3/);
+});
+
 describe("a run", () => {
   const today = new Date().toLocaleDateString("en-CA");
   let demo;
@@ -170,7 +183,7 @@ describe("a run", () => {
   test("appends the grader's score to results.md, with the date and the commit of the skill it ran", () => {
     const { section } = demo;
     assert.match(section, new RegExp(`^## demo, ${today}, skill ${demo.skillCommit}$`, "m"), demo.output);
-    assert.match(section, /^Score 1\.5 of 3 \(50%\)/m);
+    assert.match(section, /Run 1: Score 1\.5 of 3 \(50%\)/m);
     assert.match(section, /^\| 1\. Pin the toolchain \(abb228b0\)\. \| covered \|$/m);
     assert.match(section, /^\| 2\. Wait for an element before measuring it \(#12\)\. \| partly \|$/m);
     assert.match(section, /^\| 3\. Kill the whole process group \(#540, #545\)\. \| missing \|$/m);

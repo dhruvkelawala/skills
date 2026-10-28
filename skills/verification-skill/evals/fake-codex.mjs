@@ -37,8 +37,10 @@ if (phase === "create") {
   assert.equal(schema.additionalProperties, false);
   assert.deepEqual(schema.properties.lessons.items.required, ["lesson", "verdict", "file", "quote", "why"]);
   const step = { result: "passed", note: "" };
+  const previous = readFileSync(process.env.FAKE_CLAUDE_LOG, "utf8").trim().split("\n").map(JSON.parse);
+  const verdicts = previous.some((a) => a.phase === "grade") ? "covered,covered,missing" : process.env.FAKE_VERDICTS;
   const grade = {
-    lessons: process.env.FAKE_VERDICTS.split(",").map((verdict, i) => ({ lesson: i + 1, verdict, file: "", quote: "", why: "" })),
+    lessons: verdicts.split(",").map((verdict, i) => ({ lesson: i + 1, verdict, file: "", quote: "", why: "" })),
     replay: { launch: step, doctor: step, drive: step, cleanup: step },
   };
   writeFileSync(option("--output-last-message"), JSON.stringify(grade));

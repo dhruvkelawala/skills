@@ -8,7 +8,7 @@
 // README.md says what a run does and what it needs.
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, chmodSync, closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir, loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +18,7 @@ const skillsDir = dirname(skillDir);
 const casesDir = join(evalsDir, "cases");
 const resultsFile = join(evalsDir, "results.md");
 const runsDir = join(homedir(), ".cache", "verification-skill-evals");
-const USAGE = "usage: node skills/verification-skill/evals/run.mjs [<case>] [--agent codex|claude] [--runs <n>]";
+const USAGE = "usage: node skills/verification-skill/evals/run.mjs [<case>] [--agent codex|claude] [--runs <n>] [--skill-ref <commit>] [--wait-for-idle]";
 // A short SHA with at least one digit, or a PR number, inside parentheses.
 const CITATION = /\([^)]*(?:\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b|#\d+)[^)]*\)/;
 // Every process an agent starts inherits this variable, so the sweep can find it after the agent exits.
@@ -54,13 +54,44 @@ const SESSION_MARKERS = [
 ];
 const RESULTS_HEADER = `# Results
 
-Each section is one run of \`run.mjs <case>\`: the date, the skill's commit, the score and each lesson's verdict. A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The case repos are private, so the grader's quotes and replay notes stay in the run folder.
+Each section is one batch: the driver, date, skill commit, individual scores, mean and spread (maximum minus minimum). A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. The case repos are private, so the grader's quotes and replay notes stay in the run folder.
 `;
 
 class Refused extends Error {}
 
+async function runBatch(kase, options) {
+  const skill = options.skillRef ? git(skillDir, "rev-parse", "--verify", `${options.skillRef}^{commit}`) : skillCommit();
+  const results = [];
+  for (let i = 0; i < options.runs; i++) {
+    if (interrupted) throw new Error(`stopped by ${interrupted}`);
+    if (options.waitForIdle) await waitForIdle();
+    results.push(await runCase(kase, { ...options, skill }));
+  }
+  appendResults(kase, skill, options.agent, results);
+}
+
+async function waitForIdle() {
+  for (;;) {
+    if (interrupted) throw new Error(`stopped by ${interrupted}`);
+    const rows = spawnSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8" });
+    if (rows.status !== 0) throw new Error("cannot check running builds before eval");
+    const busy = rows.stdout.split("\n").some((line) => {
+      const [, pid, command] = line.match(/^\s*(\d+)\s+(.*)$/) ?? [];
+      if (!command || Number(pid) === process.pid) return false;
+      return /evals\/run\.mjs|(?:^|[ /])cargo(?:\s|$)|expo\s+run/.test(command)
+        || (/(?:^|[ /])xcodebuild(?:\s|$)/.test(command) && !/-license\s+check/.test(command));
+    });
+    const load = loadavg();
+    if (load[1] < 8 && !busy) return;
+    console.log(`Waiting for a quiet machine: load ${load.join(", ")}${busy ? "; another eval or build is running" : ""}`);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 30_000));
+  }
+}
+
 async function runCase(kase, options) {
+  const load = loadavg();
   const run = prepare(kase, options);
+  console.log(`${kase.name}: starting load ${load.join(", ")}`);
   console.log(`${kase.name}: run folder ${run.dir}, checkout ${run.checkout}`);
   let changed = null;
   try {
@@ -73,8 +104,9 @@ async function runCase(kase, options) {
     const gradeLeft = await sweep(run);
     writeFileSync(join(run.dir, "grade.json"), `${JSON.stringify(grade.output, null, 2)}\n`);
     const result = scored(kase, grade.output);
-    appendResult(kase, run, result, { create, grade, createLeft, gradeLeft });
-    console.log(`${kase.name}: ${result.score} at skill ${run.skill}, create on ${create.model}, the grade on ${grade.model}. Results in ${resultsFile}`);
+    writeFileSync(join(run.dir, "result.json"), JSON.stringify({ driver: run.driver, skill: run.skill, load, score: result.points, create, grade, createLeft, gradeLeft }, null, 2));
+    console.log(`${kase.name}: ${result.score} at skill ${run.skill}, create on ${create.model}, the grade on ${grade.model}.`);
+    return { run, result, load, create, grade, createLeft, gradeLeft };
   } finally {
     await cleanUp(run, changed);
   }
@@ -142,7 +174,7 @@ function git(cwd, ...args) {
 // The checkout is a clone that shares the case repo's objects but none of its refs, config or hooks. A worktree would
 // share all three, so the agent could read the hand-fixed skill on main, and an install step's hook installer would
 // write into the case repo. Later commits stay readable by hash, but no ref or reflog leads to them.
-function prepare(kase, { agent: driver }) {
+function prepare(kase, { agent: driver, skill, skillRef }) {
   if (!existsSync(kase.checkout)) throw new Refused(`no checkout of ${kase.repo} at ${kase.checkout}`);
   if (spawnSync("git", ["-C", kase.checkout, "cat-file", "-e", `${kase.base}^{commit}`]).status !== 0) {
     throw new Refused(`${kase.checkout} has no commit ${kase.base}; fetch it first`);
@@ -158,24 +190,29 @@ function prepare(kase, { agent: driver }) {
     git(checkout, "remote", "remove", "origin");
     for (const ref of git(checkout, "for-each-ref", "--format=%(refname)").split("\n").filter(Boolean)) git(checkout, "update-ref", "-d", ref);
     rmSync(join(checkout, ".git", "logs"), { recursive: true, force: true });
-  } catch (error) {
-    rmSync(work, { recursive: true, force: true });
-    throw error;
-  }
 
   const bin = join(work, "bin");
   mkdirSync(bin);
   writeFileSync(join(bin, "gh"), GH_OFF);
   chmodSync(join(bin, "gh"), 0o755);
   const configs = { create: join(work, `${driver}-create`), grade: join(work, `${driver}-grade`) };
-  const skill = skillCommit();
+  const source = join(work, "source");
+  const repoRoot = git(skillsDir, "rev-parse", "--show-toplevel");
+  if (skillRef) {
+    mkdirSync(source);
+    const archive = spawnSync("git", ["-C", repoRoot, "archive", skill, relative(repoRoot, skillsDir) || "."], { maxBuffer: 32 << 20 });
+    if (archive.status !== 0) throw new Error("cannot archive the pinned skill");
+    const unpack = spawnSync("tar", ["-xf", "-", "-C", source], { input: archive.stdout });
+    if (unpack.status !== 0) throw new Error("cannot unpack the pinned skill");
+  }
   for (const config of Object.values(configs)) {
-    copySkill(join(config, "skills"));
+    copySkill(join(config, "skills"), skillRef ? join(source, relative(repoRoot, skillDir)) : skillDir);
     if (driver === "codex") {
       const auth = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "auth.json");
       if (existsSync(auth)) symlinkSync(auth, join(config, "auth.json"));
     }
   }
+  rmSync(source, { recursive: true, force: true });
   const model = driver === "codex" ? JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.eval.use : null;
   const env = (phase) => {
     const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], ...(driver === "codex" ? { CODEX_HOME: configs[phase] } : {}), PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
@@ -183,11 +220,17 @@ function prepare(kase, { agent: driver }) {
     return vars;
   };
   return { id, dir, work, checkout, env, skill, driver, model, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
+  } catch (error) {
+    rmSync(work, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 // The skill without its evals, which hold the answers, plus each file outside it that it links to, at the same
 // relative place so the links resolve.
-function copySkill(skills) {
+function copySkill(skills, skillDir) {
+  const skillsDir = dirname(skillDir);
+  const evalsDir = join(skillDir, "evals");
   const target = join(skills, basename(skillDir));
   const inEvals = (path) => path === evalsDir || path.startsWith(evalsDir + sep);
   cpSync(skillDir, target, { recursive: true, filter: (src) => !inEvals(src) });
@@ -455,7 +498,7 @@ function scored(kase, output) {
   const missing = lessons.filter((l) => !(l.verdict in POINTS)).map((l) => l.n);
   if (missing.length) throw new Error(`the grader gave no verdict for lessons ${missing.join(", ")}`);
   const points = lessons.reduce((sum, l) => sum + POINTS[l.verdict], 0);
-  return { lessons, score: `${points} of ${lessons.length} (${Math.round((100 * points) / lessons.length)}%)` };
+  return { lessons, points, score: `${points} of ${lessons.length} (${Math.round((100 * points) / lessons.length)}%)` };
 }
 
 function skillCommit() {
@@ -465,14 +508,12 @@ function skillCommit() {
   return `${sha.stdout.trim()}${changed ? " with uncommitted changes" : ""}`;
 }
 
-function appendResult(kase, run, result, { create, grade, createLeft, gradeLeft }) {
+function resultDetails({ result, create, grade, createLeft, gradeLeft, load }, index) {
   const replay = REPLAY.map((step) => `${step} ${grade.output.replay?.[step]?.result ?? "not reported"}`).join(", ");
   const left = (names) => names.join(", ") || "nothing";
-  const section = [
-    `## ${kase.name}, ${new Date().toLocaleDateString("en-CA")}, skill ${run.skill}`,
-    "",
-    `Driver: ${run.driver}.`,
-    `Score ${result.score}. Create took ${create.minutes} min, and the grade ${grade.minutes} min.`,
+  return [
+    `### Run ${index + 1}: Score ${result.score}. Create took ${create.minutes} min, and the grade ${grade.minutes} min.`,
+    `Starting load (1, 5, 15 min): ${load.join(", ")}.`,
     `Replay: ${replay}.`,
     `Left behind, and stopped by the eval: after create: ${left(createLeft)}; after the grade: ${left(gradeLeft)}.`,
     "",
@@ -480,7 +521,22 @@ function appendResult(kase, run, result, { create, grade, createLeft, gradeLeft 
     "| --- | --- |",
     ...result.lessons.map((l) => `| ${l.n}. ${l.text.replaceAll("|", "\\|")} | ${l.verdict} |`),
   ].join("\n");
+}
+
+function appendResults(kase, skill, driver, results) {
+  const scores = results.map(({ result }) => result.points);
+  const mean = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const low = Math.min(...scores), high = Math.max(...scores);
+  const section = [
+    `## ${kase.name}, ${new Date().toLocaleDateString("en-CA")}, skill ${skill}`,
+    "",
+    `Driver: ${driver}. Runs: ${results.length}.`,
+    `Mean ${Number(mean.toFixed(2))} of ${kase.lessons.length} (${Math.round(100 * mean / kase.lessons.length)}%). Spread ${high - low} (${low} to ${high}).`,
+    "",
+    ...results.map(resultDetails),
+  ].join("\n");
   appendFileSync(resultsFile, `${existsSync(resultsFile) ? "" : RESULTS_HEADER}\n${section}\n`);
+  console.log(`${kase.name}: mean ${Number(mean.toFixed(2))}, spread ${high - low}. Results in ${resultsFile}`);
 }
 
 function parseArgs(args) {
@@ -490,6 +546,11 @@ function parseArgs(args) {
     const arg = args[i];
     if (arg === "--agent") options.agent = args[++i];
     else if (arg === "--runs") options.runs = Number(args[++i]);
+    else if (arg === "--skill-ref") {
+      options.skillRef = args[++i];
+      if (!options.skillRef || options.skillRef.startsWith("-")) throw new Refused("--skill-ref needs a commit");
+    }
+    else if (arg === "--wait-for-idle") options.waitForIdle = true;
     else if (!arg.startsWith("-") && !name) name = arg;
     else throw new Refused(USAGE);
   }
@@ -500,7 +561,7 @@ function parseArgs(args) {
 
 try {
   const { name, ...options } = parseArgs(process.argv.slice(2));
-  if (name) await runCase(readCase(name), options);
+  if (name) await runBatch(readCase(name), options);
   else list();
 } catch (error) {
   console.error(error instanceof Refused ? error.message : error);
