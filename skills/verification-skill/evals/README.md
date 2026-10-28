@@ -46,6 +46,8 @@ The guard does not catch calls to tools by absolute path, or commands that repla
 
 [lore](cases/lore.md) and [visaroy](cases/visaroy.md) have `Repo`, `Checkout` and `Base` lines and numbered lessons under `## Lessons`. Each lesson cites the commit or PR that taught it; the runner refuses uncited lessons.
 
+A case can add `- Toolchain: DEVELOPER_DIR=<path>`. The runner refuses a missing path before starting either agent and passes the pin to create and grading for both drivers. Lore's base commit does not build with the current default Xcode, so its case pins Xcode 26.6, the version current at that commit. As a result, Lore's lesson 1, "pin the toolchain", rarely triggers.
+
 A covered lesson scores 1, a partly covered one 0.5 and a missing one 0. An issue's gate is a mean of three runs per case at least as high as the three-run baseline on the same driver. Keep the individual scores and spread so a lucky run is visible. Claude scores do not compare with Codex scores.
 
 [results.md](results.md) holds scores and verdicts only. Both case repos are private, so quotes and replay notes stay in the record folder. Model names stay in `models.json` and local transcripts.

@@ -5,6 +5,7 @@ Lore's verify skill, `verify-lore`, was written by `create-verification-skill` i
 - Repo: dhruvkelawala/lore
 - Checkout: ~/code/lore
 - Base: 0591fa83cd16e40a8685e2c3ba08ee37006413a1
+- Toolchain: DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
 
 ## Lessons
 

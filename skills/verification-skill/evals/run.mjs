@@ -143,6 +143,8 @@ function readCase(name) {
   const text = readFileSync(file, "utf8");
   const field = (label) => text.match(new RegExp(`^- ${label}: (.+)$`, "m"))?.[1].trim();
   const [repo, checkout, base] = ["Repo", "Checkout", "Base"].map(field);
+  const toolchain = field("Toolchain");
+  const developerDir = toolchain?.match(/^DEVELOPER_DIR=(.+)$/)?.[1];
   const lessons = (text.split(/^## Lessons$/m)[1] ?? "")
     .split("\n")
     .map((line) => line.match(/^(\d+)\. (.+)$/))
@@ -152,13 +154,14 @@ function readCase(name) {
   const problems = [];
   for (const [label, value] of [["Repo", repo], ["Checkout", checkout], ["Base", base]]) if (!value) problems.push(`no "- ${label}:" line`);
   if (base && !/^[0-9a-f]{40}$/.test(base)) problems.push("Base must be a full commit SHA");
+  if (toolchain && !developerDir) problems.push("Toolchain must be DEVELOPER_DIR=<path>");
   if (!lessons.length) problems.push('no numbered lessons under "## Lessons"');
   lessons.forEach((lesson, i) => {
     if (lesson.n !== i + 1) problems.push(`lesson ${lesson.n} should be numbered ${i + 1}`);
     if (!CITATION.test(lesson.text)) problems.push(`lesson ${lesson.n} cites no commit or PR`);
   });
   if (problems.length) throw new Refused(`${file}: ${problems.join("; ")}`);
-  return { name, repo, checkout: checkout.replace(/^~(?=\/)/, homedir()), base, lessons };
+  return { name, repo, checkout: checkout.replace(/^~(?=\/)/, homedir()), base, developerDir, lessons };
 }
 
 function list() {
@@ -182,6 +185,7 @@ function git(cwd, ...args) {
 // share all three, so the agent could read the hand-fixed skill on main, and an install step's hook installer would
 // write into the case repo. Later commits stay readable by hash, but no ref or reflog leads to them.
 function prepare(kase, { agent: driver, skill, skillRef }) {
+  if (kase.developerDir && !existsSync(kase.developerDir)) throw new Refused(`no toolchain at ${kase.developerDir}`);
   if (!existsSync(kase.checkout)) throw new Refused(`no checkout of ${kase.repo} at ${kase.checkout}`);
   if (spawnSync("git", ["-C", kase.checkout, "cat-file", "-e", `${kase.base}^{commit}`]).status !== 0) {
     throw new Refused(`${kase.checkout} has no commit ${kase.base}; fetch it first`);
@@ -224,6 +228,7 @@ function prepare(kase, { agent: driver, skill, skillRef }) {
     const model = driver === "codex" ? JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.eval.use : null;
     const env = (phase) => {
       const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], ...(driver === "codex" ? { CODEX_HOME: configs[phase] } : {}), PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
+      if (kase.developerDir) vars.DEVELOPER_DIR = kase.developerDir;
       for (const key of SESSION_MARKERS) delete vars[key];
       return vars;
     };

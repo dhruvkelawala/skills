@@ -18,6 +18,7 @@ const idle = ["-e", "setInterval(() => {}, 1000)"];
 emit({ type: "system", subtype: "init", model: "fake-model" });
 
 if (process.argv.includes("--json-schema")) {
+  log({ phase: "grade", developerDir: process.env.DEVELOPER_DIR });
   const verdicts = process.env.FAKE_VERDICTS.split(",");
   const step = (result) => ({ result, note: "" });
   emit({
@@ -35,6 +36,7 @@ if (process.argv.includes("--json-schema")) {
   stray.unref();
   bare.unref();
   log({
+    phase: "create", developerDir: process.env.DEVELOPER_DIR,
     devices: probeDevices(),
     cwd: process.cwd(),
     head: git("rev-parse", "HEAD"),

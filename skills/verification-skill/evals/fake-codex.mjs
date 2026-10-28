@@ -16,6 +16,7 @@ const files = (dir) => readdirSync(dir, { recursive: true, withFileTypes: true }
 const git = (...a) => spawnSync("git", a, { encoding: "utf8" }).stdout.trim();
 const seen = {
   devices: probeDevices(),
+  developerDir: process.env.DEVELOPER_DIR,
   phase, home, linkedAuth: lstatSync(join(home, "auth.json")).isSymbolicLink(),
   skills: files(join(home, "skills")), model: option("--model"), effort: option("-c"), cwd: process.cwd(),
   gh: spawnSync("gh", ["pr", "list"]).status,

@@ -33,17 +33,17 @@ function scratchSkills() {
   return { root, evals: join(root, "skills", "verification-skill", "evals") };
 }
 
-function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base = "a".repeat(40) } = {}) {
+function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base = "a".repeat(40), toolchain } = {}) {
   mkdirSync(join(evals, "cases"), { recursive: true });
   writeFileSync(
     join(evals, "cases", `${name}.md`),
-    `# ${name}\n\n- Repo: acme/${name}\n- Checkout: ${checkout}\n- Base: ${base}\n\n## Lessons\n\n${lessons.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n`,
+    `# ${name}\n\n- Repo: acme/${name}\n- Checkout: ${checkout}\n- Base: ${base}\n${toolchain ? `- Toolchain: ${toolchain}\n` : ""}\n## Lessons\n\n${lessons.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n`,
   );
 }
 
 // One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
 // create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
-function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, inventory = "succeeds", cleanupFailure = false } = {}) {
+function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, inventory = "succeeds", cleanupFailure = false, toolchain } = {}) {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -60,7 +60,9 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, in
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "add the hand-fixed verify skill");
   git(repo, "remote", "add", "origin", "https://github.com/acme/demo.git");
-  writeCase(evals, "demo", LESSONS, { checkout: repo, base });
+  const developerDir = toolchain ? join(root, "Xcode from case.app", "Contents", "Developer") : undefined;
+  if (toolchain === "present") mkdirSync(developerDir, { recursive: true });
+  writeCase(evals, "demo", LESSONS, { checkout: repo, base, toolchain: developerDir && `DEVELOPER_DIR=${developerDir}` });
 
   const home = join(root, "home");
   const bin = join(root, "bin");
@@ -72,6 +74,11 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, in
     writeFileSync(join(bin, name), `#!/bin/sh\nexec "${process.execPath}" "${join(evalsDir, script)}" "$@"\n`);
     chmodSync(join(bin, name), 0o755);
   }
+  if (toolchain) {
+    const gitPath = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+    writeFileSync(join(bin, "git"), `#!/bin/sh\nunset DEVELOPER_DIR\nexec "${gitPath}" "$@"\n`);
+    chmodSync(join(bin, "git"), 0o755);
+  }
   const simulators = join(root, "simulators.json");
   writeFileSync(simulators, JSON.stringify({ "DEMO-UDID": "Shutdown" }));
   const log = join(root, "claude.log");
@@ -79,6 +86,7 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, in
   const skillCommit = git(join(root, "skills"), "rev-parse", "--short", "HEAD");
   const env = {
     ...process.env,
+    ...(toolchain ? { DEVELOPER_DIR: join(root, "default-Xcode") } : {}),
     CLAUDECODE: "1",
     CLAUDE_CODE_CHILD_SESSION: "1",
     CLAUDE_CODE_SESSION_ID: "the-enclosing-session",
@@ -117,6 +125,7 @@ function runDemo(create = "succeeds", { agent = "claude", runs = 1, skillRef, in
       const f = join(runFolders, d, "device-guard.log");
       return existsSync(f) ? readFileSync(f, "utf8") : "";
     }).join("\n") : "",
+    developerDir,
     skillCommit,
     repo,
     base,
@@ -181,6 +190,26 @@ test("device discovery failure refuses build destinations and still passes simul
   for (const a of demo.agents) assert.deepEqual(a.devices, { ...GUARDED_DEVICES, simulatorBuild: 1, simulatorBuildOutput: "" });
   assert.match(demo.guardLog, /could not identify physical devices/);
 });
+
+for (const agent of ["codex", "claude"]) {
+  test(`a ${agent} case toolchain overrides the caller's Xcode for create and grading`, () => {
+    const demo = runDemo("succeeds", { agent, toolchain: "present" });
+    assert.equal(demo.status, 0, demo.output);
+    assert.deepEqual(demo.agents.map((a) => [a.phase, a.developerDir]), [
+      ["create", demo.developerDir],
+      ["grade", demo.developerDir],
+    ]);
+  });
+
+  test(`a missing toolchain refuses a ${agent} case before either agent starts`, () => {
+    const demo = runDemo("succeeds", { agent, toolchain: "missing" });
+    assert.equal(demo.status, 2, demo.output);
+    assert.ok(demo.output.includes(demo.developerDir), demo.output);
+    assert.deepEqual(demo.agents, []);
+    assert.equal(demo.runDir, null);
+    assert.doesNotMatch(demo.results, /^## demo,/m);
+  });
+}
 
 describe("a run", () => {
   const today = new Date().toLocaleDateString("en-CA");
