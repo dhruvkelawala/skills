@@ -7,7 +7,7 @@
 //
 // README.md says what a run does and what it needs.
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, chmodSync, closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,7 @@ const skillsDir = dirname(skillDir);
 const casesDir = join(evalsDir, "cases");
 const resultsFile = join(evalsDir, "results.md");
 const runsDir = join(homedir(), ".cache", "verification-skill-evals");
-const USAGE = "usage: node skills/verification-skill/evals/run.mjs [<case>]";
+const USAGE = "usage: node skills/verification-skill/evals/run.mjs [<case>] [--agent codex|claude] [--runs <n>]";
 // A short SHA with at least one digit, or a PR number, inside parentheses.
 const CITATION = /\([^)]*(?:\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b|#\d+)[^)]*\)/;
 // Every process an agent starts inherits this variable, so the sweep can find it after the agent exits.
@@ -59,8 +59,8 @@ Each section is one run of \`run.mjs <case>\`: the date, the skill's commit, the
 
 class Refused extends Error {}
 
-async function runCase(kase) {
-  const run = prepare(kase);
+async function runCase(kase, options) {
+  const run = prepare(kase, options);
   console.log(`${kase.name}: run folder ${run.dir}, checkout ${run.checkout}`);
   let changed = null;
   try {
@@ -142,7 +142,7 @@ function git(cwd, ...args) {
 // The checkout is a clone that shares the case repo's objects but none of its refs, config or hooks. A worktree would
 // share all three, so the agent could read the hand-fixed skill on main, and an install step's hook installer would
 // write into the case repo. Later commits stay readable by hash, but no ref or reflog leads to them.
-function prepare(kase) {
+function prepare(kase, { agent: driver }) {
   if (!existsSync(kase.checkout)) throw new Refused(`no checkout of ${kase.repo} at ${kase.checkout}`);
   if (spawnSync("git", ["-C", kase.checkout, "cat-file", "-e", `${kase.base}^{commit}`]).status !== 0) {
     throw new Refused(`${kase.checkout} has no commit ${kase.base}; fetch it first`);
@@ -167,16 +167,22 @@ function prepare(kase) {
   mkdirSync(bin);
   writeFileSync(join(bin, "gh"), GH_OFF);
   chmodSync(join(bin, "gh"), 0o755);
-  const configs = { create: join(work, "claude-create"), grade: join(work, "claude-grade") };
+  const configs = { create: join(work, `${driver}-create`), grade: join(work, `${driver}-grade`) };
   const skill = skillCommit();
-  copySkill(join(configs.create, "skills"));
-  mkdirSync(configs.grade);
+  for (const config of Object.values(configs)) {
+    copySkill(join(config, "skills"));
+    if (driver === "codex") {
+      const auth = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "auth.json");
+      if (existsSync(auth)) symlinkSync(auth, join(config, "auth.json"));
+    }
+  }
+  const model = driver === "codex" ? JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")).jobs.eval.use : null;
   const env = (phase) => {
-    const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
+    const vars = { ...process.env, ...noPush(process.env), CLAUDE_CONFIG_DIR: configs[phase], ...(driver === "codex" ? { CODEX_HOME: configs[phase] } : {}), PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: "off", GITHUB_TOKEN: "off", [MARKER]: id };
     for (const key of SESSION_MARKERS) delete vars[key];
     return vars;
   };
-  return { id, dir, work, checkout, env, skill, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
+  return { id, dir, work, checkout, env, skill, driver, model, trail: [], simulators: new Map(simulators().map((d) => [d.udid, d.state])) };
 }
 
 // The skill without its evals, which hold the answers, plus each file outside it that it links to, at the same
@@ -238,12 +244,22 @@ function agent(run, phase, prompt, schema) {
   const transcript = join(run.dir, `${phase}.jsonl`);
   const out = openSync(transcript, "w");
   const err = openSync(join(run.dir, `${phase}.stderr`), "w");
-  const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--append-system-prompt", UNATTENDED];
-  if (schema) args.push("--json-schema", JSON.stringify(schema));
+  let args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--append-system-prompt", UNATTENDED];
+  const lastMessage = join(run.dir, `${phase}.output.json`);
+  if (run.driver === "codex") {
+    args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--model", run.model.model,
+      "-c", `model_reasoning_effort=${JSON.stringify(run.model.effort)}`, "--output-last-message", lastMessage];
+    if (schema) {
+      const schemaFile = join(run.work, "grade-schema.json");
+      writeFileSync(schemaFile, JSON.stringify(schema));
+      args.push("--output-schema", schemaFile);
+    }
+    args.push(`${UNATTENDED}\n\n${prompt}`);
+  } else if (schema) args.push("--json-schema", JSON.stringify(schema));
   const started = Date.now();
   return new Promise((resolvePhase, reject) => {
     // Its own process group, so a timeout or Ctrl-C stops the agent and whatever it is running.
-    const child = spawn("claude", args, { cwd: run.checkout, env: run.env(phase), stdio: ["ignore", out, err], detached: true });
+    const child = spawn(run.driver, args, { cwd: run.checkout, env: run.env(phase), stdio: ["ignore", out, err], detached: true });
     running = child;
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -258,16 +274,16 @@ function agent(run, phase, prompt, schema) {
       closeSync(err);
       const events = readEvents(transcript);
       run.trail.push(simulatorTrail(events));
-      const result = events.findLast((e) => e.type === "result");
-      if (!result || result.is_error) {
+      const result = events.findLast((e) => e.type === (run.driver === "codex" ? "turn.completed" : "result"));
+      if (code !== 0 || interrupted || timedOut || !result || result.is_error) {
         const why = interrupted ? `, stopped by ${interrupted}` : timedOut ? `, stopped after ${MINUTES[phase]} min` : "";
         reject(new Error(`${phase}: the agent run failed (exit ${code}${why}), transcript ${transcript}`));
         return;
       }
       resolvePhase({
-        model: events.find((e) => e.type === "system" && e.subtype === "init")?.model ?? "an unknown model",
+        model: run.model?.model ?? events.find((e) => e.type === "system" && e.subtype === "init")?.model ?? "an unknown model",
         minutes: Math.round((Date.now() - started) / 60_000),
-        output: result.structured_output,
+        output: run.driver === "codex" && schema ? JSON.parse(readFileSync(lastMessage, "utf8")) : result.structured_output,
       });
     });
   });
@@ -292,6 +308,10 @@ function simulatorTrail(events) {
   const commands = new Map();
   const trail = [];
   for (const event of events) {
+    if (event.item?.type === "command_execution") {
+      trail.push(event.item.command);
+      if (/simctl\s+create/.test(event.item.command)) trail.push(event.item.aggregated_output);
+    }
     for (const part of Array.isArray(event.message?.content) ? event.message.content : []) {
       if (part.type === "tool_use" && part.name === "Bash") {
         commands.set(part.id, part.input.command);
@@ -320,19 +340,21 @@ Lessons:
 ${kase.lessons.map((l) => `${l.n}. ${l.text}`).join("\n")}`;
 }
 
-const STEP = { type: "object", properties: { result: { enum: ["passed", "failed", "skipped"] }, note: { type: "string" } }, required: ["result", "note"] };
+const STEP = { type: "object", additionalProperties: false, properties: { result: { enum: ["passed", "failed", "skipped"] }, note: { type: "string" } }, required: ["result", "note"] };
 const GRADE_SCHEMA = {
   type: "object",
+  additionalProperties: false,
   properties: {
     lessons: {
       type: "array",
       items: {
         type: "object",
+        additionalProperties: false,
         properties: { lesson: { type: "integer" }, verdict: { enum: Object.keys(POINTS) }, file: { type: "string" }, quote: { type: "string" }, why: { type: "string" } },
-        required: ["lesson", "verdict", "why"],
+        required: ["lesson", "verdict", "file", "quote", "why"],
       },
     },
-    replay: { type: "object", properties: Object.fromEntries(REPLAY.map((step) => [step, STEP])), required: REPLAY },
+    replay: { type: "object", additionalProperties: false, properties: Object.fromEntries(REPLAY.map((step) => [step, STEP])), required: REPLAY },
   },
   required: ["lessons", "replay"],
 };
@@ -449,6 +471,7 @@ function appendResult(kase, run, result, { create, grade, createLeft, gradeLeft 
   const section = [
     `## ${kase.name}, ${new Date().toLocaleDateString("en-CA")}, skill ${run.skill}`,
     "",
+    `Driver: ${run.driver}.`,
     `Score ${result.score}. Create took ${create.minutes} min, and the grade ${grade.minutes} min.`,
     `Replay: ${replay}.`,
     `Left behind, and stopped by the eval: after create: ${left(createLeft)}; after the grade: ${left(gradeLeft)}.`,
@@ -460,9 +483,24 @@ function appendResult(kase, run, result, { create, grade, createLeft, gradeLeft 
   appendFileSync(resultsFile, `${existsSync(resultsFile) ? "" : RESULTS_HEADER}\n${section}\n`);
 }
 
+function parseArgs(args) {
+  let name;
+  const options = { agent: "codex", runs: 3 };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--agent") options.agent = args[++i];
+    else if (arg === "--runs") options.runs = Number(args[++i]);
+    else if (!arg.startsWith("-") && !name) name = arg;
+    else throw new Refused(USAGE);
+  }
+  if (!["codex", "claude"].includes(options.agent)) throw new Refused("--agent must be codex or claude");
+  if (!Number.isSafeInteger(options.runs) || options.runs < 1) throw new Refused("--runs must be a positive integer");
+  return { name, ...options };
+}
+
 try {
-  const name = process.argv[2];
-  if (name) await runCase(readCase(name));
+  const { name, ...options } = parseArgs(process.argv.slice(2));
+  if (name) await runCase(readCase(name), options);
   else list();
 } catch (error) {
   console.error(error instanceof Refused ? error.message : error);

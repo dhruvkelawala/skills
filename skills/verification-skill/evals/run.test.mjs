@@ -24,6 +24,7 @@ function scratchSkills() {
   scratch.push(root);
   cpSync(join(skillsDir, "verification-skill"), join(root, "skills", "verification-skill"), { recursive: true });
   cpSync(join(skillsDir, "evidence", "references", "surfaces.md"), join(root, "skills", "evidence", "references", "surfaces.md"));
+  cpSync(join(skillsDir, "models.json"), join(root, "skills", "models.json"));
   return { root, evals: join(root, "skills", "verification-skill", "evals") };
 }
 
@@ -37,7 +38,7 @@ function writeCase(evals, name, lessons, { checkout = `/nowhere/${name}`, base =
 
 // One run of a demo case, whose repo has a base commit and a later one holding the hand-fixed verify skill. The fake
 // create agent succeeds, or with `fails` boots a simulator and dies mid-line, as after a hard kill.
-function runDemo(create = "succeeds") {
+function runDemo(create = "succeeds", { agent = "claude", runs = 1 } = {}) {
   const { root, evals } = scratchSkills();
   git(join(root, "skills"), "init", "-q");
   git(join(root, "skills"), "add", ".");
@@ -59,8 +60,10 @@ function runDemo(create = "succeeds") {
   const home = join(root, "home");
   const bin = join(root, "bin");
   mkdirSync(home);
+  mkdirSync(join(home, ".codex"));
+  writeFileSync(join(home, ".codex", "auth.json"), "fake sign-in\n");
   mkdirSync(bin);
-  for (const [name, script] of [["claude", "fake-claude.mjs"], ["xcrun", "fake-xcrun.mjs"]]) {
+  for (const [name, script] of [["claude", "fake-claude.mjs"], ["codex", "fake-codex.mjs"], ["xcrun", "fake-xcrun.mjs"]]) {
     writeFileSync(join(bin, name), `#!/bin/sh\nexec "${process.execPath}" "${join(evalsDir, script)}" "$@"\n`);
     chmodSync(join(bin, name), 0o755);
   }
@@ -76,6 +79,7 @@ function runDemo(create = "succeeds") {
     CLAUDE_CODE_SESSION_ID: "the-enclosing-session",
     CLAUDE_CODE_OAUTH_TOKEN: "eval-oauth-token",
     HOME: home,
+    CODEX_HOME: join(home, ".codex"),
     PATH: `${bin}:${process.env.PATH}`,
     FAKE_CASE_REPO: repo,
     FAKE_CLAUDE_LOG: log,
@@ -84,15 +88,18 @@ function runDemo(create = "succeeds") {
     FAKE_VERDICTS: "covered,partly,missing",
     FAKE_XCRUN_STATE: simulators,
   };
-  const { status, stdout, stderr } = runner(evals, ["demo"], env);
+  const args = ["demo", "--runs", String(runs)];
+  if (agent !== "default") args.push("--agent", agent);
+  const { status, stdout, stderr } = runner(evals, args, env);
   const results = existsSync(join(evals, "results.md")) ? readFileSync(join(evals, "results.md"), "utf8") : "";
-  const runs = join(home, ".cache", "verification-skill-evals");
+  const runFolders = join(home, ".cache", "verification-skill-evals");
   return {
     status,
     output: `${stdout}${stderr}`,
     section: results.slice(results.lastIndexOf("\n## ") + 1),
     seen: existsSync(log) ? JSON.parse(readFileSync(log, "utf8").split("\n")[0]) : {},
-    runDir: existsSync(runs) ? join(runs, readdirSync(runs)[0]) : null,
+    agents: existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) : [],
+    runDir: existsSync(runFolders) ? join(runFolders, readdirSync(runFolders)[0]) : null,
     skillCommit,
     repo,
     base,
@@ -117,6 +124,25 @@ describe("cases", () => {
     assert.equal(status, 2);
     assert.match(stderr, /lesson 2 cites no commit or PR/);
   });
+});
+
+test("Codex is the default, with isolated homes, linked sign-in, configured model and a structured grade", () => {
+  const demo = runDemo("succeeds", { agent: "default" });
+  assert.equal(demo.status, 0, demo.output);
+  assert.deepEqual(demo.agents.map((a) => a.phase), ["create", "grade"], demo.output);
+  assert.equal(new Set(demo.agents.map((a) => a.home)).size, 2);
+  for (const a of demo.agents) {
+    assert.equal(a.linkedAuth, true);
+    assert.equal(a.model, "gpt-6.1-sol");
+    assert.equal(a.effort, 'model_reasoning_effort="xhigh"');
+    assert.ok(a.skills.includes(join("verification-skill", "SKILL.md")));
+  }
+  assert.match(demo.section, /Driver: codex/);
+  assert.match(demo.section, /Score 1\.5 of 3 \(50%\)/);
+  assert.notEqual(demo.seen.gh, 0);
+  assert.notEqual(demo.seen.push, 0);
+  for (const pid of demo.seen.strays) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  assert.ok(!existsSync(demo.seen.cwd));
 });
 
 describe("a run", () => {
