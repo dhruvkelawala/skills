@@ -29,7 +29,7 @@
     "building-with-typesafe-jev": { "source": "aaddrick/building-with-typesafe-jev", "sourceType": "github", "sourceUrl": "https://github.com/aaddrick/building-with-typesafe-jev.git", "ref": "a46856c9fbc890653891e25f85ee2f16e1d9b513", "skillPath": "skills/building-with-typesafe-jev/SKILL.md" },
     "cua-driver": { "source": "trycua/cua", "sourceType": "github", "sourceUrl": "https://github.com/trycua/cua.git", "ref": "c2a21e764e2cc8b3a0a187aa9ca7d688265fe389", "skillPath": "libs/cua-driver/rust/Skills/cua-driver/SKILL.md" },
     "linear-cli": { "source": "schpet/linear-cli", "sourceType": "github", "sourceUrl": "https://github.com/schpet/linear-cli.git", "ref": "63463ac8a31d7a14b7a7d5964c363853d0089842", "skillPath": "skills/linear-cli/SKILL.md" },
-    "mac-homelab": { "source": "dhruvkelawala/mac-homelab", "sourceType": "github", "sourceUrl": "https://github.com/dhruvkelawala/mac-homelab.git", "ref": "ce0e8cdd576ca07cb01d32259baea4e7e0c4f959", "skillPath": "SKILL.md" },
+    "mac-homelab": { "source": "dhruvkelawala/mac-homelab", "sourceType": "github", "sourceUrl": "https://github.com/dhruvkelawala/mac-homelab.git", "ref": "44ceb4d015ce848b38517a57f078c3366c39b2e0", "skillPath": "SKILL.md" },
     "visual-explainer": { "source": "dhruvkelawala/visual-explainer", "sourceType": "github", "sourceUrl": "https://github.com/dhruvkelawala/visual-explainer.git", "ref": "d0b817f7eadcd0733e8aefb6d0a10275e53b5691", "skillPath": "plugins/visual-explainer/SKILL.md" }
   }
 }
