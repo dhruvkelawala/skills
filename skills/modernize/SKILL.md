@@ -9,7 +9,7 @@ Modernize the idea, not just the branch. A clean rebase doesn't prove the PR sti
 
 Invoke as `/modernize <PR number | URL>`. The `day` morning report offers it for the user's PRs that are going stale.
 
-`gh pr` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it. `gh api` fills `{owner}` and `{repo}` from the current checkout.
+For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). `gh api` fills `{owner}` and `{repo}` from the current checkout.
 
 ## Rules
 
@@ -29,7 +29,7 @@ Fetch the base and the PR's head: `git fetch origin <base> pull/<n>/head`. Recor
 
 ## 2. Read what changed around it
 
-Read the base since the merge base: `git log --oneline <merge base>..origin/<base>`, and `git diff --stat <merge base> origin/<base> -- <the PR's files>`. Search merged and open PRs on the same paths or behaviour: `gh pr list --state all --search "<words from the goal>"` (REST: `gh api "search/issues?q=repo:{owner}/{repo}+is:pr+<words>"`).
+Read the base since the merge base: `git log --oneline <merge base>..origin/<base>`, and `git diff --stat <merge base> origin/<base> -- <the PR's files>`. Search merged and open PRs on the same paths or behaviour: `gh pr list --state all --limit 50 --search "<words from the goal>"` (REST: `gh api "search/issues?q=repo:{owner}/{repo}+is:pr+<words>&per_page=50"`).
 
 Answer each question with its evidence, a commit, a PR or a `path:line`:
 

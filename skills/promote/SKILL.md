@@ -11,9 +11,9 @@ Write every fix for the next agent. It sees only the files it opens, copies the 
 
 ## 1. Collect corrections
 
-The target repo is the PR's repo, or the current checkout. Read every source below that exists, and list the ones that do not:
+The target repo is the PR's repo, or the current checkout. For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). Read every source below that exists, and list the ones that do not:
 
-- The PR's reviews, review comments and issue comments through `gh api` REST (`pulls/<n>/reviews`, `pulls/<n>/comments`, `issues/<n>/comments`), and any `/pr-watch` repair reports.
+- The PR's reviews, review comments and issue comments through bounded GraphQL or REST, and any `/pr-watch` repair reports. REST routes include `pulls/<n>/reviews`, `pulls/<n>/comments` and `issues/<n>/comments`.
 - `/issue-to-pr` run records at `~/.agent/issue-to-pr/<repo>/*.md`, and at the older `<git dir>/issue-to-pr/*.md`. Check both `git rev-parse --git-dir` and `git rev-parse --git-common-dir`.
 - review-ready exceptions recorded in PR descriptions.
 - The current session's transcript, or the one `--session` names. [Session mining](references/session-mining.md) says where each host keeps transcripts and how to read them.

@@ -25,9 +25,9 @@ The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the reposito
 
 This thread owns its PR until the PR merges. [The PR's thread](references/pr-thread.md) says what that means, here and in an `/apr` thread: the words the user says, such as "land" and "more", the fixes the thread makes on its own, the repair budget for the PR's whole life, when it watches, and the cleanup on merge. Each "repair" in the stages below is one its [repair budget](references/pr-thread.md#repair-budget) defines, and goes in the record the way it says.
 
-## GitHub quota
+## GitHub API
 
-`gh pr`, `gh issue view`, `gh repo view` and `gh api graphql` spend the GraphQL quota that every agent on the account shares. When one fails with `API rate limit exceeded` or `RATE_LIMITED`, run the REST call named beside it, which draws on a separate quota, and carry on. `gh api` fills `{owner}` and `{repo}` from the current checkout. The pr-watch gate and the ship script fall back on their own.
+For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). `gh api` fills `{owner}` and `{repo}` from the current checkout. The pr-watch gate and the ship script fall back on their own.
 
 ## Brief
 
