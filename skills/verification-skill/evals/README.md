@@ -22,6 +22,12 @@ With no case, the runner lists the cases. `--runs` takes a positive integer and 
 
 It needs macOS, git and node, plus the selected CLI signed in. Codex uses the `eval` job in [models.json](../../models.json) for both create and grading. Each agent gets a separate Codex home with the skill and linked sign-in from `$CODEX_HOME/auth.json`, or `~/.codex/auth.json`. Sign-in is never copied or printed. Claude uses separate config folders and needs sign-in through environment variables.
 
+### Model availability
+
+When operating the runner, follow [model-policy](../../model-policy/SKILL.md). The default driver and an `--agent` flag you chose yourself are preferences. If that driver is known unavailable, choose the available one before starting. If a batch fails on availability, let the runner finish its cleanup, then invoke the same command with `--agent <available driver>` as a fresh whole batch. Keep the case, run count and skill revision the same. The runner ends the failed batch; you start its replacement.
+
+Each batch uses one driver for both create and grading and records that driver with its scores. Keep completed scores from a failed batch in its record folders; never splice them into the replacement or compare scores across drivers. Use or establish a baseline on the replacement driver. When the user explicitly requires a driver, report its unavailability and resume only on that driver unless the user authorizes fallback. A failed grade, cleanup, app run or safety check follows its normal failure handling.
+
 `--skill-ref` resolves a commit once for the batch and copies the skill and linked files from it. Without it, the runner uses the local skill and marks uncommitted skill changes. The runner itself and model settings come from the checkout running the command.
 
 `--wait-for-idle` waits until the five-minute load average is below 8 and no other `evals/run.mjs`, `xcodebuild`, `cargo` or `expo run` is running. `xcodebuild -license check` is allowed. Use it for baseline and comparison runs. Run Visaroy before Lore, and keep batches sequential.

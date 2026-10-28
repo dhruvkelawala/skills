@@ -13,6 +13,16 @@ test("Codex builds use the high-effort independent verifier and retain the revie
   assert.equal(jobs.reviewers.use.model, "claude-opus-5-5");
 });
 
+test("skill jobs continue on the thread's family when their preferred family is unavailable", () => {
+  for (const [name, job] of Object.entries(jobs)) {
+    assert.equal(job.ifUnavailable, job.members ? "skip" : "thread", name);
+  }
+  assert.equal(jobs["second-opinion"].onClaudeThread.engine, "codex");
+  assert.equal(jobs["second-opinion"].onCodexThread.engine, "claude");
+  assert.equal(jobs.verifier.onClaudeThread.driver, "codex");
+  assert.equal(jobs.verifier.onCodexThread.driver, "claudeAgent");
+});
+
 const skillText = readdirSync(SKILLS, { recursive: true })
   .filter((path) => path.endsWith(".md"))
   .map((path) => ({ path, text: readFileSync(join(SKILLS, path), "utf8") }));

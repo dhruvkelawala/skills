@@ -98,6 +98,6 @@ Report one outcome, with per-feature coverage, the entry points driven, capture 
 - `changed` with the proven corrections as one local diff, or as one PR through `/apr` when the user asked to ship.
 - `blocked` with the feature, the route tried and what is missing.
 
-Changes to this skill are measured with [its eval](evals/README.md).
+Changes to this skill are measured with [its eval](evals/README.md). Follow that page's model-availability instructions when choosing the `eval` job's driver or restarting a failed batch on the available family. A default driver is a preference; only an explicit user driver requirement prevents fallback.
 
 Adapted from pstack's create-verification-skill and maintain-verification-skill by Lauren Tan (MIT), cursor/plugins@e5a8186, and its readiness rules from cursor/plugins@c49b37a2c0.
