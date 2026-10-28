@@ -655,7 +655,7 @@ test("a thread longer than one page of comments counts as a person's, with its n
 // A head with no check runs or statuses, in a repository shaped like one with no CI: Actions has no
 // workflows, main requires nothing, nothing has posted results on main or on the last merged PR's
 // head, and five apps register empty check suites on every commit.
-function headWithoutChecks(overrides = {}) {
+function headWithoutChecks(overrides = {}, options = {}) {
   const emptySuite = (slug) => ({ app: { slug }, status: "queued", conclusion: null, latest_check_runs_count: 0 });
   const answers = {
     graphql: { data: { repository: { pullRequest: {
@@ -683,8 +683,8 @@ function headWithoutChecks(overrides = {}) {
     }
     return answer;
   };
-  return fetchSnapshot({ owner: "o", name: "r" }, 7, runGh)
-    .then((snapshot) => evaluateGate({ ...snapshot, pr: { ...snapshot.pr, expectedHead: HEAD } }));
+  return fetchSnapshot({ owner: "o", name: "r" }, 7, runGh, options)
+    .then((snapshot) => evaluateGate({ ...snapshot, pr: { ...snapshot.pr, expectedHead: HEAD } }, options));
 }
 
 for (const [name, overrides] of [
@@ -697,6 +697,19 @@ for (const [name, overrides] of [
     assert.deepEqual(result.notes, ["No CI in this repository, so there are no checks to wait on"]);
   });
 }
+
+test("verification: a private repository on a plan without rulesets has no ruleset checks to wait for", async () => {
+  const plan = { httpError: "Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)" };
+  const result = await headWithoutChecks({ "repos/o/r/rules/branches/main": plan }, { forVerification: true });
+  assert.equal(result.state, "ready", result.reasons.join("; "));
+});
+
+test("verification: rules nobody may read keep the required checks unknown", async () => {
+  const denied = { httpError: "Resource not accessible by integration (HTTP 403)" };
+  const result = await headWithoutChecks({ "repos/o/r/rules/branches/main": denied }, { forVerification: true });
+  assert.equal(result.state, "pending");
+  assert.ok(result.reasons.includes("Required checks are unknown"), result.reasons.join("; "));
+});
 
 for (const [name, overrides] of [
   ["an active workflow", { "repos/o/r/actions/workflows": { total_count: 1, workflows: [{ name: "ci", state: "active" }] } }],
