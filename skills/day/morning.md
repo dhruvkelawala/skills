@@ -36,39 +36,49 @@ While the prep runs, gather each section's lines.
 ````md
 Morning. 3 builds to start, 2 PRs wait on your review, 1 run stopped last night.
 
-Builds to start
+### Builds to start
+
 1. [app#31: Rate-limit the export endpoint](https://github.com/<owner>/app/issues/31) · unblocks #35
 2. [app#32: Add a --dry-run flag to import](https://github.com/<owner>/app/issues/32) · ready 9 days, the oldest in app
 3. [app#33: Show the row count after export](https://github.com/<owner>/app/issues/33) · ready 4 days
+
 And 12 more ready to build.
 
-Almost ready
+### Almost ready
+
 4. [app#34: Onboarding loses people on step two](https://github.com/<owner>/app/issues/34) · missing: which screen loses people
 
-Review queue
+### Review queue
+
 5. [app#7: Retry fetches on a 5xx](https://github.com/<owner>/app/pull/7) · teammate · 67 lines · prepped: 1 P1, tour in its Guide tab
 6. [app#5: Log each retry](https://github.com/<owner>/app/pull/5) · teammate · 12 lines · sits on #7
 
-Your open PRs
+### Your open PRs
+
 7. [app#21: Stream the export as CSV](https://github.com/<owner>/app/pull/21) · checks failing
 8. [app#19: Cache the schema per request](https://github.com/<owner>/app/pull/19) · approved, checks pass
 
-Going stale
+### Going stale
+
 9. [app#20: Move the config loader to TOML](https://github.com/<owner>/app/pull/20) · quiet 20 days
 
-Late comments
+### Late comments
+
 10. [app#81: Retry budget](https://github.com/<owner>/app/pull/81) · merged 3 days ago · alice says the empty case breaks on main
 
-Stopped last night
+### Stopped last night
+
 11. [Build #12: cache layer](t3-thread://v1/<threadId>) · stopped at stage 2, building criterion 2 of 3
 
 Strain: 38 GB free on disk, biggest ~/Library (300 GB, of which ~/Library/Developer 120 GB).
+
 Progress page for web could not be built: linear: not signed in.
 
 Reply with the builds to start, such as "start 1 and 3". `/pr-review https://github.com/<owner>/app/pull/7` reviews line 5 from its prep, `/modernize https://github.com/<owner>/app/pull/20` says whether line 9 should still land, and "go on 11" restarts a stopped run.
 ````
 
 - The sections come in this order, under these names. Leave out a section with nothing in it, and its count in the first line.
+- Each section name is a `###` heading with a blank line under it, and a blank line ends each list. A numbered list that starts past 1 can't begin under a plain line of text, and a line right under a list joins its last item, so without them the report renders as one block of text.
 - Number every line in one sequence, so a reply can name any line.
 - **Builds to start**, **Your open PRs** and **Going stale** list their first 10 in the script's order, then count the rest in one line. Your open PRs are the ones updated in the last 14 days, and the rest are going stale, so each of your open PRs is on one line.
 - The last line offers `/modernize <its URL>` for the first **Going stale** PR, which rebases it or says why it should change or close.
