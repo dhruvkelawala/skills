@@ -166,7 +166,7 @@ export function evaluateGate(snapshot, options = {}) {
   }
 
   for (const reviewer of options.reviewers ?? []) {
-    const verdict = reviewerVerdict(snapshot, head, reviewer, options.requestComment, options.forVerification);
+    const verdict = reviewerVerdict(snapshot, head, reviewer, options.requestComment);
     if (verdict.blocked) blocked.push(verdict.blocked);
     if (verdict.pending) pending.push(verdict.pending);
   }
@@ -199,12 +199,7 @@ function unansweredReviews(snapshot) {
   });
 }
 
-// A reviewer has covered the exact HEAD when it posted a review object bound to
-// that commit, or (for reviewers that signal through PR-level comments or
-// reactions) left a comment or a "+1" reaction newer than both the HEAD commit
-// and the newest request comment. An "eyes" reaction newer than any "+1" means
-// it is still working. Anything older than that floor is stale evidence.
-function reviewerVerdict(snapshot, head, reviewer, requestComment, forVerification) {
+function reviewerVerdict(snapshot, head, reviewer, requestComment) {
   const isReviewer = (login) => sameLogin(login, reviewer);
   const label = `Reviewer ${reviewer}`;
   const pr = snapshot?.pr ?? {};
@@ -219,7 +214,7 @@ function reviewerVerdict(snapshot, head, reviewer, requestComment, forVerificati
   if (headReviews.some((r) => r.state === "CHANGES_REQUESTED")) {
     return { blocked: `${label} requested changes on the current HEAD` };
   }
-  if (forVerification && sameLogin(reviewer, "chatgpt-codex-connector")) {
+  if (sameLogin(reviewer, "chatgpt-codex-connector")) {
     const summary = (snapshot?.comments ?? []).findLast((c) =>
       isReviewer(c.author) && String(c.body ?? "").includes("<!-- codex-review-state:v1 "));
     if (summary) {
