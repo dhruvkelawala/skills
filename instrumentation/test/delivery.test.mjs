@@ -64,3 +64,25 @@ test('a bounded hook still delivers accepted events when later requests are refu
     assert.equal((await status(config)).rejected, 1);
   } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rm(dir, { recursive: true, force: true }); }
 });
+
+test('expected failing tests stay distinct from evidence failures at the backend boundary', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'skill-expected-red-'));
+  const bodies = [];
+  const server = createServer(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    bodies.push(JSON.parse(raw));
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const config = { enabled: true, directory: dir, endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test' };
+    const head = 'a'.repeat(40);
+    const evidence = [{ uri: 'https://example.org/evidence', sha256: 'b'.repeat(64), head, result: 'fail', expires: '2100-01-01T00:00:00Z' }];
+    for (const reason of ['expected-red', 'recovered', 'unrecovered']) {
+      await emit(config, { ...event, kind: 'gate', eventKey: reason, head, evidence, outcome: 'failed', reason, judge: 'node-test', rubric: 'acceptance/v1' });
+      await flush(config);
+    }
+    assert.equal(bodies.filter((b) => b.name === 'evidence-failure').length, 1, 'only unrecovered failure should alert');
+    assert.equal(bodies.filter((b) => b.resourceSpans?.[0].scopeSpans[0].spans[0].attributes.some((a) => a.key === 'langfuse.observation.level' && a.value.stringValue === 'ERROR')).length, 1);
+  } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rm(dir, { recursive: true, force: true }); }
+});

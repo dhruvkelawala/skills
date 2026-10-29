@@ -5,6 +5,7 @@ import { digest, metadataEvent } from './contract.mjs';
 const defaults = { maxEvents: 1000, maxBytes: 16 * 1024 * 1024, maxAttempts: 8, retryMs: 1000, timeoutMs: 3000 };
 
 export function ingestion(event) {
+  const expectedFailure = ['expected-red', 'recovered'].includes(event.reason);
   const traceId = digest(event.workflow).slice(0, 32);
   const invocationId = digest([event.workflow, event.attempt, event.invocation].join(':')).slice(0, 16);
   const id = event.kind === 'skill.started' ? invocationId : event.eventId.slice(0, 16);
@@ -12,7 +13,7 @@ export function ingestion(event) {
   const attribute = (key, value) => ({ key, value: { stringValue: typeof value === 'string' ? value : JSON.stringify(value) } });
   const attributes = [attribute('session.id', event.workflow), attribute('langfuse.trace.name', 'skill-workflow'), attribute('langfuse.trace.tags', [event.skill, 'skill-run/v1']), attribute('langfuse.observation.type', event.kind === 'request' ? 'generation' : 'span')];
   for (const [key, value] of Object.entries(event)) if (value !== null) attributes.push(attribute('langfuse.observation.metadata.' + key, value));
-  if (event.execution === 'failed' || event.outcome === 'failed') attributes.push(attribute('langfuse.observation.level', 'ERROR'));
+  if (!expectedFailure && (event.execution === 'failed' || event.outcome === 'failed')) attributes.push(attribute('langfuse.observation.level', 'ERROR'));
   if (event.kind === 'request') {
     if (event.model) attributes.push(attribute('langfuse.observation.model.name', event.model));
     if (event.usage) attributes.push(attribute('langfuse.observation.usage_details', usageDetails(event.usage)));
@@ -21,7 +22,7 @@ export function ingestion(event) {
   const span = { traceId, spanId: id, name: event.kind === 'request' ? 'provider.request' : event.kind, kind: 1, startTimeUnixNano: nanos, endTimeUnixNano: nanos, attributes };
   if (parent) span.parentSpanId = parent;
   const trace = { resourceSpans: [{ resource: { attributes: [attribute('service.name', 'skill-observability-pilot')] }, scopeSpans: [{ scope: { name: 'skill-run/v1' }, spans: [span] }] }] };
-  const score = event.kind === 'gate' && event.outcome !== 'unknown' ? { id: digest(event.eventId + ':score').slice(0, 32), traceId, observationId: id, name: 'evidence-failure', dataType: 'BOOLEAN', value: event.outcome === 'failed' ? 1 : 0, comment: JSON.stringify({ evidence: event.evidence, judge: event.judge, rubric: event.rubric }) } : null;
+  const score = event.kind === 'gate' && !expectedFailure && event.outcome !== 'unknown' ? { id: digest(event.eventId + ':score').slice(0, 32), traceId, observationId: id, name: 'evidence-failure', dataType: 'BOOLEAN', value: event.outcome === 'failed' ? 1 : 0, comment: JSON.stringify({ evidence: event.evidence, judge: event.judge, rubric: event.rubric }) } : null;
   const measured = event.kind === 'request' && event.usage?.input != null && event.usage?.output != null && (event.usage.inputIncludesCache === true || event.usage.inputIncludesCache === false && event.usage.cacheRead != null && event.usage.cacheWrite != null) ? { id: digest(event.request + ':tokens').slice(0, 32), traceId, observationId: id, name: 'runtime-tokens', dataType: 'NUMERIC', value: Object.values(usageDetails(event.usage)).reduce((n, v) => n + v, 0), comment: JSON.stringify({ source: event.request, schema: event.schema, measurement: 'runtime-counter', evidence: 'provider-request', priceBasis: null }) } : null;
   return { trace, scores: [score, measured].filter(Boolean) };
 }
