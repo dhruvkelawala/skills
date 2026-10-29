@@ -954,3 +954,177 @@ Left behind, and stopped by the eval: after create: not recorded before the orig
 | 13. Catch short-lived states from video, and stop recorders in a `finally` (7fb75647). | partly |
 
 Run 3's create completed, but its first grader stopped on model capacity. Its saved create patch was restored exactly and graded with the same model after the quiet-machine gate. The original create-phase sweep inventory was not recorded; both failed-run and recovery cleanup completed. Grader restart load (1, 5, 15 min): 4.54638671875, 7.869140625, 15.44482421875.
+
+## visaroy, 2026-10-28, skill c8c439f
+
+Driver: codex. Runs: 1.
+Mean 15 of 19 (79%). Spread 0 (15 to 15).
+
+### Run 1: Score 15 of 19 (79%). Create took 44 min, and the grade 5 min.
+Starting load (1, 5, 15 min): 6.1640625, 7.2216796875, 6.57275390625.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Each paid external dependency gets an off and a live mode that doctor prints. | partly |
+| 2. Flag fixtures with absolute dates. | missing |
+| 3. Run helpers on GNU and BSD tools. | partly |
+| 4. Bind to loopback, and have doctor prove it. | covered |
+| 5. Prove recipes on a clean PATH. | covered |
+| 6. Open each capture at full size before calling it proof. | partly |
+| 7. Reach deep states through a dev-only seed, and say what it skips. | partly |
+| 8. Blank build-time public variables too. | covered |
+| 9. Prove the production-build launch separately. | partly |
+| 10. For each spec, list its mocks, what it asserts and the credentials the test process reads. | covered |
+| 11. Name each environment and which ones a run may drive. | covered |
+| 12. Environment guards fail closed. | covered |
+| 13. Record the revision the target actually serves. | covered |
+| 14. Point at the source instead of copying changing values. | covered |
+| 15. One unmocked recipe per feature; label mocked ones UI-only. | covered |
+| 16. Helpers need a fallback when a shared API quota runs out. | covered |
+| 17. Never echo URLs or env values. | partly |
+| 18. Route every harness `webServer` and `reuseExistingServer` to the owned instance. | covered |
+| 19. Claim a port per run and stop the whole process group. | covered |
+
+## visaroy, 2026-10-28, skill c8c439f
+
+Driver: codex. Runs: 1.
+Mean 13.5 of 19 (71%). Spread 0 (13.5 to 13.5).
+
+### Run 1: Score 13.5 of 19 (71%). Create took 39 min, and the grade 4 min.
+Starting load (1, 5, 15 min): 6.0751953125, 6.39892578125, 6.193359375.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Each paid external dependency gets an off and a live mode that doctor prints. | partly |
+| 2. Flag fixtures with absolute dates. | missing |
+| 3. Run helpers on GNU and BSD tools. | partly |
+| 4. Bind to loopback, and have doctor prove it. | covered |
+| 5. Prove recipes on a clean PATH. | covered |
+| 6. Open each capture at full size before calling it proof. | partly |
+| 7. Reach deep states through a dev-only seed, and say what it skips. | missing |
+| 8. Blank build-time public variables too. | covered |
+| 9. Prove the production-build launch separately. | missing |
+| 10. For each spec, list its mocks, what it asserts and the credentials the test process reads. | covered |
+| 11. Name each environment and which ones a run may drive. | covered |
+| 12. Environment guards fail closed. | covered |
+| 13. Record the revision the target actually serves. | covered |
+| 14. Point at the source instead of copying changing values. | covered |
+| 15. One unmocked recipe per feature; label mocked ones UI-only. | covered |
+| 16. Helpers need a fallback when a shared API quota runs out. | partly |
+| 17. Never echo URLs or env values. | partly |
+| 18. Route every harness `webServer` and `reuseExistingServer` to the owned instance. | covered |
+| 19. Claim a port per run and stop the whole process group. | covered |
+
+## visaroy, 2026-10-29, skill c8c439f
+
+Driver: codex. Runs: 1.
+Mean 13.5 of 19 (71%). Spread 0 (13.5 to 13.5).
+
+### Run 1: Score 13.5 of 19 (71%). Create took 43 min, and the grade 13 min.
+Starting load (1, 5, 15 min): 3.90576171875, 4.373046875, 4.349609375.
+Replay: launch passed, doctor passed, drive passed, cleanup passed.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Each paid external dependency gets an off and a live mode that doctor prints. | partly |
+| 2. Flag fixtures with absolute dates. | missing |
+| 3. Run helpers on GNU and BSD tools. | partly |
+| 4. Bind to loopback, and have doctor prove it. | covered |
+| 5. Prove recipes on a clean PATH. | partly |
+| 6. Open each capture at full size before calling it proof. | partly |
+| 7. Reach deep states through a dev-only seed, and say what it skips. | missing |
+| 8. Blank build-time public variables too. | covered |
+| 9. Prove the production-build launch separately. | missing |
+| 10. For each spec, list its mocks, what it asserts and the credentials the test process reads. | covered |
+| 11. Name each environment and which ones a run may drive. | covered |
+| 12. Environment guards fail closed. | covered |
+| 13. Record the revision the target actually serves. | covered |
+| 14. Point at the source instead of copying changing values. | covered |
+| 15. One unmocked recipe per feature; label mocked ones UI-only. | covered |
+| 16. Helpers need a fallback when a shared API quota runs out. | partly |
+| 17. Never echo URLs or env values. | covered |
+| 18. Route every harness `webServer` and `reuseExistingServer` to the owned instance. | covered |
+| 19. Claim a port per run and stop the whole process group. | covered |
+
+## lore, 2026-10-29, skill c8c439f
+
+Driver: codex. Runs: 1.
+Mean 0 of 13 (0%). Spread 0 (0 to 0).
+
+### Run 1: Score 0 of 13 (0%). Create took 14 min, and the grade 1 min.
+Starting load (1, 5, 15 min): 3.93505859375, 4.23828125, 4.2392578125.
+Replay: launch skipped, doctor skipped, drive skipped, cleanup skipped.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the build toolchain in a repo file and build through it. | missing |
+| 2. On a person's own device, back up their data first and confirm the new build loaded. | missing |
+| 3. Evidence ends with a publish command whose links a reviewer can open. | missing |
+| 4. Open each published link where the reviewer reads, such as T3 on a phone. | missing |
+| 5. Pass twice in a row with retries off, with unique data and storage checked before and after. | missing |
+| 6. Dismiss known system prompts at every step, and delete what each test creates. | missing |
+| 7. Name driver sessions per run. | missing |
+| 8. Say which claims each build configuration can support, such as dev builds and feel. | missing |
+| 9. Give each run its own driver state directory. | missing |
+| 10. Link to the file that owns a version pin instead of copying it. | missing |
+| 11. Don't assume the seeded layout; wait for an element before measuring it. | missing |
+| 12. A measurement must require that something was measured. | missing |
+| 13. Catch short-lived states from video, and stop recorders in a `finally`. | missing |
+
+## lore, 2026-10-29, skill c8c439f
+
+Driver: codex. Runs: 1.
+Mean 9 of 13 (69%). Spread 0 (9 to 9).
+
+### Run 1: Score 9 of 13 (69%). Create took 151 min, and the grade 15 min.
+Starting load (1, 5, 15 min): 3.060546875, 7.93896484375, 10.8486328125.
+Replay: launch passed, doctor passed, drive failed, cleanup passed.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the build toolchain in a repo file and build through it. | missing |
+| 2. On a person's own device, back up their data first and confirm the new build loaded. | partly |
+| 3. Evidence ends with a publish command whose links a reviewer can open. | covered |
+| 4. Open each published link where the reviewer reads, such as T3 on a phone. | missing |
+| 5. Pass twice in a row with retries off, with unique data and storage checked before and after. | partly |
+| 6. Dismiss known system prompts at every step, and delete what each test creates. | partly |
+| 7. Name driver sessions per run. | covered |
+| 8. Say which claims each build configuration can support, such as dev builds and feel. | covered |
+| 9. Give each run its own driver state directory. | covered |
+| 10. Link to the file that owns a version pin instead of copying it. | covered |
+| 11. Don't assume the seeded layout; wait for an element before measuring it. | covered |
+| 12. A measurement must require that something was measured. | covered |
+| 13. Catch short-lived states from video, and stop recorders in a `finally`. | partly |
+
+## lore, 2026-10-29, skill c8c439f
+
+Driver: codex. Runs: 1.
+Mean 0 of 13 (0%). Spread 0 (0 to 0).
+
+### Run 1: Score 0 of 13 (0%). Create took 23 min, and the grade 1 min.
+Starting load (1, 5, 15 min): 2.06982421875, 7.62646484375, 14.6376953125.
+Replay: launch skipped, doctor skipped, drive skipped, cleanup skipped.
+Left behind, and stopped by the eval: after create: nothing; after the grade: nothing.
+
+| Lesson | Verdict |
+| --- | --- |
+| 1. Pin the build toolchain in a repo file and build through it. | missing |
+| 2. On a person's own device, back up their data first and confirm the new build loaded. | missing |
+| 3. Evidence ends with a publish command whose links a reviewer can open. | missing |
+| 4. Open each published link where the reviewer reads, such as T3 on a phone. | missing |
+| 5. Pass twice in a row with retries off, with unique data and storage checked before and after. | missing |
+| 6. Dismiss known system prompts at every step, and delete what each test creates. | missing |
+| 7. Name driver sessions per run. | missing |
+| 8. Say which claims each build configuration can support, such as dev builds and feel. | missing |
+| 9. Give each run its own driver state directory. | missing |
+| 10. Link to the file that owns a version pin instead of copying it. | missing |
+| 11. Don't assume the seeded layout; wait for an element before measuring it. | missing |
+| 12. A measurement must require that something was measured. | missing |
+| 13. Catch short-lived states from video, and stop recorders in a `finally`. | missing |
