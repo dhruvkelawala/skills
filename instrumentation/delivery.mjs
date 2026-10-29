@@ -84,20 +84,23 @@ async function rejected(c) {
   await durable(path, { rejected: count + 1 });
 }
 
-export async function emit(config, input) {
+export async function emit(config, input, { remember = false } = {}) {
   return locked(config, async (c) => {
-    const event = metadataEvent(input);
+    let event = metadataEvent(input);
     if (event.kind === 'request') {
       if (!event.request || !/^[a-f0-9]{64}$/.test(event.request)) return { status: 'unavailable' };
       event.eventId = event.request;
     }
-    const body = ingestion(event);
     const existing = await entries(c);
     const path = join(c.directory, event.eventId + '.json');
     const old = existing.find((item) => item.path === path);
-    const value = { body, attempts: old?.attempts ?? 0, next: old?.next ?? 0, exhausted: old?.exhausted ?? false };
+    const remembered = event.kind === 'request' && (remember || old?.remember === true);
+    if (remembered && old?.event) event = { ...old.event, usage: event.usage, time: event.time, execution: event.execution ?? old.event.execution };
+    const body = ingestion(event);
+    if (old?.delivered && digest(JSON.stringify(old.body)) === digest(JSON.stringify(body))) return { status: 'accepted', eventId: event.eventId, duplicate: true };
+    const value = { body, event: remembered ? event : undefined, remember: remembered, delivered: false, attempts: old?.attempts ?? 0, next: old?.next ?? 0, exhausted: old?.exhausted ?? false };
     const bytes = Buffer.byteLength(JSON.stringify(value));
-    if ((!old && existing.length >= c.maxEvents) || bytes + existing.filter((e) => e.path !== path).reduce((n, e) => n + Buffer.byteLength(JSON.stringify(e)), 0) > c.maxBytes) {
+    if (((!old || old.delivered) && existing.filter((e) => !e.delivered).length >= c.maxEvents) || bytes + existing.filter((e) => e.path !== path).reduce((n, e) => n + Buffer.byteLength(JSON.stringify(e)), 0) > c.maxBytes) {
       await rejected(c); return { status: 'unavailable' };
     }
     await durable(path, value);
@@ -113,7 +116,7 @@ export async function flush(config) {
     let delivered = 0;
     const deadline = Date.now() + c.timeoutMs;
     for (const item of await entries(c)) {
-      if (item.exhausted || item.next > Date.now() || Date.now() >= deadline) continue;
+      if (item.delivered || item.exhausted || item.next > Date.now() || Date.now() >= deadline) continue;
       let ok = false;
       try {
         const send = async (url, body) => {
@@ -124,10 +127,15 @@ export async function flush(config) {
         ok = await send(endpoint, item.body.trace);
         for (const score of item.body.scores) if (ok) ok = await send(new URL('/api/public/scores', c.endpoint), score);
       } catch {}
-      if (ok) { await unlink(item.path); delivered++; }
+      const { path, ...value } = item;
+      if (ok) {
+        if (item.remember) await durable(path, { ...value, delivered: true, attempts: 0, next: 0, exhausted: false });
+        else await unlink(path);
+        delivered++;
+      }
       else {
         const attempts = item.attempts + 1;
-        await durable(item.path, { body: item.body, attempts, next: Date.now() + Math.min(60000, c.retryMs * 2 ** attempts), exhausted: attempts >= c.maxAttempts });
+        await durable(path, { ...value, attempts, next: Date.now() + Math.min(60000, c.retryMs * 2 ** attempts), exhausted: attempts >= c.maxAttempts });
       }
     }
     return { status: 'flushed', delivered, ...(await queueStatus(c)) };
@@ -137,6 +145,6 @@ async function queueStatus(c) {
   const items = await entries(c);
   let rejected = 0;
   try { rejected = JSON.parse(await readFile(join(c.directory, 'gaps'), 'utf8')).rejected; } catch {}
-  return { pending: items.filter((e) => !e.exhausted).length, exhausted: items.filter((e) => e.exhausted).length, rejected };
+  return { pending: items.filter((e) => !e.delivered && !e.exhausted).length, exhausted: items.filter((e) => !e.delivered && e.exhausted).length, remembered: items.filter((e) => e.delivered).length, rejected };
 }
 export async function status(config) { return locked(config, async (c) => ({ status: 'available', ...(await queueStatus(c)) })); }

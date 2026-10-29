@@ -42,26 +42,41 @@ test('accepted metadata survives rejection and a fresh process; replay uses stab
   } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('a bounded hook still delivers accepted events when later requests are refused', async () => {
+test('a bounded hook advances without resending acknowledged requests or moving their attempt', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'skill-hook-bound-'));
   const delivered = new Set();
+  const posts = [];
   const server = createServer(async (req, res) => {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const span = JSON.parse(raw).resourceSpans?.[0].scopeSpans[0].spans[0];
-    if (span) delivered.add(span.spanId);
+    if (span) { delivered.add(span.spanId); posts.push(span); }
     res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   try {
     await writeFile(join(dir, 'SKILL.md'), 'instructions');
     const transcript = join(dir, 'session.jsonl');
-    await writeFile(transcript, Array.from({ length: 5 }, (_, i) => JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T18:00:01Z', message: { id: 'request-' + i, usage: { input_tokens: 1, output_tokens: 1 } } })).join('\n'));
+    const rows = Array.from({ length: 5 }, (_, i) => ({ type: 'assistant', timestamp: '2026-10-29T18:00:01Z', message: { id: 'request-' + i, usage: { input_tokens: 1, output_tokens: 1 } } }));
+    await writeFile(transcript, rows.map(JSON.stringify).join('\n'));
     const config = { enabled: true, directory: join(dir, 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', maxEvents: 3, since: '2026-10-29T18:00:00Z', skillDirectory: dir, context: { workflow: 'w', attempt: 'a', invocation: 'root', skill: 'research', session: 's' } };
     const result = await captureHook(config, 'claude', { session_id: 's', transcript_path: transcript });
     assert.equal(delivered.size, 3, 'accepted events must flush despite bounded rejection');
     assert.equal(result.status, 'unavailable');
     assert.equal(result.delivery.pending, 0);
     assert.equal((await status(config)).rejected, 1);
+    await captureHook(config, 'claude', { session_id: 's', transcript_path: transcript });
+    assert.equal(delivered.size, 5, 'later hooks must reach requests beyond the first queue batch');
+    const resumed = { ...config, context: { ...config.context, attempt: 'b' } };
+    await captureHook(resumed, 'claude', { session_id: 's', transcript_path: transcript });
+    assert.equal(posts.length, 5, 'acknowledged requests must not be uploaded again');
+    rows[0].message.usage.output_tokens = 2;
+    rows.push({ ...rows[1], message: { ...rows[1].message, id: 'new-request' } });
+    await writeFile(transcript, rows.map(JSON.stringify).join('\n'));
+    await captureHook(resumed, 'claude', { session_id: 's', transcript_path: transcript });
+    assert.equal(posts.length, 7, 'late usage updates and new requests must still upload');
+    const attempt = (span) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.attempt').value.stringValue;
+    assert.equal(attempt(posts[5]), 'a', 'an updated old request keeps its original attempt');
+    assert.equal(attempt(posts[6]), 'b');
   } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rm(dir, { recursive: true, force: true }); }
 });
 

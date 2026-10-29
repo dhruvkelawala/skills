@@ -32,7 +32,7 @@ export async function captureHook(config, runtime, payload) {
   let accepted = 0;
   for (const event of events) {
     if (Date.parse(event.time) < Date.parse(config.since)) continue;
-    if ((await emit(config, { ...event, eventKey: event.request })).status === 'accepted') accepted++;
+    if ((await emit(config, { ...event, eventKey: event.request }, { remember: true })).status === 'accepted') accepted++;
     else return { status: 'unavailable', accepted, delivery: await flush(config), coverage: 'partial' };
   }
   const delivery = await flush(config);

@@ -63,7 +63,7 @@ Provider requests have stable source identities across retries and resume. Claud
 
 The source allowlist exports only contract identity, enums, hashes, counters, artifact/source references and gate metadata. Prompts, source text, command arguments, tool results and error bodies never enter the persistent outbox or network payload. There is no content-capture option in this pilot. References are intentional metadata and must be safe to share; credentials, query strings and URL fragments are rejected. Keep raw transcripts private.
 
-Accepted events are atomically written and fsynced before upload. The outbox holds at most 1,000 events and 16 MiB by default. Failed uploads retry with exponential backoff up to eight attempts when `cli.mjs flush` runs, including after restart. The hook also flushes automatically. Rejected OTLP spans and failed score uploads retain the same IDs. Exhausted entries stay on disk and count against the bound; inspect status before manually archiving them or replaying them into a new outbox. No hidden daemon or scheduler is installed.
+Accepted events are atomically written and fsynced before upload. The outbox holds at most 1,000 pending/exhausted events and 16 MiB of total records by default. Hook requests retain acknowledged metadata within that byte bound: unchanged requests skip upload, late usage updates keep the first captured attempt/parent/revision, and new requests can advance on later hooks after a full batch flushes. `remembered` reports acknowledged records. Other emitter calls remain explicit replay. Failed uploads retry with exponential backoff up to eight attempts when `cli.mjs flush` runs, including after restart. The hook also flushes automatically. Rejected OTLP spans and failed score uploads retain the same IDs. Exhausted entries and acknowledged metadata count against the byte bound; inspect status and preserve evidence before manually archiving a completed invocation's outbox. A full metadata history returns unavailable rather than silently forgetting progress. No hidden daemon or scheduler is installed.
 
 ```sh
 SKILL_OBSERVABILITY_CONFIG=<private-config.json> node instrumentation/cli.mjs status
@@ -71,6 +71,12 @@ SKILL_OBSERVABILITY_CONFIG=<private-config.json> node instrumentation/cli.mjs fl
 ```
 
 Always inspect the structured result. `disabled`, `busy`, `unavailable`, pending, rejected or exhausted is not successful capture. Hook commands exit zero so telemetry cannot fail the originating task; this does not make capture complete. A missing final hook cannot guarantee delivery of events never accepted by the outbox. [Queries and warnings](queries.md) pair backend views with local status.
+
+For an execution-time report, pass an array of contract events to `summarize` from `instrumentation/workflow.mjs`, with the current artifact `head`. It returns active/waiting milliseconds, execution, current evidence-backed outcome and repair counts. For example, from this repository root:
+
+```sh
+node --input-type=module -e 'import {readFileSync} from "node:fs"; import {summarize} from "./instrumentation/workflow.mjs"; console.log(JSON.stringify(summarize(JSON.parse(readFileSync(process.argv[1])), {head:process.argv[2]})))' <metadata-events.json> <current-head>
+```
 
 ## Disable and clean up
 
