@@ -17,6 +17,7 @@ export async function captureHook(config, runtime, payload) {
   if (!config.enabled) return { status: 'disabled' };
   if (!Number.isFinite(Date.parse(config.since))) return { status: 'unavailable' };
   if (!payload.transcript_path || !payload.session_id) return { status: 'unavailable' };
+  if (payload.session_id !== config.context?.session) return { status: 'unavailable' };
   if ((await stat(payload.transcript_path)).size > 64 * 1024 * 1024) return { status: 'unavailable' };
   const text = await readFile(payload.transcript_path, 'utf8');
   const lines = text.split('\n');

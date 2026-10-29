@@ -56,7 +56,7 @@ test('a bounded hook still delivers accepted events when later requests are refu
     await writeFile(join(dir, 'SKILL.md'), 'instructions');
     const transcript = join(dir, 'session.jsonl');
     await writeFile(transcript, Array.from({ length: 5 }, (_, i) => JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T18:00:01Z', message: { id: 'request-' + i, usage: { input_tokens: 1, output_tokens: 1 } } })).join('\n'));
-    const config = { enabled: true, directory: join(dir, 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', maxEvents: 3, since: '2026-10-29T18:00:00Z', skillDirectory: dir, context: { workflow: 'w', attempt: 'a', invocation: 'root', skill: 'research' } };
+    const config = { enabled: true, directory: join(dir, 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', maxEvents: 3, since: '2026-10-29T18:00:00Z', skillDirectory: dir, context: { workflow: 'w', attempt: 'a', invocation: 'root', skill: 'research', session: 's' } };
     const result = await captureHook(config, 'claude', { session_id: 's', transcript_path: transcript });
     assert.equal(delivered.size, 3, 'accepted events must flush despite bounded rejection');
     assert.equal(result.status, 'unavailable');

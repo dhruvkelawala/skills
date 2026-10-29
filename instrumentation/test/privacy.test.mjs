@@ -19,10 +19,12 @@ test('the project hook exports only allowlisted metadata before persistence and 
     ];
     await writeFile(transcript, rows.map(JSON.stringify).join('\n'));
     const config = join(dir, 'config.json');
-    await writeFile(config, JSON.stringify({ enabled: true, directory: join(dir, 'outbox'), endpoint: 'http://127.0.0.1:1', publicKey: 'test', secretKey: 'test', since: '2026-10-29T18:00:00Z', context: { workflow: 'w', attempt: 'a', invocation: 'root', skill: 'research' }, skillDirectory: skill }), { mode: 0o600 });
+    await writeFile(config, JSON.stringify({ enabled: true, directory: join(dir, 'outbox'), endpoint: 'http://127.0.0.1:1', publicKey: 'test', secretKey: 'test', since: '2026-10-29T18:00:00Z', context: { workflow: 'w', attempt: 'a', invocation: 'root', skill: 'research', session: 's' }, skillDirectory: skill }), { mode: 0o600 });
     const child = spawnSync(process.execPath, [cli, 'hook', 'claude'], { env: { ...process.env, SKILL_OBSERVABILITY_CONFIG: config }, input: JSON.stringify({ session_id: 's', transcript_path: transcript, prompt: canary, arguments: canary, tool_response: canary, error: canary }), encoding: 'utf8' });
     assert.equal(child.status, 0);
     assert.equal(JSON.parse(child.stdout).accepted, 1);
+    const unrelated = spawnSync(process.execPath, [cli, 'hook', 'claude'], { env: { ...process.env, SKILL_OBSERVABILITY_CONFIG: config }, input: JSON.stringify({ session_id: 'another-session', transcript_path: transcript }), encoding: 'utf8' });
+    assert.equal(JSON.parse(unrelated.stdout).status, 'unavailable', 'another session cannot inherit this invocation opt-in');
     const files = await readdir(join(dir, 'outbox'));
     const exported = (await Promise.all(files.map((file) => readFile(join(dir, 'outbox', file), 'utf8')))).join('');
     assert.ok(!exported.includes(canary));

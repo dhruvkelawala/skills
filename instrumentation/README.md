@@ -24,6 +24,7 @@ Use Node 22 or later. Collection is disabled unless `SKILL_OBSERVABILITY_CONFIG`
     "provider": null,
     "model": null,
     "effort": null,
+    "session": null,
     "task": null,
     "repository": null,
     "head": null,
@@ -33,7 +34,7 @@ Use Node 22 or later. Collection is disabled unless `SKILL_OBSERVABILITY_CONFIG`
 }
 ```
 
-Use the runtime's actual provider/model/effort when exposed. Null remains unknown. `since` bounds export to this opt-in, although cumulative accounting may read earlier counters to establish a baseline. The hook reads only the exact supplied session file, with a 64 MiB limit. It recognizes the pinned Codex cumulative `token_count` and Claude assistant usage records; it does not parse conversational content or search historical sessions. Unsupported records, counter resets, unobserved API failures and missing children are coverage gaps. Never treat the observed request count as complete provider billing.
+Use the runtime's actual provider/model/effort when exposed. Null remains unknown. Bind `context.session` to the exact intended runtime session before enabling hook capture. Unbound or different sessions return unavailable before reading a transcript; other tasks in the project cannot inherit this invocation's identity. Use a separate configuration for each invocation and child, with distinct workflow/attempt/invocation values as appropriate. A launcher that cannot expose or bind the session is a live-capture blocker; workflow markers remain usable. `since` bounds export to this opt-in, although cumulative accounting may read earlier counters to establish a baseline. The hook reads only the exact supplied session file, with a 64 MiB limit. It recognizes the pinned Codex cumulative `token_count` and Claude assistant usage records; it does not parse conversational content or search historical sessions. Unsupported records, counter resets, unobserved API failures and missing children are coverage gaps. Treat the observed request count as a subtotal of provider billing.
 
 Start an isolated Langfuse deployment using the [trial commands](pilot/README.md), or supply your own OSS endpoint. In a new project hook process, the command below writes only a project-local hook file. It refuses an existing file rather than changing someone else's hooks:
 
