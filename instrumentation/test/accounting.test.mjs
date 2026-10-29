@@ -19,6 +19,14 @@ test('unique requests reconcile streams, replay, failed attempts and child usage
   assert.equal(result.ambiguousRequests, 3);
   assert.equal(result.childCoverage, 'partial');
   assert.equal(result.cost, null);
+  const early = captureRequests('claude', [claude('late-update', 1)], context)[0];
+  const updated = captureRequests('claude', [claude('late-update', 5)], context)[0];
+  for (const versions of [[early, updated], [updated, early], [early, updated, early]]) {
+    const combined = totals(versions, 'root');
+    assert.equal(combined.inclusive.total, 57, 'equal-timestamp updates preserve 10 input + 5 output + 30 cache read + 12 cache write');
+    assert.equal(combined.requests, 1);
+    assert.equal(combined.inclusive.cacheWrite1h, 7);
+  }
 });
 
 test('Codex cumulative snapshots count each request once and keep reasoning inside output', () => {

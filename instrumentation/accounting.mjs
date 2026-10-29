@@ -66,6 +66,11 @@ export function totals(events, invocation) {
     const key = event.request;
     const old = requests.get(key);
     if (!old || Date.parse(event.time) > Date.parse(old.time)) requests.set(key, event);
+    else if (Date.parse(event.time) === Date.parse(old.time) && event.usage) {
+      const usage = { ...event.usage };
+      for (const key of KEYS) if (old.usage?.[key] != null) usage[key] = Math.max(old.usage[key], usage[key] ?? 0);
+      requests.set(key, { ...old, usage });
+    }
   }
   const values = [...requests.values()];
   function sum(list) {
