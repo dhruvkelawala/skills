@@ -6,7 +6,7 @@ export function summarize(events, { head, now = new Date().toISOString() }) {
   const repairs = { autonomous: 0, requested: 0 };
   for (const e of unique.filter((e) => !e.parent)) {
     const time = Date.parse(e.time);
-    if (e.execution) {
+    if (e.execution && ['skill.started', 'skill.finished', 'stage', 'waiting', 'resumed', 'interrupted'].includes(e.kind)) {
       if (previous !== null) {
         if (execution === 'running') activeMs += Math.max(0, time - previous);
         if (execution.startsWith('waiting-')) waitMs += Math.max(0, time - previous);
