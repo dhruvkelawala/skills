@@ -4,7 +4,7 @@ Each case uses the public emitter, CLI, accounting or workflow interface. HTTP r
 
 | Owning test | Observable contract and credible regression | Why existing proof misses it |
 | --- | --- | --- |
-| contract | Identity and actual revision; conflating load/start/finish or hashing a Git SHA instead of changed instructions fails | No shared run contract existed |
+| contract | Identity and actual revision, including exposed percent-encoded T3 task IDs; conflating load/start/finish, dropping a task ID or hashing a Git SHA instead of changed instructions fails | No shared run contract existed; a plain UUID cannot expose encoded-ID loss |
 | accounting, unique requests | Literal independently worked totals, stream dedup, failed usage gaps and child inclusion; summing every stream row fails | Backend replay cannot establish source counter semantics |
 | accounting, Codex | Cumulative deltas, included reasoning/cache and resume replay; adding snapshots fails | Claude uses different counter semantics |
 | accounting, unknown duration | Exposed aggregate cache writes survive without invented 5m/1h allocation; dropping the unsplit counter fails | The split-cache fixture cannot expose this loss |

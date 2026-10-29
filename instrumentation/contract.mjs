@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 export const digest = (value) => createHash('sha256').update(value).digest('hex');
 const KINDS = new Set(['skill.loaded', 'skill.started', 'skill.finished', 'stage', 'waiting', 'resumed', 'interrupted', 'gate', 'repair', 'request', 'capture.gap']);
-const token = (value) => typeof value === 'string' && /^[\w.:/@+-]{1,200}$/.test(value) ? value : null;
+const token = (value) => typeof value === 'string' && /^[\w.%:/@+-]{1,200}$/.test(value) ? value : null;
 const choice = (value, choices) => choices.includes(value) ? value : null;
 const number = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
 

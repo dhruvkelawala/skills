@@ -16,6 +16,8 @@ test('workflow identity survives resume while invocation, load, completion and a
     assert.equal(loaded.schema, 'skill-run/v1');
     assert.equal(loaded.model, null);
     assert.equal(loaded.parent, null);
+    const task = 'node:delegated-task:command%3Amcp%3A148';
+    assert.equal(metadataEvent({ ...base, kind: 'skill.loaded', task }).task, task);
     assert.notEqual(loaded.eventId, metadataEvent({ ...base, kind: 'skill.started' }).eventId);
     assert.notEqual(loaded.eventId, metadataEvent({ ...base, kind: 'skill.finished' }).eventId);
     const resumed = metadataEvent({ ...base, attempt: 'attempt-2', kind: 'skill.started' });
