@@ -12,7 +12,7 @@ test('an outside skill records its actual revision, artifact and assessed source
   const server = createServer(async (req, res) => {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const body = JSON.parse(raw); received.push(body);
-    res.writeHead(207, { 'content-type': 'application/json' }); res.end(JSON.stringify({ successes: body.batch.map((e) => ({ id: e.id, status: 201 })), errors: [] }));
+    res.writeHead(207, { 'content-type': 'application/json' }); res.end(JSON.stringify({}));
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   try {
@@ -21,7 +21,8 @@ test('an outside skill records its actual revision, artifact and assessed source
     const config = { enabled: true, directory: join(dir, 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', context: { workflow: 'research-w', attempt: 'research-a', invocation: 'research', skill: 'research' } };
     const result = await recordExternal(config, { phase: 'finish', skillDirectory: skill, artifact, artifactUri: 'https://github.com/example/repo/blob/main/research/findings.md', sources: [{ uri: 'https://example.org/spec', sha256: 'c'.repeat(64), head: 'a'.repeat(40), result: 'unknown' }], head: 'a'.repeat(40), eventKey: 'finish' });
     assert.equal(result.status, 'accepted');
-    const event = received[0].batch[1].body.metadata;
+    const attrs = received[0].resourceSpans[0].scopeSpans[0].spans[0].attributes;
+    const event = Object.fromEntries(attrs.filter((a) => a.key.startsWith('langfuse.observation.metadata.')).map((a) => { const value = a.value.stringValue; let parsed; try { parsed = JSON.parse(value); } catch { parsed = value; } return [a.key.slice('langfuse.observation.metadata.'.length), parsed]; }));
     assert.match(event.revision, /^[a-f0-9]{64}$/);
     assert.match(event.artifact.sha256, /^[a-f0-9]{64}$/);
     assert.equal(event.artifact.uri, 'https://github.com/example/repo/blob/main/research/findings.md');

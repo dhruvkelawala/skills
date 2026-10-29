@@ -17,7 +17,7 @@ test('accepted metadata survives rejection and a fresh process; replay uses stab
     let raw = ''; for await (const chunk of req) raw += chunk;
     bodies.push(JSON.parse(raw));
     res.writeHead(reject ? 503 : 207, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(reject ? {} : { successes: bodies.at(-1).batch.map((e) => ({ id: e.id, status: 201 })), errors: [] }));
+    res.end(JSON.stringify(reject ? {} : {}));
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const config = { enabled: true, directory: dir, endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', maxAttempts: 2, retryMs: 0 };
@@ -30,7 +30,7 @@ test('accepted metadata survives rejection and a fresh process; replay uses stab
     reject = false;
     assert.equal((await flush(config)).pending, 0);
     await emit(config, event); await flush(config);
-    assert.deepEqual(bodies[1].batch.map((e) => e.id), bodies[2].batch.map((e) => e.id));
+    assert.deepEqual(bodies[1].resourceSpans[0].scopeSpans[0].spans[0].spanId, bodies[2].resourceSpans[0].scopeSpans[0].spans[0].spanId);
     reject = true;
     await emit(config, { ...event, eventKey: 'exhaust' });
     await flush(config); await flush(config);

@@ -1,0 +1,14 @@
+{
+  "langfuse": "71ddcb9094f53d19176a262f107871d8b2950fb0",
+  "plugin": "e1d02be28e6bacbfe350a1bc1ccf861e54edee17",
+  "codex_cli": "codex-cli 0.164.0",
+  "node": "v26.13.0",
+  "langfuse_backend": "4.72.0",
+  "runtime": {
+    "cpu": 4,
+    "memory_gib": 8,
+    "data_disk_gib": 35,
+    "root_disk_gib": 20,
+    "arch": "aarch64"
+  }
+}

@@ -7,18 +7,22 @@ const defaults = { maxEvents: 1000, maxBytes: 16 * 1024 * 1024, maxAttempts: 8, 
 export function ingestion(event) {
   const traceId = digest(event.workflow).slice(0, 32);
   const invocationId = digest([event.workflow, event.attempt, event.invocation].join(':')).slice(0, 16);
-  const id = event.kind === 'request' ? event.request.slice(0, 16) : event.kind === 'skill.started' || event.kind === 'skill.finished' ? invocationId : event.eventId.slice(0, 16);
-  const body = { id, traceId, name: event.kind === 'request' ? 'provider.request' : event.kind, startTime: event.time, metadata: event, level: event.execution === 'failed' || event.outcome === 'failed' ? 'ERROR' : 'DEFAULT' };
-  if (event.kind === 'request') { body.model = event.model; body.usageDetails = usageDetails(event.usage); }
-  if (event.kind === 'skill.finished') { delete body.startTime; body.endTime = event.time; }
-  const parentId = event.kind === 'skill.started' || event.kind === 'skill.finished' ? event.parent && digest([event.workflow, event.attempt, event.parent].join(':')).slice(0, 16) : invocationId;
-  if (parentId) body.parentObservationId = parentId;
-  const batch = [
-    { id: digest(event.eventId + ':trace'), timestamp: event.time, type: 'trace-create', body: { id: traceId, name: 'skill-workflow', sessionId: event.workflow, tags: ['skill-run/v1', event.skill], metadata: { workflow: event.workflow } } },
-    { id: event.eventId, timestamp: event.time, type: event.kind === 'request' ? 'generation-create' : event.kind === 'skill.finished' ? 'span-update' : 'span-create', body },
-  ];
-  if (event.kind === 'gate' && event.outcome !== 'unknown') batch.push({ id: digest(event.eventId + ':score'), timestamp: event.time, type: 'score-create', body: { id: digest(event.eventId + ':score').slice(0, 32), traceId, observationId: id, name: 'evidence-failure', dataType: 'BOOLEAN', value: event.outcome === 'failed' ? 1 : 0, comment: JSON.stringify({ evidence: event.evidence, judge: event.judge, rubric: event.rubric }) } });
-  return { batch };
+  const id = event.kind === 'skill.started' ? invocationId : event.eventId.slice(0, 16);
+  const parent = event.kind === 'skill.started' ? event.parent && digest([event.workflow, event.attempt, event.parent].join(':')).slice(0, 16) : invocationId;
+  const attribute = (key, value) => ({ key, value: { stringValue: typeof value === 'string' ? value : JSON.stringify(value) } });
+  const attributes = [attribute('session.id', event.workflow), attribute('langfuse.trace.name', 'skill-workflow'), attribute('langfuse.trace.tags', [event.skill, 'skill-run/v1']), attribute('langfuse.observation.type', event.kind === 'request' ? 'generation' : 'span')];
+  for (const [key, value] of Object.entries(event)) if (value !== null) attributes.push(attribute('langfuse.observation.metadata.' + key, value));
+  if (event.execution === 'failed' || event.outcome === 'failed') attributes.push(attribute('langfuse.observation.level', 'ERROR'));
+  if (event.kind === 'request') {
+    if (event.model) attributes.push(attribute('langfuse.observation.model.name', event.model));
+    if (event.usage) attributes.push(attribute('langfuse.observation.usage_details', usageDetails(event.usage)));
+  }
+  const nanos = String(BigInt(Date.parse(event.time)) * 1000000n);
+  const span = { traceId, spanId: id, name: event.kind === 'request' ? 'provider.request' : event.kind, kind: 1, startTimeUnixNano: nanos, endTimeUnixNano: nanos, attributes };
+  if (parent) span.parentSpanId = parent;
+  const trace = { resourceSpans: [{ resource: { attributes: [attribute('service.name', 'skill-observability-pilot')] }, scopeSpans: [{ scope: { name: 'skill-run/v1' }, spans: [span] }] }] };
+  const score = event.kind === 'gate' && event.outcome !== 'unknown' ? { id: digest(event.eventId + ':score').slice(0, 32), traceId, observationId: id, name: 'evidence-failure', dataType: 'BOOLEAN', value: event.outcome === 'failed' ? 1 : 0, comment: JSON.stringify({ evidence: event.evidence, judge: event.judge, rubric: event.rubric }) } : null;
+  return { trace, score };
 }
 
 function usageDetails(u) {
@@ -99,7 +103,7 @@ export async function emit(config, input) {
 
 export async function flush(config) {
   return locked(config, async (c) => {
-    const endpoint = new URL('/api/public/ingestion', c.endpoint);
+    const endpoint = new URL('/api/public/otel/v1/traces', c.endpoint);
     if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname))) return { status: 'unavailable' };
     if (!c.publicKey || !c.secretKey) return { status: 'unavailable' };
     let delivered = 0;
@@ -108,10 +112,13 @@ export async function flush(config) {
       if (item.exhausted || item.next > Date.now() || Date.now() >= deadline) continue;
       let ok = false;
       try {
-        const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Basic ' + Buffer.from(c.publicKey + ':' + c.secretKey).toString('base64') }, body: JSON.stringify(item.body), redirect: 'error', signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())) });
-        const receipt = await response.json();
-        const accepted = new Set((receipt.successes ?? []).filter((s) => s.status >= 200 && s.status < 300).map((s) => s.id));
-        ok = response.ok && !(receipt.errors?.length) && item.body.batch.every((e) => accepted.has(e.id));
+        const send = async (url, body) => {
+          const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Basic ' + Buffer.from(c.publicKey + ':' + c.secretKey).toString('base64') }, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())) });
+          const receipt = await response.json();
+          return response.ok && !(Number(receipt.partialSuccess?.rejectedSpans) > 0) && !receipt.error;
+        };
+        ok = await send(endpoint, item.body.trace);
+        if (ok && item.body.score) ok = await send(new URL('/api/public/scores', c.endpoint), item.body.score);
       } catch {}
       if (ok) { await unlink(item.path); delivered++; }
       else {

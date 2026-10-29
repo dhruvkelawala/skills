@@ -1,0 +1,16 @@
+import { digest } from './contract.mjs';
+
+export function monitorRules({ projectId, workflow, tokenWarning = 100000, triggerIds = [] }) {
+  if (!workflow || !projectId || !Number.isSafeInteger(tokenWarning) || tokenWarning < 0) throw new Error('invalid warning configuration');
+  const trace = digest(workflow).slice(0, 32);
+  const base = { projectId, window: '1h', thresholdOperator: 'GT', warningThreshold: null, triggerIds, tags: ['skill-run/v1'] };
+  const scope = { column: 'traceId', operator: '=', value: trace, type: 'string' };
+  return [
+    { ...base, name: `${workflow}: token warning; evidence trace ${trace}`, view: 'observations', metric: { measure: 'totalTokens', aggregation: 'sum' }, filters: [scope], alertThreshold: tokenWarning },
+    { ...base, name: `${workflow}: evidence failure; evidence trace ${trace}`, view: 'scores-boolean', metric: { measure: 'count', aggregation: 'count' }, filters: [scope, { column: 'name', operator: '=', value: 'evidence-failure', type: 'string' }, { column: 'value', operator: '=', value: 1, type: 'number' }], alertThreshold: 0 },
+  ];
+}
+
+export function usageQuery(workflow, fromTimestamp, toTimestamp) {
+  return { view: 'observations', dimensions: [], metrics: [{ measure: 'totalTokens', aggregation: 'sum' }, { measure: 'count', aggregation: 'count' }], filters: [{ column: 'traceId', operator: '=', value: digest(workflow).slice(0, 32), type: 'string' }], fromTimestamp, toTimestamp };
+}
