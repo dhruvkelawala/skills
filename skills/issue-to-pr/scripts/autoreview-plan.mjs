@@ -35,7 +35,7 @@ function main([command, path, ...args]) {
 function stage3(record, facts) {
   const basis = gitBasis(record, facts);
   const completed = completedReview(record);
-  if (header(record, "review_policy") !== "conditional-v1") {
+  if (!inPilot(record)) {
     return completed ? alreadyCompleted(basis, completed) : decision("run", ["policy-default"], basis);
   }
   const reviews = facts?.reviews;
@@ -78,11 +78,22 @@ function stage3(record, facts) {
 function publication(record, skip) {
   if (skip) return { decision: "skip", reasons: ["explicit-skip"], reuse: false, outcome: "skipped", aprArgs: ["--skip-review"] };
   const completed = completedReview(record);
+  if (inPilot(record) && !completed) {
+    const saved = header(record, "autoreview_plan");
+    const plan = saved ? JSON.parse(saved) : null;
+    if (header(record, "autoreview").startsWith("skipped:") || (plan?.decision === "skip" && plan.reasons?.includes("eligible"))) {
+      return { decision: "blocked", reasons: ["skip-flag-required"], reuse: false, outcome: "skipped", aprArgs: ["--skip-review"] };
+    }
+  }
   const tree = git("rev-parse", "HEAD^{tree}");
   if (completed?.result === "clean" && completed.tree === tree && !git("status", "--porcelain")) {
     return { decision: "skip", reasons: ["clean-result-reused"], reuse: true, outcome: "completed", review: completed, aprArgs: [] };
   }
   return { decision: "run", reasons: ["review-required"], reuse: false, outcome: "incomplete", aprArgs: [] };
+}
+
+function inPilot(record) {
+  return header(record, "review_policy") === "conditional-v1" && !header(record, "pilot_exit");
 }
 
 function gitBasis(record, facts) {

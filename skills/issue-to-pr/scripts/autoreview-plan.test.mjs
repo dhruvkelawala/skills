@@ -63,6 +63,7 @@ test("a fully eligible pilot skip records its computed basis and survives a same
   assert.deepEqual(plan.basis.paths, ["app.js"]);
   assert.deepEqual(f.run(), plan);
   assert.doesNotMatch(readFileSync(f.record, "utf8"), /^autoreview: .*clean/m);
+  assert.equal(f.run("publish").decision, "blocked", "a saved skip requires the publication flag even before its outcome is recorded");
   f.outcome("skipped: conditional-v1, eligible");
   const publication = f.run("publish", ...plan.aprArgs);
   assert.equal(publication.decision, "skip");
@@ -167,7 +168,9 @@ test("old records and non-pilot policies retain the existing extra-opinion defau
 test("publication gives explicit skip precedence and never reuses a skip reason containing clean", (t) => {
   const f = fixture(t);
   f.outcome(`skipped: clean source reviews, tree ${f.tree}, clean`);
-  assert.equal(f.run("publish").decision, "run");
+  const unflagged = f.run("publish");
+  assert.equal(unflagged.decision, "blocked");
+  assert.deepEqual(unflagged.reasons, ["skip-flag-required"]);
   const skipped = f.run("publish", "--skip-review");
   assert.equal(skipped.decision, "skip");
   assert.equal(skipped.reuse, false);
@@ -175,6 +178,10 @@ test("publication gives explicit skip precedence and never reuses a skip reason 
   f.edit((text) => text.replace(/^autoreview: .*$/m, `autoreview: codex actual-model, tree ${f.tree}, clean`));
   assert.equal(f.run("publish").reuse, true);
   assert.equal(f.run("publish", "--skip-review").reuse, false);
+  f.edit((text) => text.replace("review_policy: conditional-v1\n", "").replace(/^autoreview: .*$/m, "autoreview: skipped: clean source reports"));
+  assert.equal(f.run("publish").decision, "run", "old records keep standalone defaults");
+  f.edit((text) => `review_policy: conditional-v1\npilot_exit: standalone pr-watch, explicitly left pilot\n${text}`);
+  assert.equal(f.run("publish").decision, "run", "an explicit departure restores standalone publication");
 });
 
 test("actual clean reuse requires the reviewed tree and a clean checkout", (t) => {
