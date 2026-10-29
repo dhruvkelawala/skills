@@ -1,0 +1,28 @@
+Issue #123: evaluateGate with synthetic GitHub snapshots
+Base: afabbc34bb2fb49990a294a29e61b3b290266793
+Head: be65b307d62a07311a3a7942ffa35f95a0dfd4f0
+All unrelated gate conditions are clean. No live GitHub data is used.
+
+New summary running for HEAD
+Before: {"state":"ready","reasons":[],"threads":[]}
+After:  {"state":"pending","reasons":["Reviewer chatgpt-codex-connector is reviewing the current HEAD"],"threads":[]}
+
+Old summary completed for HEAD
+Before: {"state":"pending","reasons":["Reviewer chatgpt-codex-connector has not reviewed the current HEAD"],"threads":[]}
+After:  {"state":"ready","reasons":[],"threads":[]}
+
+New summary completed for another commit
+Before: {"state":"ready","reasons":[],"threads":[]}
+After:  {"state":"pending","reasons":["Reviewer chatgpt-codex-connector has not reviewed the current HEAD"],"threads":[]}
+
+New reviewer comment without a marker
+Before: {"state":"ready","reasons":[],"threads":[]}
+After:  {"state":"ready","reasons":[],"threads":[]}
+
+Verification behavior before and after:
+Running code review: {"state":"pending","reasons":["Reviewer chatgpt-codex-connector is reviewing the current HEAD"],"threads":[]} (unchanged)
+Completed without findings: {"state":"ready","reasons":[],"threads":[]} (unchanged)
+Completed with findings: {"state":"blocked","reasons":["Reviewer chatgpt-codex-connector reports unresolved findings on the current HEAD"],"threads":[]} (unchanged)
+Other commit: {"state":"pending","reasons":["Reviewer chatgpt-codex-connector has not reviewed the current HEAD"],"threads":[]} (unchanged)
+Unreadable marker: {"state":"pending","reasons":["Reviewer chatgpt-codex-connector review result is unknown"],"threads":[]} (unchanged)
+Security review still running: {"state":"pending","reasons":["Reviewer chatgpt-codex-connector is reviewing the current HEAD"],"threads":[]} (unchanged)
