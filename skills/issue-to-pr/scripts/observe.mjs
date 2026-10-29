@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
+import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
 import { header } from './run-record.mjs';
 import { configuration } from '../../../instrumentation/cli.mjs';
 import { digest, skillRevision } from '../../../instrumentation/contract.mjs';
@@ -22,7 +22,7 @@ export async function observe(recordPath, input, config) {
   return { ...(await emit(config, event)), delivery: await flush(config) };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const input = JSON.parse(await readFile(process.argv[3], 'utf8'));
     console.log(JSON.stringify(await observe(process.argv[2], input, await configuration())));
