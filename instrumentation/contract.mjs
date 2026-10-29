@@ -41,6 +41,9 @@ export function metadataEvent(input) {
   event.outcome = choice(input.outcome, ['verified', 'failed', 'unknown']) ?? 'unknown';
   event.reason = choice(input.reason, ['expected-red', 'recovered', 'unrecovered', 'autonomous', 'user-requested', 'unavailable', 'exhausted', 'ambiguous', 'missing-child']);
   event.evidence = evidence(input.evidence);
+  if (event.outcome !== 'unknown' && !validEvidence(event.evidence, event.head, time)) event.outcome = 'unknown';
+  if (event.outcome === 'verified' && event.evidence.some((e) => e.result !== 'pass')) event.outcome = 'unknown';
+  if (event.outcome === 'failed' && !event.evidence.some((e) => e.result === 'fail')) event.outcome = 'unknown';
   event.judge = token(input.judge);
   event.rubric = token(input.rubric);
   event.usage = usage(input.usage);
@@ -68,4 +71,8 @@ function usage(value) {
   result.inputIncludesCache = typeof value.inputIncludesCache === 'boolean' ? value.inputIncludesCache : null;
   result.outputIncludesReasoning = typeof value.outputIncludesReasoning === 'boolean' ? value.outputIncludesReasoning : null;
   return result;
+}
+
+export function validEvidence(items, head, time) {
+  return Boolean(head && items?.length && items.every((e) => e.head === head && e.sha256 && e.result !== 'unknown' && e.expires && Date.parse(e.expires) > Date.parse(time)));
 }
