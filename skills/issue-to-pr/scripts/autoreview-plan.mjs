@@ -48,6 +48,7 @@ function stage3(record, facts) {
   }
   if (facts.openP0P1 === true) return decision("blocked", ["accepted-findings-open"], basis);
   if (completed) return alreadyCompleted(basis, completed);
+  if (header(record, "autoreview").startsWith("incomplete:")) return decision("run", ["opinion-incomplete"], basis);
 
   const previous = header(record, "autoreview_plan");
   const prior = previous ? JSON.parse(previous) : null;

@@ -209,8 +209,11 @@ test("a completed opinion is once-only even after repairs and exposes its origin
 
 test("a failed opinion remains incomplete and is never reused as a clean review", (t) => {
   const f = fixture(t);
+  assert.equal(f.run().decision, "skip");
   f.outcome("incomplete: provider failed");
-  f.facts.userRequested = true;
-  assert.equal(f.run().decision, "run");
+  const retry = f.run();
+  assert.equal(retry.decision, "run");
+  assert.deepEqual(retry.reasons, ["opinion-incomplete"]);
+  assert.deepEqual(f.run(), retry);
   assert.equal(f.run("publish").decision, "run");
 });
