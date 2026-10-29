@@ -14,6 +14,8 @@ A spec's record with `spec_mode: stack` has no branch of its own. For it, run [s
 
 The repair budget in the record still applies.
 
+Retain `review_policy`, `autoreview_plan`, the actual extra-opinion outcome and its reviewed basis on resume. Before stage 3 completes, rerun the planner on the live tree, contract and explicit facts; a changed basis requires reassessment. A completed extra opinion is once-only. After stage 3, preserve skips and disclose later repairs through the existing `--skip-review` publication calls. If an enrolled PR is instead handled by standalone `/pr-watch`, record `pilot_exit: standalone pr-watch at <head>, <UTC time>` before handing off, because its repair publication can run autoreview. Record any other departure from the pilot explicitly, preserving historical decisions and outcomes. Standalone APR and pr-watch keep their defaults.
+
 ## Predecessor moved
 
 1. Run `git fetch origin`. The new base is the predecessor's head branch, or the default branch when the predecessor merged. When it closed without merging, record `blocked: predecessor closed` and stop.

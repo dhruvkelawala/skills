@@ -10,7 +10,7 @@ apr runs autoreview first, then makes an intentional commit, pushes, opens a rea
 Invoke as `/apr [claude|codex] [--skip-review] [--base <ref or sha>] [stack [<predecessor PR URL>]] [--no-watch] [--max-repairs N] [--body-file <path>] [--run-record <path>]`.
 
 - The engine comes from the `second-opinion` job in the models file (step 1). By default it is that job's entry for this thread. `claude` or `codex` picks the entry with that engine. Anything else stops with a question.
-- `--skip-review` skips autoreview. The report then says so and claims no clean result.
+- `--skip-review` skips autoreview before considering clean-result reuse. The report then says so and claims no clean result from this APR call.
 - `--base` pins the review range and the PR base. `/issue-to-pr` passes its `base_sha`.
 - `stack [<predecessor PR URL>]` publishes the current branch as a layer on that PR. Without a URL, apr treats the branch as stacked when `gh stack view` succeeds and lists it, and takes the branch below it as the predecessor.
 - `--no-watch` stops after the PR is published. `/issue-to-pr` and `/pr-watch` pass it because they own the watch themselves.
@@ -39,7 +39,7 @@ On `main`, `master` or the default branch, create `<type>/<short-description>` w
 ## 4. Verify and review
 
 1. Run `/verify` in focused mode, or the project's obvious formatter and focused tests when it is unavailable. Skip this when the exact current HEAD already has a `/verify` result from earlier in this session, as it does when `/issue-to-pr` or `/pr-watch` calls in.
-2. With `--run-record`, read its `autoreview` line. When the result is clean, its tree equals `git rev-parse HEAD^{tree}`, and `git status --porcelain` prints nothing (no staged, unstaged or untracked changes), skip the helper and carry that engine, model and result into the report and the PR body. `/issue-to-pr` runs autoreview once in its own review stage, and this keeps apr from repeating it.
+2. Resolve skip and reuse with `node <this skill's folder>/../issue-to-pr/scripts/autoreview-plan.mjs publish <record|-> [--skip-review]`, passing the flag when invoked and `-` without a run record. Explicit skip wins first and claims no clean result. Otherwise only an actual completed `autoreview: <claude|codex> <model>, tree <hash>, clean` on the current tree and a clean checkout can be reused. Carry that engine, model and result into the report and PR body. A plan is not a result; a skipped or incomplete outcome never qualifies, even if its reason contains `clean`. On `blocked`, report the reason. `skip-flag-required` or `opinion-already-completed` means the enrolled run must pass `--skip-review`; neither permits launching the helper. Without an explicit skip or reusable result, run the helper as before.
 3. Otherwise, unless review was skipped, review the exact change with the helper. Uncommitted work:
 
 ```bash
@@ -109,7 +109,7 @@ repairs: 0/<budget>
 
 ## PR body
 
-With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, the model it ran (step 1) and the result. With `--skip-review`, leave the line as supplied. Otherwise load the `pr` skill and fill its template: the problem and the change, Evidence before and after, a Proof paragraph that names the verification and autoreview commands that passed, rather than "tests pass", and the door and the blast radius. For a fix, name the root cause in the opening.
+With `--body-file`, use the supplied body. When step 4 ran or reused a review, set the body's autoreview line to that engine, the model it ran (step 1) and the result. With `--skip-review`, preserve a supplied historical outcome and its reviewed basis, say this publication skipped review, and disclose later repairs. An intentional pilot skip says skipped with its reason; it never claims clean. Otherwise load the `pr` skill and fill its template: the problem and the change, Evidence before and after, a Proof paragraph that names the verification and autoreview commands that passed, rather than "tests pass", and the door and the blast radius. For a fix, name the root cause in the opening.
 
 Before step 6 sends a body, check it with `node <this skill's folder>/../pr-watch/scripts/secrets.mjs < <body file>`. When it exits 1, put each secret's variable in its place, as its output says, and check again.
 

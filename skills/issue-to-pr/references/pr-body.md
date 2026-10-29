@@ -19,7 +19,7 @@ The body has two tiers. The top fills the `pr` skill's template and stays under 
 
 **Proof:** <Where the change ran, what was checked by hand, and that `/verify` passed, by its command.>
 
-Reviewed: <one line, such as "two `/code-review` passes and autoreview, every finding fixed or answered below".>
+Reviewed: <source-review passes and their result; extra opinion completed, intentionally skipped with reason, or incomplete.>
 
 **Not checked:**
 
@@ -53,7 +53,8 @@ Captured at `<capture short sha>`. Run at `<head short sha>` against base `<base
 ### Review trail
 
 - `/code-review` pass 1 at `<short sha>`: <n> fixed, <n> rejected with reasons
-- Autoreview, <engine and model>, tree `<short hash>`: <clean, n fixed, or skipped: reason>
+- Autoreview: <completed: actual engine/model, reviewed base/head/tree and clean or n fixed; skipped: policy and reason codes with source-review basis; or incomplete: reason and attempted basis>
+- Conditional pilot, when enrolled: <saved decision, explicit facts, actual author/reviewer families, retained-opinion duration and downstream accepted P0/P1 findings, or none yet>
 - `/code-review` pass 2 over the repairs: <n fixed, or skipped: light lane or tree unchanged>
 - Review-ready: <clean, exceptions, or skipped: light lane>
 - Not re-reviewed: <repair commits made after the last pass, or none>
@@ -95,5 +96,6 @@ node <issue-to-pr>/scripts/pr-body.mjs < <body file>
 - Alt text says what the reader sees in the capture, such as "The polaroid fading in with the shared photo already in it".
 - The verification table lists every command `/verify` found, including the ones that could not run.
 - The head in Verification equals the PR head. After every push, refresh the body for the new head, [check it](#the-check), and update it with `gh pr edit --body-file` (REST: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>`).
+- Keep the extra-opinion decision separate from its outcome. A pilot skip carries no completed or clean extra opinion. A completed review retains its original basis after later repairs, which stay in `Not re-reviewed`. Publication through `--skip-review` must preserve that history without claiming a new clean result.
 - Excerpts are real output from this run, trimmed to the failing assertion, the passing summary or the changed output. Leave out full logs and diffs, since the PR already shows the diff.
 - For each capture, pick the lightest proof a reviewer would accept as seeing the feature work: a still for a state, a recording under 30 seconds for a flow, or a transcript for a CLI or API.
