@@ -9,6 +9,7 @@ Each case uses the public emitter, CLI, accounting or workflow interface. HTTP r
 | accounting, Codex | Cumulative deltas, included reasoning/cache and resume replay; adding snapshots fails | Claude uses different counter semantics |
 | accounting, unknown duration | Exposed aggregate cache writes survive without invented 5m/1h allocation; dropping the unsplit counter fails | The split-cache fixture cannot expose this loss |
 | delivery | Persisted acceptance, rejected upload, fresh-process status, retry, exhaustion and bounded rejection; advancing progress on export failure fails | In-memory accounting cannot reach crash/retry lifecycle |
+| bounded hook delivery | Accepted requests still flush when a later enqueue is refused; an early hook return leaves the receiver empty | Delivery alone cannot reach the hook's early-return branch; uses the real capture API and an external HTTP receiver, without a test-only seam |
 | privacy | The actual project-hook CLI omits content from outbox and output; serializing tool/error/input objects fails | Contract field validation alone cannot prove the hook path uses it |
 | workflow | Wait time, resumed attempts, repair categories and stale/missing evidence; equating completion with verified success fails | Provider counters have no workflow quality semantics |
 | external | A separate skill's actual revision, artifact and source references; requiring PR fields or copying content fails | issue-to-pr cannot prove the generic outside-skill boundary |
