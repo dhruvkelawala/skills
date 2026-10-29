@@ -14,6 +14,10 @@ A fresh T3 Sonnet 5.5 task loaded the installed research skill and wrote the [ho
 
 Quality outcomes require supplied fresh evidence at the matching head and a recorded judge/rubric where applicable. The pilot supplies no autonomous claim-support grader. Unknown or stale evidence remains unknown.
 
+The Sonnet live snapshot was captured at `ab60db0`, before the exact-session guard in `b032b44`. It does not prove live capture with the current adapter. Current project hooks require the launcher to supply the exact session ID in the invocation config before capture. This T3 task exposes delegated-task identity, but a supported prelaunch session-binding interface was not established. Codex additionally needs exact-hook review through `/hooks` in the same provider profile, which the inspected app-server cannot perform. Both current live paths remain incomplete. No trust record was changed or bypass flag used.
+
+The public v2 observation list truncates metadata values to 200 characters unless requested with `expandMetadata`. Artifact, evidence and usage inspection requests those full fields. An initial artifact read failed on that shortened response; the expanded response preserved the complete artifact URI and hash. Fixture runs also use distinct synthetic sessions, so separate workflows cannot reuse an earlier fixture's stable request score identity.
+
 A real backend outage left three accepted fixture events pending. A fresh Node process read the same pending count; after restoration another process delivered all three with no exhausted or rejected events. Rejection, exhaustion and bounds are also exercised through the caller-facing local receiver tests.
 
 Initial monitor exploration changed the token rule from observations to scores. Its historical receipts contain an ALERT, an OK during that rule transition, and a new score-based ALERT. That history is not duplicate unresolved delivery and cannot satisfy the helper’s stricter exactly-one-ever assertion. Final replay proof uses a fresh workflow and unchanged score predicates.

@@ -27,7 +27,7 @@ if (command === 'seed') {
   const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const now = new Date().toISOString();
   const revision = await skillRevision(fileURLToPath(new URL('../../skills/issue-to-pr', import.meta.url)));
-  const context = { workflow, attempt: 'first', invocation: 'root', skill: 'issue-to-pr', revision, head, session: 'synthetic-session', childCoverage: 'partial' };
+  const context = { workflow, attempt: 'first', invocation: 'root', skill: 'issue-to-pr', revision, head, session: workflow, childCoverage: 'partial' };
   const row = { type: 'event_msg', timestamp: now, payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 200, output_tokens: 40, cached_input_tokens: 50, reasoning_output_tokens: 10 } } } };
   const canary = 'PILOT_PROMPT_SOURCE_COMMAND_TOOL_ERROR_CANARY_148';
   const events = [metadataEvent({ ...context, kind: 'skill.started', execution: 'running', eventKey: 'start', time: now }), ...captureRequests('codex', [{ type: 'response_item', payload: { content: canary, arguments: canary, error: canary } }, row, row], context), metadataEvent({ ...context, kind: 'gate', eventKey: 'evidence-failure', time: now, outcome: 'failed', judge: 'fixture-file-check', rubric: 'pilot/v1', evidence: [{ uri: 'https://example.org/pilot/failed-evidence', sha256: digest('failed evidence'), head, result: 'fail', expires: new Date(Date.now() + 3600000).toISOString() }], prompt: canary, toolResult: canary, error: canary })];
@@ -45,7 +45,7 @@ if (command === 'seed') {
   else if (command === 'status') console.log(JSON.stringify(await status(config)));
   else if (command === 'read') {
     const traceId = digest(state.workflow).slice(0, 32);
-    const rows = await api('v2/observations?traceId=' + traceId + '&fields=core,basic,usage,model,input,output,metadata');
+    const rows = await api('v2/observations?traceId=' + traceId + '&fields=core,basic,usage,model,input,output,metadata&expandMetadata=artifact,evidence,usage');
     const unique = [...new Map(rows.data.map((o) => [o.id, o])).values()];
     const q = usageQuery(state.workflow, new Date(Date.now() - 3600000).toISOString(), new Date(Date.now() + 60000).toISOString());
     const metrics = await api('v2/metrics?query=' + encodeURIComponent(JSON.stringify(q)));
