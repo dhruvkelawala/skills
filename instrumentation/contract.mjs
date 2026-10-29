@@ -6,7 +6,7 @@ export const digest = (value) => createHash('sha256').update(value).digest('hex'
 const KINDS = new Set(['skill.loaded', 'skill.started', 'skill.finished', 'stage', 'waiting', 'resumed', 'interrupted', 'gate', 'repair', 'request', 'capture.gap']);
 const token = (value) => typeof value === 'string' && /^[\w.:/@+-]{1,200}$/.test(value) ? value : null;
 const choice = (value, choices) => choices.includes(value) ? value : null;
-const number = (value) => Number.isFinite(value) && value >= 0 ? value : null;
+const number = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
 
 export async function skillRevision(directory) {
   const entries = [];
@@ -68,7 +68,7 @@ function evidence(items) {
 function usage(value) {
   if (!value) return null;
   const result = {};
-  for (const key of ['input', 'output', 'cacheRead', 'cacheWrite5m', 'cacheWrite1h', 'reasoning']) result[key] = number(value[key]);
+  for (const key of ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite5m', 'cacheWrite1h', 'reasoning']) result[key] = number(value[key]);
   result.inputIncludesCache = typeof value.inputIncludesCache === 'boolean' ? value.inputIncludesCache : null;
   result.outputIncludesReasoning = typeof value.outputIncludesReasoning === 'boolean' ? value.outputIncludesReasoning : null;
   return result;

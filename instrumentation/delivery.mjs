@@ -31,6 +31,8 @@ function usageDetails(u) {
   if (u.input != null) details.input = Math.max(0, u.input - (u.inputIncludesCache ? u.cacheRead ?? 0 : 0));
   if (u.output != null) details.output = Math.max(0, u.output - (u.outputIncludesReasoning ? u.reasoning ?? 0 : 0));
   for (const [from, to] of [['cacheRead', 'cache_read'], ['cacheWrite5m', 'cache_write_5m'], ['cacheWrite1h', 'cache_write_1h'], ['reasoning', 'reasoning']]) if (u[from] != null) details[to] = u[from];
+  const unsplit = (u.cacheWrite ?? 0) - (u.cacheWrite5m ?? 0) - (u.cacheWrite1h ?? 0);
+  if (unsplit > 0) details.cache_write_unknown_duration = unsplit;
   return details;
 }
 

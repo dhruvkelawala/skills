@@ -11,7 +11,7 @@ test('unique requests reconcile streams, replay, failed attempts and child usage
   assert.equal(events.length, 3);
   const child = captureRequests('claude', [claude('child', 3)], { ...context, invocation: 'child', parent: 'root', task: 'delegate-1', allocation: 'exclusive' });
   const result = totals([...events, ...events, ...child], 'root');
-  assert.deepEqual(result.inclusive, { input: 30, output: 15, cacheRead: 90, cacheWrite5m: 15, cacheWrite1h: 21, reasoning: null, total: 171 });
+  assert.deepEqual(result.inclusive, { input: 30, output: 15, cacheRead: 90, cacheWrite: 36, cacheWrite5m: 15, cacheWrite1h: 21, reasoning: null, total: 171 });
   assert.equal(result.requests, 4);
   assert.equal(result.failedRequests, 1);
   assert.equal(result.unknownUsage, 1);
@@ -26,8 +26,18 @@ test('Codex cumulative snapshots count each request once and keep reasoning insi
   const first = row(200, 40, 50, 10);
   const events = captureRequests('codex', [first, first, row(300, 60, 75, 15)], context);
   assert.equal(events.length, 2);
-  assert.deepEqual(totals(events, 'root').inclusive, { input: 300, output: 60, cacheRead: 75, cacheWrite5m: null, cacheWrite1h: null, reasoning: 15, total: 360 });
+  assert.deepEqual(totals(events, 'root').inclusive, { input: 300, output: 60, cacheRead: 75, cacheWrite: null, cacheWrite5m: null, cacheWrite1h: null, reasoning: 15, total: 360 });
   assert.equal(totals(events, 'root').exclusive, null);
   const replay = captureRequests('codex', [first, first, row(300, 60, 75, 15)], { ...context, attempt: 'resumed' });
   assert.equal(totals([...events, ...replay], 'root').requests, 2);
+});
+
+
+test('Claude aggregate cache writes remain measured when their duration is unknown', () => {
+  const rows = [{ type: 'assistant', timestamp: '2026-10-29T18:00:00Z', message: { id: 'legacy-cache', usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 20, cache_creation_input_tokens: 40 } } }];
+  const events = captureRequests('claude', rows, context);
+  assert.equal(events[0].usage.cacheWrite, 40);
+  assert.equal(events[0].usage.cacheWrite5m, null);
+  assert.equal(events[0].usage.cacheWrite1h, null);
+  assert.equal(totals(events, 'root').inclusive.total, 75);
 });

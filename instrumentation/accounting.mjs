@@ -1,6 +1,6 @@
 import { digest, metadataEvent } from './contract.mjs';
 
-const KEYS = ['input', 'output', 'cacheRead', 'cacheWrite5m', 'cacheWrite1h', 'reasoning'];
+const KEYS = ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite5m', 'cacheWrite1h', 'reasoning'];
 const counter = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
 
 // Bounded adapters for the pinned runtimes' usage records; content is never projected.
@@ -19,7 +19,7 @@ export function captureRequests(runtime, rows, context) {
       failed = row.isApiErrorMessage === true;
       const u = row.message?.usage;
       model = row.message?.model ?? model;
-      usage = u ? { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cache_read_input_tokens), cacheWrite5m: counter(u.cache_creation?.ephemeral_5m_input_tokens), cacheWrite1h: counter(u.cache_creation?.ephemeral_1h_input_tokens), reasoning: null, inputIncludesCache: false, outputIncludesReasoning: true } : null;
+      usage = u ? { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cache_read_input_tokens), cacheWrite: counter(u.cache_creation_input_tokens) ?? (u.cache_creation ? (counter(u.cache_creation.ephemeral_5m_input_tokens) ?? 0) + (counter(u.cache_creation.ephemeral_1h_input_tokens) ?? 0) : null), cacheWrite5m: counter(u.cache_creation?.ephemeral_5m_input_tokens), cacheWrite1h: counter(u.cache_creation?.ephemeral_1h_input_tokens), reasoning: null, inputIncludesCache: false, outputIncludesReasoning: true } : null;
       if (usage && u.cache_creation_input_tokens > 0 && !u.cache_creation) {
         usage.cacheWrite5m = null;
         usage.cacheWrite1h = null;
@@ -29,7 +29,7 @@ export function captureRequests(runtime, rows, context) {
       if (row.type === 'turn_context') { turn = p?.turn_id ?? turn; model = p?.model ?? model; effort = p?.effort ?? p?.reasoning_effort ?? effort; }
       if (row.type !== 'event_msg' || p?.type !== 'token_count' || !p.info?.total_token_usage) continue;
       const u = p.info.total_token_usage;
-      const current = { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cached_input_tokens), cacheWrite5m: null, cacheWrite1h: null, reasoning: counter(u.reasoning_output_tokens) };
+      const current = { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cached_input_tokens), cacheWrite: null, cacheWrite5m: null, cacheWrite1h: null, reasoning: counter(u.reasoning_output_tokens) };
       if (KEYS.every((key) => current[key] === (previous[key] ?? null))) continue;
       const reset = KEYS.some((key) => current[key] !== null && previous[key] != null && current[key] < previous[key]);
       if (reset) throw new Error('cumulative usage reset; capture unavailable without request identity');
@@ -75,7 +75,7 @@ export function totals(events, invocation) {
     }));
     result.total = list.some((e) => e.usage) ? list.reduce((n, e) => {
       const u = e.usage;
-      return n + (u?.input ?? 0) + (u?.output ?? 0) + (u?.inputIncludesCache === false ? (u.cacheRead ?? 0) + (u.cacheWrite5m ?? 0) + (u.cacheWrite1h ?? 0) : 0);
+      return n + (u?.input ?? 0) + (u?.output ?? 0) + (u?.inputIncludesCache === false ? (u.cacheRead ?? 0) + (u.cacheWrite ?? 0) : 0);
     }, 0) : null;
     return result;
   }
