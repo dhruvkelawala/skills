@@ -1,0 +1,44 @@
+Issue #123 verification at be65b307d62a07311a3a7942ffa35f95a0dfd4f0
+
+$ node --test skills/pr-watch/scripts/pr-gate.test.mjs
+✔ watch: rejects a stability requirement below two (0.062958ms)
+ℹ tests 107
+ℹ suites 0
+ℹ pass 107
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2820.786916
+
+$ node --test $(git ls-files '*.test.mjs')
+✔ a command a signal stops, such as on a harness timeout, is still recorded with the output it had (160.676375ms)
+ℹ tests 271
+ℹ suites 4
+ℹ pass 271
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36543.269792
+
+$ python3 skills/cleanup/scripts/test-artifact-audit.py
+PASS: artifacts, caches, sizes, holds, read-only
+
+$ python3 skills/cleanup/scripts/test-worktree-audit.py
+PASS: 8 classifications, HEAD SHAs, offline safety, invalid markers, deduplication, whitespace paths, trunk, read-only
+
+Before the fix, the four new normal-gate cases:
+✖ normal gate: Codex waits for a new running summary (1.683208ms)
+✖ normal gate: Codex accepts a completed summary created before the HEAD (0.143458ms)
+✖ normal gate: Codex rejects a new summary for another commit (0.096459ms)
+✔ normal gate: Codex accepts a new comment without a marker (0.079375ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 1
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 49.490375
+
