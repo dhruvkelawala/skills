@@ -7,13 +7,13 @@ description: Use when the user invokes /day morning (the 10:00 scheduled task se
 
 The day has two fixed anchors, a morning report and a goodnight check, and this skill owns both. For the morning report, `/day morning`, which a 10:00 scheduled task sends, follow [morning.md](morning.md). This file covers the goodnight check, which is night mode.
 
-Invoke as `/day night`, or say "goodnight". The T3 tools see the threads of the T3 server this thread runs on, so start the check from a thread on the machine where T3 runs new threads.
+Invoke as `/day night`, or say "goodnight". The check covers the project this thread is in. It covers every project only when the message that starts it asks for all of them, as in `/day night all`, "goodnight all" or "check every project". The T3 tools see the threads of the T3 server this thread runs on, so start the check from a thread in the project to check, on the machine where T3 runs new threads.
 
 The user often reads the list on a phone. Put the answer first, and link each thread as `[title](t3-thread://v1/<threadId>)` with the `threadId` exactly as T3 returns it, so it opens in T3. Every link goes to a T3 thread or a web page, never to a local file or localhost.
 
 ## 1. Gather the threads
 
-1. List every project with `t3_project_list`, and each project's active threads with `t3_thread_list` and `settled: false`. Follow `nextCursor` until it is null. Leave out this thread and archived threads. Subagent threads stay out, since their parent stands for them.
+1. Call `t3_thread_list` with `settled: false` and no `projectId`. It lists this thread's project, and returns that `projectId` and this thread's `currentThreadId`. When the check covers every project, list them with `t3_project_list` and call `t3_thread_list` with each `projectId` and `settled: false`. Follow `nextCursor` until it is null. Leave out this thread and archived threads. Subagent threads stay out, since their parent stands for them.
 2. Read each thread with `t3_thread_read`, keeping its status, `activeRunId`, `pendingRequestCount`, `branch`, `worktreePath`, `pullRequests`, `updatedAt` and its last few messages. When the thread is an `/issue-to-pr` build, its run record at `~/.agent/issue-to-pr/<repo>/<issue>.md` gives its `stage` and `repairs`.
 3. Put each thread in the first group that fits:
    - **Runs** keep working tonight without the user. A turn is `preparing`, `queued`, `starting` or `running`, or the thread watches an open PR, which its last message says.
@@ -23,7 +23,7 @@ The user often reads the list on a phone. Put the answer first, and link each th
 
    A snoozed thread is listed only as a run, since the user put its questions off. A turn that has run for over an hour with no update has also gone quiet. Keep it under runs, and say so in its reason. A thread that watches an open PR is idle between PR events by design, and stays a run.
 
-**Complete when:** every active thread on the server, apart from this one, is in exactly one group.
+**Complete when:** every active thread in the projects the check covers, apart from this one, is in exactly one group.
 
 ## 2. Check the strain
 
@@ -45,10 +45,10 @@ A run that continues keeps the day's rules and its remaining repairs. It gets no
 
 ## 4. Post the list and wait
 
-Post the list in this shape. Number every listed thread in one sequence, so the user can change any line by its number. Leave out an empty group, the done line when nothing is done, and the strain line when the script printed nothing.
+Post the list in this shape. The first line names what the check covers: the project's title from `t3_project_list`, or "all projects". When it covers all projects, put each thread's project title after its link. Number every listed thread in one sequence, so the user can change any line by its number. Leave out an empty group, the done line when nothing is done, and the strain line when the script printed nothing.
 
 ```md
-Goodnight. 3 runs: 2 continue, 1 stop. 1 waits on you, 1 went quiet.
+Goodnight in app. 3 runs: 2 continue, 1 stop. 1 waits on you, 1 went quiet.
 
 Runs
 1. continue · [Build #63: thread per build](t3-thread://v1/<threadId>) · PR #81 waiting on CI, 7 repairs left
@@ -99,7 +99,7 @@ Stop each thread marked stop in these moves, in this order:
 
 ## The night record
 
-The night record is `~/.agent/day/night-<YYYY-MM-DD>-<HHMM>.md`, written when the reply is acted on. When a record from the last 12 hours exists, add to it instead, so a second goodnight in one night keeps the first one's stops.
+The night record is `~/.agent/day/night-<YYYY-MM-DD>-<HHMM>.md`, written when the reply is acted on. When a record from the last 12 hours exists, add to it instead, so goodnights in several projects, or a second one in the same project, keep every stop in the record the morning reads.
 
 ```md
 # Night record, <YYYY-MM-DD> <HH:MM>
@@ -111,7 +111,7 @@ The night record is `~/.agent/day/night-<YYYY-MM-DD>-<HHMM>.md`, written when th
 - <ISO time with offset> · [<title>](t3-thread://v1/<threadId>) · <the reason it continued>
 ```
 
-The morning report lists the stopped lines of the newest record from the last 24 hours whose threads have not run since ([morning step 2](morning.md#2-gather-the-rest)). A run stopped on an earlier night and never restarted shows up in the next goodnight check as gone quiet.
+The morning report lists the stopped lines of the newest record from the last 24 hours whose threads have not run since ([morning step 2](morning.md#2-gather-the-rest)). A run stopped on an earlier night and never restarted shows up as gone quiet in the next goodnight check that covers its project.
 
 ## "go on"
 
