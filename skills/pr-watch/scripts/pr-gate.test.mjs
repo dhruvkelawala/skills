@@ -432,6 +432,38 @@ test("verification waits for the current-head Codex summary to finish without un
   }
 });
 
+for (const [name, createdAt, codeReview, expectedState, reason] of [
+  ["waits for a new running summary", REVIEWED_AT,
+    { commit_sha: HEAD, status: "running", has_unresolved_findings: null },
+    "pending", "is reviewing the current HEAD"],
+  ["accepts a completed summary created before the HEAD", "2026-08-28T20:00:00Z",
+    { commit_sha: HEAD, status: "completed", has_unresolved_findings: false },
+    "ready", null],
+  ["rejects a new summary for another commit", REVIEWED_AT,
+    { commit_sha: OTHER, status: "completed", has_unresolved_findings: false },
+    "pending", "has not reviewed the current HEAD"],
+  ["accepts a new comment without a marker", REVIEWED_AT, null, "ready", null],
+]) {
+  test(`normal gate: Codex ${name}`, () => {
+    const reviewer = "chatgpt-codex-connector";
+    const requestComment = "@codex review";
+    const body = codeReview
+      ? `<!-- codex-review-state:v1 ${JSON.stringify({ code_review: codeReview, security_review: null })} -->`
+      : "Review complete.";
+    const snapshot = baseSnapshot({
+      comments: [
+        { author: PR_AUTHOR, body: requestComment, createdAt: REQUESTED_AT },
+        { author: `${reviewer}[bot]`, body, createdAt },
+      ],
+    });
+    assert.deepEqual(evaluateGate(snapshot, { reviewers: [reviewer], requestComment }), {
+      state: expectedState,
+      reasons: reason ? [`Reviewer ${reviewer} ${reason}`] : [],
+      threads: [],
+    });
+  });
+}
+
 test("ready: reviewer posted a review object bound to HEAD", () => {
   const result = evaluateGate(baseSnapshot({
     reviews: [{ author: BOT, commitId: HEAD, state: "COMMENTED", submittedAt: REVIEWED_AT }],
