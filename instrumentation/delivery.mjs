@@ -22,7 +22,8 @@ export function ingestion(event) {
   if (parent) span.parentSpanId = parent;
   const trace = { resourceSpans: [{ resource: { attributes: [attribute('service.name', 'skill-observability-pilot')] }, scopeSpans: [{ scope: { name: 'skill-run/v1' }, spans: [span] }] }] };
   const score = event.kind === 'gate' && event.outcome !== 'unknown' ? { id: digest(event.eventId + ':score').slice(0, 32), traceId, observationId: id, name: 'evidence-failure', dataType: 'BOOLEAN', value: event.outcome === 'failed' ? 1 : 0, comment: JSON.stringify({ evidence: event.evidence, judge: event.judge, rubric: event.rubric }) } : null;
-  return { trace, score };
+  const measured = event.kind === 'request' && event.usage?.input != null && event.usage?.output != null && (event.usage.inputIncludesCache === true || event.usage.inputIncludesCache === false && event.usage.cacheRead != null && event.usage.cacheWrite != null) ? { id: digest(event.request + ':tokens').slice(0, 32), traceId, observationId: id, name: 'runtime-tokens', dataType: 'NUMERIC', value: Object.values(usageDetails(event.usage)).reduce((n, v) => n + v, 0), comment: JSON.stringify({ source: event.request, schema: event.schema, measurement: 'runtime-counter', evidence: 'provider-request', priceBasis: null }) } : null;
+  return { trace, scores: [score, measured].filter(Boolean) };
 }
 
 function usageDetails(u) {
@@ -120,7 +121,7 @@ export async function flush(config) {
           return response.ok && !(Number(receipt.partialSuccess?.rejectedSpans) > 0) && !receipt.error;
         };
         ok = await send(endpoint, item.body.trace);
-        if (ok && item.body.score) ok = await send(new URL('/api/public/scores', c.endpoint), item.body.score);
+        for (const score of item.body.scores) if (ok) ok = await send(new URL('/api/public/scores', c.endpoint), score);
       } catch {}
       if (ok) { await unlink(item.path); delivered++; }
       else {

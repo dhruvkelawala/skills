@@ -5,10 +5,11 @@ import { monitorRules } from '../queries.mjs';
 test('backend warning predicates stay scoped to one workflow and configurable warning budget', () => {
   const rules = monitorRules({ projectId: 'pilot', workflow: 'w', tokenWarning: 123 });
   assert.equal(rules.length, 2);
-  const usage = rules.find((r) => r.view === 'observations');
+  const usage = rules.find((r) => r.view === 'scores-numeric');
   const evidence = rules.find((r) => r.view === 'scores-boolean');
+  assert.ok(usage);
   assert.equal(usage.alertThreshold, 123);
-  assert.equal(usage.metric.measure, 'totalTokens');
+  assert.equal(usage.metric.measure, 'value');
   assert.equal(evidence.alertThreshold, 0);
   assert.ok(evidence.filters.some((f) => f.column === 'name' && f.value === 'evidence-failure'));
   assert.ok(evidence.filters.some((f) => f.column === 'booleanValue' && f.value === true));

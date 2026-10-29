@@ -49,8 +49,8 @@ if (command === 'seed') {
     const unique = [...new Map(rows.data.map((o) => [o.id, o])).values()];
     const q = usageQuery(state.workflow, new Date(Date.now() - 3600000).toISOString(), new Date(Date.now() + 60000).toISOString());
     const metrics = await api('v2/metrics?query=' + encodeURIComponent(JSON.stringify(q)));
-    assert.equal(metrics.data[0].sum_totalTokens, 240);
-    assert.equal(metrics.data[0].count_count, 3);
+    assert.equal(metrics.data[0].sum_value, 240);
+    assert.equal(metrics.data[0].count_count, 1);
     const scores = await api('v3/scores?traceId=' + traceId);
     assert.ok(!JSON.stringify({ rows, scores }).includes(state.canary), 'stored fields must suppress every content canary');
     assert.equal(unique.length, 3);
@@ -60,7 +60,7 @@ if (command === 'seed') {
     assert.equal(generation.usageDetails.cache_read, 50);
     assert.equal(generation.usageDetails.reasoning, 10);
     assert.equal(scores.data.filter((s) => s.name === 'evidence-failure').length, 1);
-    const result = { phase: 'backend-only-fixture', capturedHead: state.head, workflow: state.workflow, traceId, uniqueObservations: unique.length, rawRows: rows.data.length, sourceTotals: state.expected, metrics, usageDetails: generation.usageDetails, evidenceFailureScores: scores.data.length, storedCanaryAbsent: true };
+    const result = { phase: 'backend-only-fixture', capturedHead: state.head, workflow: state.workflow, traceId, uniqueObservations: unique.length, rawRows: rows.data.length, sourceTotals: state.expected, metrics, usageDetails: generation.usageDetails, evidenceFailureScores: scores.data.filter((s) => s.name === 'evidence-failure').length, storedCanaryAbsent: true };
     await writeFile(join(work, 'readback.json'), JSON.stringify({ rows, metrics, scores }), { mode: 0o600 });
     console.log(JSON.stringify(result, null, 2));
   } else throw new Error('usage: probe.mjs seed|replay|read|flush|status');

@@ -73,7 +73,7 @@ export function totals(events, invocation) {
       const known = list.filter((event) => event.usage?.[key] != null);
       return [key, known.length ? known.reduce((n, event) => n + event.usage[key], 0) : null];
     }));
-    result.total = list.some((e) => e.usage) ? list.reduce((n, e) => {
+    result.total = list.some((e) => e.usage) && list.filter((e) => e.usage).every((e) => e.usage?.input != null && e.usage?.output != null && (e.usage.inputIncludesCache === true || e.usage.inputIncludesCache === false && e.usage.cacheRead != null && e.usage.cacheWrite != null)) ? list.reduce((n, e) => {
       const u = e.usage;
       return n + (u?.input ?? 0) + (u?.output ?? 0) + (u?.inputIncludesCache === false ? (u.cacheRead ?? 0) + (u.cacheWrite ?? 0) : 0);
     }, 0) : null;
