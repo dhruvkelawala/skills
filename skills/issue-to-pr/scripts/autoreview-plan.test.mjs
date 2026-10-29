@@ -227,4 +227,10 @@ test("a failed opinion remains incomplete and is never reused as a clean review"
   assert.deepEqual(retry.reasons, ["opinion-incomplete"]);
   assert.deepEqual(f.run(), retry);
   assert.equal(f.run("publish").decision, "run");
+  f.facts.configuration.paths = ["app.js"];
+  assert.deepEqual(f.run().reasons, ["opinion-incomplete", "configuration-changed"]);
+  f.facts.configuration.paths = [];
+  const retained = f.run();
+  assert.deepEqual(retained.reasons, ["opinion-incomplete", "configuration-changed"]);
+  assert.ok(retained.prompt.includes("app.js"), "the retry keeps the original configuration trigger in its prompt");
 });

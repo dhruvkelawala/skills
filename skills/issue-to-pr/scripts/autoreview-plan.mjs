@@ -48,13 +48,14 @@ function stage3(record, facts) {
   }
   if (facts.openP0P1 === true) return decision("blocked", ["accepted-findings-open"], basis);
   if (completed) return alreadyCompleted(basis, completed);
-  if (header(record, "autoreview").startsWith("incomplete:")) return decision("run", ["opinion-incomplete"], basis);
+  const incomplete = header(record, "autoreview").startsWith("incomplete:");
 
   const previous = header(record, "autoreview_plan");
   const prior = previous ? JSON.parse(previous) : null;
-  if (prior && isDeepStrictEqual(prior.basis, basis)) return prior;
+  if (prior && isDeepStrictEqual(prior.basis, basis) && (!incomplete || prior.reasons?.includes("opinion-incomplete"))) return prior;
 
-  const reasons = [];
+  const retained = incomplete && prior?.decision === "run" ? prior : null;
+  const reasons = incomplete ? ["opinion-incomplete", ...(retained?.reasons ?? [])] : [];
   if (!basis.contract || reviews.some((review) => review.contract !== basis.contract) ||
       (prior && prior.basis.contract !== basis.contract)) reasons.push("contract-changed");
   if (basis.dirty) reasons.push("worktree-dirty");
@@ -65,7 +66,7 @@ function stage3(record, facts) {
 
   const config = facts.configuration;
   if (config?.complete !== true || !Array.isArray(config.paths) || !config.paths.every(text)) reasons.push("configuration-unknown");
-  const configPaths = basis.paths.filter((path) => configurationPath(path) || config?.paths?.includes(path));
+  const configPaths = [...new Set([...changedConfiguration(basis), ...(retained ? changedConfiguration(retained.basis) : [])])];
   if (configPaths.length) reasons.push("configuration-changed");
   for (const risk of RISKS) {
     if ([facts.contractRisks, ...reviews.map((review) => review.risks)].some((risks) => risks?.[risk] !== false)) reasons.push(`risk-${risk}`);
@@ -73,7 +74,7 @@ function stage3(record, facts) {
   const hosted = facts.hostedReviewer;
   if (hosted?.configured !== true || hosted.available !== true || hosted.bot !== true || !text(hosted.login) || !text(hosted.source)) reasons.push("hosted-reviewer");
   if (facts.userRequested !== false) reasons.push("user-request");
-  return decision(reasons.length ? "run" : "skip", reasons.length ? reasons : ["eligible"], basis, configPaths);
+  return decision(reasons.length ? "run" : "skip", reasons.length ? [...new Set(reasons)] : ["eligible"], basis, configPaths);
 }
 
 function publication(record, skip) {
@@ -147,6 +148,10 @@ function decision(value, reasons, basis, configPaths = []) {
 function configurationPath(path) {
   return /(?:^|\/)(?:package\.json|(?:package-lock|npm-shrinkwrap)\.json|(?:pnpm-lock|pnpm-workspace)\.yaml|yarn\.lock|bun\.lockb?|deno\.(?:jsonc?|lock)|Cargo\.(?:toml|lock)|go\.(?:mod|sum|work)|pyproject\.toml|poetry\.lock|uv\.lock|Pipfile(?:\.lock)?|requirements[^/]*\.txt|Gemfile(?:\.lock)?|composer\.(?:json|lock)|pom\.xml|(?:build|settings)\.gradle(?:\.kts)?|gradle\.properties|gradlew(?:\.bat)?|[^/]+\.csproj|global\.json|NuGet\.Config|Package\.(?:swift|resolved)|Podfile(?:\.lock)?|\.tool-versions|\.node-version|\.nvmrc|\.python-version|\.ruby-version|\.java-version|rust-toolchain(?:\.toml)?|\.npmrc|\.yarnrc(?:\.yml)?|\.gitmodules|Dockerfile[^/]*|Containerfile[^/]*|(?:docker-)?compose[^/]*\.ya?ml|Makefile|GNUmakefile|CMakeLists\.txt|[^/]+\.cmake|(?:vite|vitest|webpack|rollup|babel|next|nuxt|svelte|astro|eslint|prettier|tsup)\.config\.[^/]+|tsconfig[^/]*\.json|\.babelrc[^/]*|\.gitlab-ci\.yml|Jenkinsfile|azure-pipelines\.ya?ml)$/i.test(path) ||
     /(?:^|\/)(?:\.github\/workflows|\.circleci|\.buildkite|\.devcontainer|gradle\/wrapper)\//i.test(path);
+}
+
+function changedConfiguration(basis) {
+  return basis.paths.filter((path) => configurationPath(path) || basis.facts.configuration?.paths?.includes(path));
 }
 
 process.exitCode = main(process.argv.slice(2));
