@@ -9,7 +9,8 @@ const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 const command = `SKILL_OBSERVABILITY_CONFIG=${quote(resolve(config))} ${quote(process.execPath)} ${quote(cli)} hook ${runtime}`;
 const hook = { type: 'command', command, timeout: 15 };
-const contents = JSON.stringify({ hooks: { Stop: [{ hooks: [hook] }], SessionEnd: [{ hooks: [hook] }] } }, null, 2) + '\n';
+const endHook = runtime === 'codex' ? { ...hook, timeout: 3 } : hook;
+const contents = JSON.stringify({ hooks: { Stop: [{ hooks: [hook] }], SessionEnd: [{ hooks: [endHook] }] } }, null, 2) + '\n';
 const path = join(resolve(project), runtime === 'claude' ? '.claude/settings.local.json' : '.codex/hooks.json');
 if (action === 'create') {
   await mkdir(dirname(path), { recursive: true });
