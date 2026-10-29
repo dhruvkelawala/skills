@@ -71,6 +71,27 @@ test("a fully eligible pilot skip records its computed basis and survives a same
   assert.equal(publication.outcome, "skipped");
 });
 
+test("tree-identical rewrites preserve verified source reviews while changed content blocks reuse", (t) => {
+  const f = fixture(t);
+  assert.equal(f.run().decision, "skip");
+  f.git("commit", "--amend", "-qm", "rewritten message");
+  const head = f.git("rev-parse", "HEAD");
+  assert.notEqual(head, f.head);
+  assert.equal(f.git("rev-parse", "HEAD^{tree}"), f.tree);
+  const plan = f.run();
+  assert.equal(plan.decision, "skip");
+  assert.deepEqual(plan.reasons, ["eligible"]);
+  assert.equal(plan.basis.head, head);
+
+  for (const review of f.facts.reviews) review.head = f.base;
+  assert.deepEqual(f.run().reasons, ["source-review-incomplete"], "a matching claimed tree must still belong to the reviewed commit");
+  for (const review of f.facts.reviews) review.head = f.head;
+  writeFileSync(join(f.repo, "app.js"), "export const value = 3;\n");
+  f.git("add", "app.js");
+  f.git("commit", "--amend", "--no-edit");
+  assert.deepEqual(f.run().reasons, ["source-review-incomplete"], "a rewritten head with different content cannot reuse unrelated reviews");
+});
+
 const retained = [
   ["fallback", (f) => { f.facts.reviews[0].fallback = true; }, "source-fallback"],
   ["limited coverage", (f) => { f.facts.reviews[1].coverage = "limited"; }, "source-coverage"],

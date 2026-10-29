@@ -41,7 +41,7 @@ function stage3(record, facts) {
   const reviews = facts?.reviews;
   if (!Array.isArray(reviews) || reviews.length !== 2 ||
       !["standards", "spec"].every((axis) => reviews.some((review) => review?.axis === axis)) ||
-      reviews.some((review) => !sourceComplete(review, basis.base)) ||
+      reviews.some((review) => !sourceComplete(review, basis)) ||
       reviews[0].reviewer === reviews[1].reviewer ||
       reviews[0].head !== reviews[1].head || reviews[0].tree !== reviews[1].tree) {
     return decision("blocked", ["source-review-incomplete"], basis);
@@ -116,14 +116,15 @@ function gitBasis(record, facts) {
   };
 }
 
-function sourceComplete(review, base) {
+function sourceComplete(review, basis) {
   if (review.status !== "completed" || !text(review.reviewer) || !text(review.model) ||
-      !["claude", "codex"].includes(review.family) || review.base !== base ||
+      !["claude", "codex"].includes(review.family) || review.base !== basis.base ||
       !SHA.test(review.head) || !SHA.test(review.tree) || !ACCESS.every((key) => review.access?.[key] === true)) return false;
   try {
-    git("merge-base", "--is-ancestor", base, review.head);
-    git("merge-base", "--is-ancestor", review.head, "HEAD");
-    return git("rev-parse", `${review.head}^{tree}`) === review.tree;
+    git("merge-base", "--is-ancestor", basis.base, review.head);
+    if (git("rev-parse", `${review.head}^{tree}`) !== review.tree) return false;
+    if (review.tree !== basis.tree) git("merge-base", "--is-ancestor", review.head, basis.head);
+    return true;
   } catch {
     return false;
   }
