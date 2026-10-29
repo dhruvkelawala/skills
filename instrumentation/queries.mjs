@@ -7,7 +7,7 @@ export function monitorRules({ projectId, workflow, tokenWarning = 100000, trigg
   const scope = { column: 'traceId', operator: '=', value: trace, type: 'string' };
   return [
     { ...base, name: `${workflow}: token warning; evidence trace ${trace}`, view: 'observations', metric: { measure: 'totalTokens', aggregation: 'sum' }, filters: [scope], alertThreshold: tokenWarning },
-    { ...base, name: `${workflow}: evidence failure; evidence trace ${trace}`, view: 'scores-boolean', metric: { measure: 'count', aggregation: 'count' }, filters: [scope, { column: 'name', operator: '=', value: 'evidence-failure', type: 'string' }, { column: 'value', operator: '=', value: 1, type: 'number' }], alertThreshold: 0 },
+    { ...base, name: `${workflow}: evidence failure; evidence trace ${trace}`, view: 'scores-boolean', metric: { measure: 'count', aggregation: 'count' }, filters: [scope, { column: 'name', operator: '=', value: 'evidence-failure', type: 'string' }, { column: 'booleanValue', operator: '=', value: true, type: 'boolean' }], alertThreshold: 0 },
   ];
 }
 

@@ -11,7 +11,7 @@ test('backend warning predicates stay scoped to one workflow and configurable wa
   assert.equal(usage.metric.measure, 'totalTokens');
   assert.equal(evidence.alertThreshold, 0);
   assert.ok(evidence.filters.some((f) => f.column === 'name' && f.value === 'evidence-failure'));
-  assert.ok(evidence.filters.some((f) => f.column === 'value' && f.value === 1));
+  assert.ok(evidence.filters.some((f) => f.column === 'booleanValue' && f.value === true));
   for (const rule of rules) {
     assert.ok(rule.filters.some((f) => f.column === 'traceId' && /^[a-f0-9]{32}$/.test(f.value)));
     assert.match(rule.name, /w/);
