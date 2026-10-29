@@ -1,0 +1,63 @@
+Issue 110: sanitized Codex eval outcome capture
+Generated from runner result.json and grade.json; no private source, quotes or screenshots.
+Instruction revision: c8c439f8293a06abd78bae63258e19fc25eeabc4
+Create and grader model: gpt-6.1-sol
+All cases ran sequentially.
+
+Visaroy command, repeated three times:
+node skills/verification-skill/evals/run.mjs visaroy --runs 1
+Authorized pre-run gate: 5-minute load <8, no other eval/cargo/expo/build;
+AgentDeviceRunnerUITests test-without-building was permitted for this web-only case.
+Another project's simulator UI-test session was live during the first two Visaroy runs; no such runner was present at the third run's launch.
+Lore command:
+node skills/verification-skill/evals/run.mjs lore --runs 1 --wait-for-idle
+
+visaroy: scores=[15, 13.5, 13.5], mean=14.00/19
+Recorded baseline: scores=[13.5, 12.5, 13.5], mean=13.17/19
+Run 1: score=15/19; starting load (1/5/15 min)=6.1640625, 7.2216796875, 6.57275390625
+  Replay: launch=passed, doctor=passed, drive=passed, cleanup=passed
+  Leftovers: create=0, grade=0
+  Duration: create=44 min, grade=5 min
+  Generated helpers=1, CLI test files=1, skill calls helpers=True
+  Lessons: GNU/BSD=partly, clean PATH=covered, quota handling=covered
+Run 2: score=13.5/19; starting load (1/5/15 min)=6.0751953125, 6.39892578125, 6.193359375
+  Replay: launch=passed, doctor=passed, drive=passed, cleanup=passed
+  Leftovers: create=0, grade=0
+  Duration: create=39 min, grade=4 min
+  Generated helpers=1, CLI test files=1, skill calls helpers=True
+  Lessons: GNU/BSD=partly, clean PATH=covered, quota handling=partly
+Run 3: score=13.5/19; starting load (1/5/15 min)=3.90576171875, 4.373046875, 4.349609375
+  Replay: launch=passed, doctor=passed, drive=passed, cleanup=passed
+  Leftovers: create=0, grade=0
+  Duration: create=43 min, grade=13 min
+  Generated helpers=1, CLI test files=1, skill calls helpers=True
+  Lessons: GNU/BSD=partly, clean PATH=partly, quota handling=partly
+
+lore: scores=[0, 9, 0], mean=3.00/13
+Recorded baseline: scores=[8, 8.5, 9.5], mean=8.67/13
+Run 1: score=0/13; starting load (1/5/15 min)=3.93505859375, 4.23828125, 4.2392578125
+  Replay: launch=skipped, doctor=skipped, drive=skipped, cleanup=skipped
+  Leftovers: create=0, grade=0
+  Duration: create=14 min, grade=1 min
+Run 2: score=9/13; starting load (1/5/15 min)=3.060546875, 7.93896484375, 10.8486328125
+  Replay: launch=passed, doctor=passed, drive=failed, cleanup=passed
+  Leftovers: create=0, grade=0
+  Duration: create=151 min, grade=15 min
+Run 3: score=0/13; starting load (1/5/15 min)=2.06982421875, 7.62646484375, 14.6376953125
+  Replay: launch=skipped, doctor=skipped, drive=skipped, cleanup=skipped
+  Leftovers: create=0, grade=0
+  Duration: create=23 min, grade=1 min
+
+Limitations:
+Scores are grader judgments; quota handling marked covered does not prove a live API fallback.
+No personal phone or phone data was driven.
+Claude second opinion skipped by user instruction.
+
+Repository verification at the unchanged instruction revision:
+node --test $(rg --files scripts skills -g '*.test.mjs')
+tests 265; pass 265; fail 0; cancelled 0; skipped 0; todo 0
+git diff --check: passed
+
+Lore runs 1 and 3 stopped before writing a skill because native builds could not resolve aliased temporary paths.
+Lore run 2 passed launch, Doctor and cleanup, but its independent drive failed after restart.
+The Lore mean is below baseline; the requested acceptance criterion is not met.
