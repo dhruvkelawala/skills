@@ -85,26 +85,44 @@ async function rejected(c) {
 }
 
 export async function emit(config, input, { remember = false } = {}) {
+  const { accepted, ...result } = await emitBatch(config, [input], { remember });
+  return result;
+}
+
+export async function emitBatch(config, inputs, { remember = false } = {}) {
   return locked(config, async (c) => {
-    let event = metadataEvent(input);
-    if (event.kind === 'request') {
-      if (!event.request || !/^[a-f0-9]{64}$/.test(event.request)) return { status: 'unavailable' };
-      event.eventId = event.request;
+    const existing = new Map((await entries(c)).map(({ path, ...value }) => [path, { value, bytes: Buffer.byteLength(JSON.stringify(value)) }]));
+    let pending = 0, bytes = 0, accepted = 0, result = { status: 'accepted' };
+    for (const item of existing.values()) { if (!item.value.delivered) pending++; bytes += item.bytes; }
+    for (const input of inputs) {
+      let event = metadataEvent(input);
+      if (event.kind === 'request') {
+        if (!event.request || !/^[a-f0-9]{64}$/.test(event.request)) return { status: 'unavailable', accepted };
+        event.eventId = event.request;
+      }
+      const path = join(c.directory, event.eventId + '.json');
+      const previous = existing.get(path);
+      const old = previous?.value;
+      const remembered = event.kind === 'request' && (remember || old?.remember === true);
+      if (remembered && old?.event) event = { ...old.event, usage: event.usage, time: event.time, execution: event.execution ?? old.event.execution };
+      const body = ingestion(event);
+      result = { status: 'accepted', eventId: event.eventId };
+      if (old && old.remember === remembered && (!old.delivered || remembered) && digest(JSON.stringify(old.body)) === digest(JSON.stringify(body))) {
+        result.duplicate = true; accepted++; continue;
+      }
+      const value = { body, event: remembered ? event : undefined, remember: remembered, delivered: false, attempts: old?.attempts ?? 0, next: old?.next ?? 0, exhausted: old?.exhausted ?? false };
+      const size = Buffer.byteLength(JSON.stringify(value));
+      const added = !old || old.delivered;
+      if ((added && pending >= c.maxEvents) || bytes - (previous?.bytes ?? 0) + size > c.maxBytes) {
+        await rejected(c); return { status: 'unavailable', accepted };
+      }
+      await durable(path, value);
+      bytes += size - (previous?.bytes ?? 0);
+      if (added) pending++;
+      existing.set(path, { value, bytes: size });
+      accepted++;
     }
-    const existing = await entries(c);
-    const path = join(c.directory, event.eventId + '.json');
-    const old = existing.find((item) => item.path === path);
-    const remembered = event.kind === 'request' && (remember || old?.remember === true);
-    if (remembered && old?.event) event = { ...old.event, usage: event.usage, time: event.time, execution: event.execution ?? old.event.execution };
-    const body = ingestion(event);
-    if (old?.delivered && digest(JSON.stringify(old.body)) === digest(JSON.stringify(body))) return { status: 'accepted', eventId: event.eventId, duplicate: true };
-    const value = { body, event: remembered ? event : undefined, remember: remembered, delivered: false, attempts: old?.attempts ?? 0, next: old?.next ?? 0, exhausted: old?.exhausted ?? false };
-    const bytes = Buffer.byteLength(JSON.stringify(value));
-    if (((!old || old.delivered) && existing.filter((e) => !e.delivered).length >= c.maxEvents) || bytes + existing.filter((e) => e.path !== path).reduce((n, e) => n + Buffer.byteLength(JSON.stringify(e)), 0) > c.maxBytes) {
-      await rejected(c); return { status: 'unavailable' };
-    }
-    await durable(path, value);
-    return { status: 'accepted', eventId: event.eventId };
+    return { ...result, accepted };
   });
 }
 

@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { metadataEvent, skillRevision } from './contract.mjs';
 import { captureRequests } from './accounting.mjs';
-import { emit, flush, status } from './delivery.mjs';
+import { emit, emitBatch, flush, status } from './delivery.mjs';
 
 export async function configuration(path = process.env.SKILL_OBSERVABILITY_CONFIG) {
   if (!path) return { enabled: false };
@@ -28,15 +28,10 @@ export async function captureHook(config, runtime, payload) {
     catch { if (i !== lines.length - 1) return { status: 'unavailable' }; }
   }
   const revision = await skillRevision(config.skillDirectory);
-  const events = captureRequests(runtime, rows, { ...config.context, session: payload.session_id, revision });
-  let accepted = 0;
-  for (const event of events) {
-    if (Date.parse(event.time) < Date.parse(config.since)) continue;
-    if ((await emit(config, { ...event, eventKey: event.request }, { remember: true })).status === 'accepted') accepted++;
-    else return { status: 'unavailable', accepted, delivery: await flush(config), coverage: 'partial' };
-  }
+  const events = captureRequests(runtime, rows, { ...config.context, revision });
+  const batch = await emitBatch(config, events.filter((event) => Date.parse(event.time) >= Date.parse(config.since)).map((event) => ({ ...event, eventKey: event.request })), { remember: true });
   const delivery = await flush(config);
-  return { status: 'captured', accepted, delivery, coverage: 'partial' };
+  return { status: batch.status === 'accepted' ? 'captured' : 'unavailable', accepted: batch.accepted ?? 0, delivery, coverage: 'partial' };
 }
 
 async function stdin() {
