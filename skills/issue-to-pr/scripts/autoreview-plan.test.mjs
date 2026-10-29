@@ -120,11 +120,13 @@ for (const lane of ["light", "full"]) {
     const f = fixture(t);
     f.edit((text) => text.replace("lane: light", `lane: ${lane}`));
     assert.equal(f.run().decision, "skip");
+    f.outcome("skipped: conditional-v1, eligible");
     f.commit("app.js", "export const value = 3;\n");
     const plan = f.run();
     assert.equal(plan.decision, "run");
     assert.ok(plan.reasons.includes("pass1-tree-changed"));
     assert.equal(plan.basis.tree, f.git("rev-parse", "HEAD^{tree}"));
+    assert.equal(f.run("publish").decision, "run", "a fresh retained plan supersedes the old skipped outcome");
   });
 }
 
@@ -189,10 +191,12 @@ test("actual clean reuse requires the reviewed tree and a clean checkout", (t) =
   f.outcome(`claude actual-model, tree ${f.tree}, clean`);
   assert.equal(f.run("publish").reuse, true);
   writeFileSync(join(f.repo, "app.js"), "uncommitted\n");
-  assert.equal(f.run("publish").decision, "run");
+  assert.equal(f.run("publish").decision, "blocked");
   f.git("checkout", "--", "app.js");
   f.commit("app.js", "later repair\n");
-  assert.equal(f.run("publish").decision, "run");
+  assert.equal(f.run("publish").decision, "blocked", "the pilot cannot repeat a completed opinion after repairs");
+  f.edit((text) => text.replace("review_policy: conditional-v1\n", ""));
+  assert.equal(f.run("publish").decision, "run", "non-pilot reuse defaults are preserved");
 });
 
 test("a completed opinion is once-only even after repairs and exposes its original basis", (t) => {
@@ -205,12 +209,19 @@ test("a completed opinion is once-only even after repairs and exposes its origin
   assert.equal(plan.reviewedTree, f.tree);
   assert.equal(plan.notRereviewed, true);
   assert.deepEqual(plan.aprArgs, ["--skip-review"]);
+  const publication = f.run("publish");
+  assert.equal(publication.decision, "blocked");
+  assert.deepEqual(publication.reasons, ["opinion-already-completed"]);
+  assert.equal(publication.outcome, "completed");
 });
 
 test("a failed opinion remains incomplete and is never reused as a clean review", (t) => {
   const f = fixture(t);
   assert.equal(f.run().decision, "skip");
   f.outcome("incomplete: provider failed");
+  const publication = f.run("publish");
+  assert.equal(publication.decision, "run");
+  assert.equal(publication.outcome, "incomplete");
   const retry = f.run();
   assert.equal(retry.decision, "run");
   assert.deepEqual(retry.reasons, ["opinion-incomplete"]);

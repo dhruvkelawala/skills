@@ -82,13 +82,17 @@ function publication(record, skip) {
   if (inPilot(record) && !completed) {
     const saved = header(record, "autoreview_plan");
     const plan = saved ? JSON.parse(saved) : null;
-    if (header(record, "autoreview").startsWith("skipped:") || (plan?.decision === "skip" && plan.reasons?.includes("eligible"))) {
+    const skipped = plan ? plan.decision === "skip" && plan.reasons?.includes("eligible") : header(record, "autoreview").startsWith("skipped:");
+    if (skipped && !header(record, "autoreview").startsWith("incomplete:")) {
       return { decision: "blocked", reasons: ["skip-flag-required"], reuse: false, outcome: "skipped", aprArgs: ["--skip-review"] };
     }
   }
   const tree = git("rev-parse", "HEAD^{tree}");
   if (completed?.result === "clean" && completed.tree === tree && !git("status", "--porcelain")) {
     return { decision: "skip", reasons: ["clean-result-reused"], reuse: true, outcome: "completed", review: completed, aprArgs: [] };
+  }
+  if (inPilot(record) && completed) {
+    return { decision: "blocked", reasons: ["opinion-already-completed"], reuse: false, outcome: "completed", review: completed, aprArgs: ["--skip-review"] };
   }
   return { decision: "run", reasons: ["review-required"], reuse: false, outcome: "incomplete", aprArgs: [] };
 }
