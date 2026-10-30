@@ -23,6 +23,10 @@ After the brief posts, the run continues without waiting. It stops only for a ha
 
 The run record is `~/.agent/issue-to-pr/<repo>/<issue>.md`, outside the repository, where `<repo>` is `gh repo view --json name --jq .name` (REST: `gh api repos/{owner}/{repo} --jq .name`). Only this session writes it. Helper agents return reports, and this session appends them. [Run record](references/run-record.md) has the format and the checks to run when a record already exists. Every stage ends by updating `stage`, `head` and `tree`. Only `repairs.mjs` changes `repairs`.
 
+## Optional observability pilot
+
+When `SKILL_OBSERVABILITY_CONFIG` names an enabled private pilot configuration, follow [observability](references/observability.md) at stage boundaries, waits, resumption, gates and terminal state. Capture remains optional and fail-open. The orchestrator remains the only run-record writer; observability changes no review, repair, evidence or merge rule.
+
 ## The PR's thread
 
 This thread owns its PR until the PR merges. [The PR's thread](references/pr-thread.md) says what that means, here and in an `/apr` thread: the words the user says, such as "land" and "more", the fixes the thread makes on its own, the repair budget for the PR's whole life, when it watches, and the cleanup on merge. Each "repair" in the stages below is one its [repair budget](references/pr-thread.md#repair-budget) defines, and goes in the record the way it says.

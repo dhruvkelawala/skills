@@ -1,0 +1,20 @@
+# Test ownership
+
+Each case uses the public emitter, CLI, accounting or workflow interface. HTTP receivers replace only the external backend in focused tests. Actual ingestion/read/predicate behavior is checked separately by the pilot commands. No test-only production export or vendor patch was added.
+
+| Owning test | Observable contract and credible regression | Why existing proof misses it |
+| --- | --- | --- |
+| contract | Identity and actual revision, including exposed percent-encoded T3 task IDs; conflating load/start/finish, dropping a task ID or hashing a Git SHA instead of changed instructions fails | No shared run contract existed; a plain UUID cannot expose encoded-ID loss |
+| accounting, unique requests | Literal independently worked totals, stream dedup, failed usage gaps and child inclusion; summing every stream row fails | Backend replay cannot establish source counter semantics |
+| accounting, Codex | Cumulative deltas, included reasoning/cache and resume replay; adding snapshots fails | Claude uses different counter semantics |
+| accounting, unknown duration | Exposed aggregate cache writes survive without invented 5m/1h allocation; dropping the unsplit counter fails | The split-cache fixture cannot expose this loss |
+| delivery | Persisted acceptance, rejected upload, fresh-process status, retry, exhaustion and bounded rejection; advancing progress on export failure fails | In-memory accounting cannot reach crash/retry lifecycle |
+| bounded hook delivery | Accepted requests flush after overflow; later hooks reach new requests, skip acknowledged payloads, and retain old-attempt ownership on late usage updates | Delivery alone cannot reach the hook loop; an external receiver sees 3 instead of all 5 requests before the progress fix, then literal 5/7 posts across replay/update/resume |
+| hook history deadline | A real CLI process with 2,000 acknowledged requests reaches a new tail request before the three-second SessionEnd deadline; per-event history scans cause the host to kill it first | The five-request progression case cannot reveal growing filesystem work; receipts are seeded through the real adapter and receiver, with no test-only production seam |
+| expected failure delivery | Expected-red and recovered checks retain their reason without ERROR severity or failure scores; scoring outcome alone produces three alerts instead of one | Workflow summaries cannot observe backend score/severity output; exercises emit/flush through a receiver, with literal expected counts |
+| privacy | The actual project-hook CLI omits content from outbox and output, and refuses a different session before capture; serializing tool/error/input objects or inheriting another invocation's opt-in fails | Contract validation alone cannot prove the CLI uses the allowlist or binds its runtime identity; the real CLI/config seam needs no test-only export |
+| workflow | Wait time, resumed attempts, repair categories and stale/missing evidence; equating completion with verified success fails | Provider counters have no workflow quality semantics |
+| external | A separate skill's actual revision, artifact and source references; requiring PR fields or copying content fails | issue-to-pr cannot prove the generic outside-skill boundary |
+| queries | Public backend rule definitions scope warnings and use version-correct Boolean filters and stable score aggregation; project-wide filters or observation sums fail | Fake receiver tests cannot prove a backend query declaration |
+
+Red runs reached each new contract assertion before implementation. The initial workflow stub returned null and failed at its first timing assertion; other stubs returned empty/unavailable values. The query authoring case was corrected against the actual backend's `booleanValue` schema after its real metrics API rejected `value`. The ordinary observation aggregate's measured transient replay inflation drove the runtime-score query regression. These are retained independent API/config contracts, not copies of implementation inventories.

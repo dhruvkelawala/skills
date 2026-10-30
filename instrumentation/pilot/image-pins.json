@@ -1,0 +1,30 @@
+{
+  "langfuse/clickhouse": {
+    "image": "clickhouse/clickhouse-server@sha256:8a790dd3468db22b1d4e7b18a176f378ff5ff6053b9c48dd4ea1fa71a24c5ba6",
+    "architecture": "arm64"
+  },
+  "langfuse/langfuse-web": {
+    "image": "docker.langfuse.com/langfuse/langfuse@sha256:c311fd9db4b69f6514fdcb1b86a2a105d5a4ed51fbf0ded033ff2722459c804a",
+    "architecture": "arm64"
+  },
+  "langfuse/langfuse-worker": {
+    "image": "docker.langfuse.com/langfuse/langfuse-worker@sha256:aa1724b989a00f1e4ca9930709202489c73deaaf2f1116bbd3d71c77edb8fedb",
+    "architecture": "arm64"
+  },
+  "langfuse/minio": {
+    "image": "cgr.dev/chainguard/minio@sha256:e234321fd3abff7fb968b0674056e883b702aa1ad93a0d4d795cb6c21fa46407",
+    "architecture": "arm64"
+  },
+  "langfuse/postgres": {
+    "image": "postgres@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f",
+    "architecture": "arm64"
+  },
+  "langfuse/redis": {
+    "image": "redis@sha256:b6b6e3dc0c0952737748e55d5d885272840c7e42ba41ab1d5489f693419882f5",
+    "architecture": "arm64"
+  },
+  "langfuse/bakeoff-alert": {
+    "image": "docker.langfuse.com/langfuse/langfuse@sha256:c311fd9db4b69f6514fdcb1b86a2a105d5a4ed51fbf0ded033ff2722459c804a",
+    "architecture": "arm64"
+  }
+}
