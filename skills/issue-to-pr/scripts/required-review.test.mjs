@@ -10,7 +10,8 @@ const SCRIPT = fileURLToPath(new URL("./required-review.mjs", import.meta.url));
 
 // Runs the script for o/r's branch main with a gh on PATH that answers as GitHub does. `ref` is the
 // branch's rules in GraphQL's shape, as GitHub returned them for cli/cli and nodejs/node on
-// 2026-10-23, or "spent" once the account's GraphQL quota is. `rulesets` and `protected` are what
+// 2026-10-23, or "spent" once the account's GraphQL quota is. `pulls` is the reviewDecision of each
+// of the newest PRs into main, or a failure message for that read. `rulesets` and `protected` are what
 // REST shows; `rulesets: "forbidden"` is a plan without rulesets. `broken` fails every call.
 function requiredReview(t, github) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-required-review-"));
@@ -24,6 +25,11 @@ const fail = (message) => { process.stderr.write(message + "\\n"); process.exit(
 if (github.broken) fail("gh: " + github.broken);
 if (args[0] === "api" && args[1] === "graphql") {
   if (github.ref === "spent") fail("gh: API rate limit already exceeded for user ID 1.");
+  if (args.some((arg) => arg.includes("pullRequests("))) {
+    if (!["o=o", "n=r", "b=main"].every((field) => args.includes(field))) fail("unexpected query: " + args.join(" "));
+    if (typeof github.pulls === "string") fail("gh: " + github.pulls);
+    answer({ data: { repository: { pullRequests: { nodes: (github.pulls ?? []).map((reviewDecision) => ({ reviewDecision })) } } } });
+  }
   if (!["o=o", "n=r", "q=refs/heads/main"].every((field) => args.includes(field))) fail("unexpected query: " + args.join(" "));
   answer({ data: { repository: { ref: github.ref } } });
 }
@@ -50,6 +56,7 @@ test("says how many approvals a branch's protection or rulesets ask for, through
     ["a ruleset", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "DELETION", parameters: null }, pullRequestRule(1)]) }, "review required: 1 approval"],
     ["both, the higher count", { ref: ref({ requiredApprovingReviewCount: 2 }, [pullRequestRule(1)]) }, "review required: 2 approvals"],
     ["protection with no review rule", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "REQUIRED_LINEAR_HISTORY", parameters: null }]) }, "no review required"],
+    ["a rule the caller can bypass, which reads 0 but shows on a newest PR", { ref: ref({ requiredApprovingReviewCount: 0 }), pulls: [null, "REVIEW_REQUIRED", "APPROVED"] }, "review required: 1 approval"],
     ["quota spent, a ruleset", { ref: "spent", rulesets: [{ type: "pull_request", parameters: { required_approving_review_count: 2 } }] }, "review required: 2 approvals"],
     ["quota spent, a protected branch REST can't see into", { ref: "spent", protected: true }, "review required: 1 approval"],
     ["quota spent, unprotected on a plan without rulesets", { ref: "spent", rulesets: "forbidden" }, "no review required"],

@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 
 const RULES_QUERY = "query($o:String!,$n:String!,$q:String!){repository(owner:$o,name:$n){ref(qualifiedName:$q){refUpdateRule{requiredApprovingReviewCount} rules(first:100){nodes{type parameters{... on PullRequestParameters{requiredApprovingReviewCount}}}}}}}";
 
+const PULLS_QUERY = "query($o:String!,$n:String!,$b:String!){repository(owner:$o,name:$n){pullRequests(baseRefName:$b,first:10,orderBy:{field:CREATED_AT,direction:DESC}){nodes{reviewDecision}}}}";
+
 const gh = (args) => JSON.parse(execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
 const rateLimited = (error) => /rate limit|RATE_LIMITED/i.test(`${error?.stderr ?? ""}\n${error?.stdout ?? ""}`);
 const highest = (counts) => Math.max(0, ...counts.filter(Number.isInteger));
@@ -25,10 +27,17 @@ function approvals(repo, branch) {
   try {
     const { ref } = gh(["api", "graphql", "-f", `query=${RULES_QUERY}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `q=refs/heads/${branch}`]).data.repository;
     const rulesets = (ref?.rules?.nodes ?? []).filter((rule) => rule.type === "PULL_REQUEST");
-    return highest([ref?.refUpdateRule?.requiredApprovingReviewCount, ...rulesets.map((rule) => rule.parameters?.requiredApprovingReviewCount)]);
+    const count = highest([ref?.refUpdateRule?.requiredApprovingReviewCount, ...rulesets.map((rule) => rule.parameters?.requiredApprovingReviewCount)]);
+    if (count) return count;
   } catch (error) {
     if (!rateLimited(error)) throw error;
+    return restApprovals(repo, branch);
   }
+  const { nodes } = gh(["api", "graphql", "-f", `query=${PULLS_QUERY}`, "-f", `o=${owner}`, "-f", `n=${name}`, "-f", `b=${branch}`]).data.repository.pullRequests;
+  return nodes.some((pull) => pull.reviewDecision != null) ? 1 : 0;
+}
+
+function restApprovals(repo, branch) {
   process.stderr.write("required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review\n");
   const rulesets = restRulesets(repo, branch).filter((rule) => rule.type === "pull_request");
   const isProtected = gh(["api", `repos/${repo}/branches/${branch}`]).protected === true;
