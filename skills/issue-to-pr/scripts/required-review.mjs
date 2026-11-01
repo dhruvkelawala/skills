@@ -5,10 +5,13 @@
 //   required-review.mjs <owner/repo> <branch>
 //
 // Prints `review required: <n> approval(s)` or `no review required` and exits 0. A failed read exits
-// 2, so it never reads as "no review". GraphQL shows classic protection and rulesets to anyone who can
-// read the repository. When the GraphQL quota every agent on the account shares is spent, REST answers
-// instead. REST shows a classic rule's details only to admins, so there any protected branch counts
-// as asking for one approval.
+// 2, so it never reads as "no review". It reads the branch's classic protection and rulesets through
+// GraphQL, which answers for the caller: an account that can bypass a review rule reads 0 approvals.
+// So when they read 0, it also reads the 10 newest PRs into the branch. GitHub sets a PR's
+// reviewDecision only where a review is required, so a non-null one on any of them counts as one
+// approval. When the GraphQL quota every agent on the account shares is spent, REST answers instead,
+// with no reviewDecision. REST shows a classic rule's details only to admins, so there any protected
+// branch counts as asking for one approval.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
