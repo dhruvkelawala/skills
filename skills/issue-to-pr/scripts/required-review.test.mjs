@@ -51,7 +51,8 @@ const pullRequestRule = (count) => ({ type: "PULL_REQUEST", parameters: { requir
 
 test("says how many approvals a branch's protection or rulesets ask for, through GraphQL or, with its quota spent, REST", (t) => {
   for (const [name, github, says] of [
-    ["unprotected", { ref: ref(null) }, "no review required"],
+    ["unprotected, no PRs yet", { ref: ref(null), pulls: [] }, "no review required"],
+    ["unprotected, its newest PRs with no review decision", { ref: ref(null), pulls: [null, null] }, "no review required"],
     ["classic protection", { ref: ref({ requiredApprovingReviewCount: 1 }, [{ type: "COPILOT_CODE_REVIEW", parameters: {} }]) }, "review required: 1 approval"],
     ["a ruleset", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "DELETION", parameters: null }, pullRequestRule(1)]) }, "review required: 1 approval"],
     ["both, the higher count", { ref: ref({ requiredApprovingReviewCount: 2 }, [pullRequestRule(1)]) }, "review required: 2 approvals"],
