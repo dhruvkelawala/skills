@@ -10,6 +10,8 @@ After saving each stage's record, write a metadata JSON file outside the reposit
 node <issue-to-pr>/scripts/observe.mjs <record> <metadata.json>
 ```
 
+Each call also records the owning session's token usage. It reads that session's own transcript, found from `CLAUDE_CODE_SESSION_ID` or `CODEX_THREAD_ID`, so no hook setup or session binding is needed. The `usage` field in the output reports it. Delegates' usage is not captured yet; keep `childCoverage: partial`.
+
 Use `kind: skill.loaded` only for loading; `skill.started` for invocation; `stage` at each stage boundary; `waiting` with execution `waiting-human` or `waiting-external` before yielding; `interrupted` when the host reports interruption; `resumed` with execution `running` under the new attempt; `skill.finished` with the actual terminal execution state. Each marker needs a unique `eventKey` within its invocation/attempt/kind. Retry the same key for the same event. Missing host markers remain a capture gap, never inferred success.
 
 At a gate, use `kind: gate` and references containing URI, SHA-256, current head, pass/fail result and expiry. The shared contract downgrades missing, stale or mismatched evidence to unknown. Expected test-first failures use `reason: expected-red`; recovered tool failures use `reason: recovered`. Neither establishes workflow failure. Use `reason: autonomous` versus `user-requested` on repair markers, following the existing repair ledger; telemetry never edits the budget. Terminal execution and outcome are independent.
