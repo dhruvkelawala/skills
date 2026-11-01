@@ -55,7 +55,7 @@ test("says how many approvals a branch's protection or rulesets ask for, through
     ["unprotected, its newest PRs with no review decision", { ref: ref(null), pulls: [null, null] }, "no review required"],
     ["classic protection", { ref: ref({ requiredApprovingReviewCount: 1 }, [{ type: "COPILOT_CODE_REVIEW", parameters: {} }]) }, "review required: 1 approval"],
     ["a ruleset", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "DELETION", parameters: null }, pullRequestRule(1)]) }, "review required: 1 approval"],
-    ["both, the higher count", { ref: ref({ requiredApprovingReviewCount: 2 }, [pullRequestRule(1)]) }, "review required: 2 approvals"],
+    ["both, the higher count", { ref: ref({ requiredApprovingReviewCount: 2 }, [pullRequestRule(1)]), pulls: ["APPROVED"] }, "review required: 2 approvals"],
     ["protection with no review rule", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "REQUIRED_LINEAR_HISTORY", parameters: null }]) }, "no review required"],
     ["a rule the caller can bypass, which reads 0 but shows on a newest PR", { ref: ref({ requiredApprovingReviewCount: 0 }), pulls: [null, "REVIEW_REQUIRED", "APPROVED"] }, "review required: 1 approval"],
     ["quota spent, a ruleset", { ref: "spent", rulesets: [{ type: "pull_request", parameters: { required_approving_review_count: 2 } }] }, "review required: 2 approvals"],
