@@ -1,0 +1,92 @@
+# required-review.mjs against a fake gh that answers as GitHub does (criteria 1, 2, 4, 5)
+
+## C1: rules read 0 for a caller who can bypass them; newest PRs show a review decision — base (7c758dc)
+gh answers: {"ref":{"refUpdateRule":{"requiredApprovingReviewCount":0},"rules":{"nodes":[]}},"pulls":[null,"REVIEW_REQUIRED","APPROVED"]}
+$ node required-review.mjs o/r main
+no review required
+exit 0
+
+## C1: rules read 0 for a caller who can bypass them; newest PRs show a review decision — head (aedb43f)
+gh answers: {"ref":{"refUpdateRule":{"requiredApprovingReviewCount":0},"rules":{"nodes":[]}},"pulls":[null,"REVIEW_REQUIRED","APPROVED"]}
+$ node required-review.mjs o/r main
+review required: 1 approval
+exit 0
+
+## C2: rules read 0; newest PRs all have a null review decision — base (7c758dc)
+gh answers: {"ref":{"refUpdateRule":null,"rules":{"nodes":[]}},"pulls":[null,null,null]}
+$ node required-review.mjs o/r main
+no review required
+exit 0
+
+## C2: rules read 0; newest PRs all have a null review decision — head (aedb43f)
+gh answers: {"ref":{"refUpdateRule":null,"rules":{"nodes":[]}},"pulls":[null,null,null]}
+$ node required-review.mjs o/r main
+no review required
+exit 0
+
+## C2: rules read 0; no PRs into the branch — base (7c758dc)
+gh answers: {"ref":{"refUpdateRule":null,"rules":{"nodes":[]}},"pulls":[]}
+$ node required-review.mjs o/r main
+no review required
+exit 0
+
+## C2: rules read 0; no PRs into the branch — head (aedb43f)
+gh answers: {"ref":{"refUpdateRule":null,"rules":{"nodes":[]}},"pulls":[]}
+$ node required-review.mjs o/r main
+no review required
+exit 0
+
+## C4: GraphQL quota spent; a ruleset asks for 2 (REST) — base (7c758dc)
+gh answers: {"ref":"spent","rulesets":[{"type":"pull_request","parameters":{"required_approving_review_count":2}}]}
+$ node required-review.mjs o/r main
+required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review
+review required: 2 approvals
+exit 0
+
+## C4: GraphQL quota spent; a ruleset asks for 2 (REST) — head (aedb43f)
+gh answers: {"ref":"spent","rulesets":[{"type":"pull_request","parameters":{"required_approving_review_count":2}}]}
+$ node required-review.mjs o/r main
+required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review
+review required: 2 approvals
+exit 0
+
+## C4: GraphQL quota spent; a protected branch REST cannot see into — base (7c758dc)
+gh answers: {"ref":"spent","protected":true}
+$ node required-review.mjs o/r main
+required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review
+review required: 1 approval
+exit 0
+
+## C4: GraphQL quota spent; a protected branch REST cannot see into — head (aedb43f)
+gh answers: {"ref":"spent","protected":true}
+$ node required-review.mjs o/r main
+required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review
+review required: 1 approval
+exit 0
+
+## C4: GraphQL quota spent; unprotected — base (7c758dc)
+gh answers: {"ref":"spent"}
+$ node required-review.mjs o/r main
+required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review
+no review required
+exit 0
+
+## C4: GraphQL quota spent; unprotected — head (aedb43f)
+gh answers: {"ref":"spent"}
+$ node required-review.mjs o/r main
+required-review: GitHub's GraphQL quota is spent, so this reads REST, where any protected branch counts as asking for a review
+no review required
+exit 0
+
+## C5: rules read 0; the PR read fails — base (7c758dc)
+gh answers: {"ref":{"refUpdateRule":null,"rules":{"nodes":[]}},"pulls":"HTTP 502: Bad Gateway (https://api.github.com/graphql)"}
+$ node required-review.mjs o/r main
+no review required
+exit 0
+
+## C5: rules read 0; the PR read fails — head (aedb43f)
+gh answers: {"ref":{"refUpdateRule":null,"rules":{"nodes":[]}},"pulls":"HTTP 502: Bad Gateway (https://api.github.com/graphql)"}
+$ node required-review.mjs o/r main
+required-review: gh: HTTP 502: Bad Gateway (https://api.github.com/graphql)
+exit 2
+

@@ -1,0 +1,34 @@
+# Criterion 6: what the script and stage 5 say it reads
+
+## base 7c758dc: issue-to-pr SKILL.md stage 5 step 2
+187:2. Check whether GitHub asks for a review before a PR merges into the default branch: `node <this skill's folder>/scripts/required-review.mjs <owner/repo> <default branch>`. When it prints `review required`, record `draft: yes`, and the PR opens as a draft so that nobody is asked to review it before the user has. Otherwise record `draft: no`.
+
+## base 7c758dc: required-review.mjs header
+// Whether GitHub asks for an approving review before a PR merges into a branch. Where it does, stage 5
+// opens the PR as a draft, so nobody is asked to review it before the user has.
+//
+//   required-review.mjs <owner/repo> <branch>
+//
+// Prints `review required: <n> approval(s)` or `no review required` and exits 0. A failed read exits
+// 2, so it never reads as "no review". GraphQL shows classic protection and rulesets to anyone who can
+// read the repository. When the GraphQL quota every agent on the account shares is spent, REST answers
+// instead. REST shows a classic rule's details only to admins, so there any protected branch counts
+// as asking for one approval.
+
+## head aedb43f: issue-to-pr SKILL.md stage 5 step 2
+187:2. Check whether GitHub asks for a review before a PR merges into the default branch: `node <this skill's folder>/scripts/required-review.mjs <owner/repo> <default branch>`. It reads the branch's protection and rulesets, and when those ask for no approvals, as they read for an account that can bypass them, it also counts a review decision on any of the 10 newest PRs into the branch. When it prints `review required`, record `draft: yes`, and the PR opens as a draft so that nobody is asked to review it before the user has. Otherwise record `draft: no`.
+
+## head aedb43f: required-review.mjs header
+// Whether GitHub asks for an approving review before a PR merges into a branch. Where it does, stage 5
+// opens the PR as a draft, so nobody is asked to review it before the user has.
+//
+//   required-review.mjs <owner/repo> <branch>
+//
+// Prints `review required: <n> approval(s)` or `no review required` and exits 0. A failed read exits
+// 2, so it never reads as "no review". It reads the branch's classic protection and rulesets through
+// GraphQL, which answers for the caller: an account that can bypass a review rule reads 0 approvals.
+// So when they read 0, it also reads the 10 newest PRs into the branch. GitHub sets a PR's
+// reviewDecision only where a review is required, so a non-null one on any of them counts as one
+// approval. When the GraphQL quota every agent on the account shares is spent, REST answers instead,
+// with no reviewDecision. REST shows a classic rule's details only to admins, so there any protected
+// branch counts as asking for one approval.

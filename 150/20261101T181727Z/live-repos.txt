@@ -1,0 +1,51 @@
+# base 7c758dc, live repos (private repo names redacted; work repos 1-2 have a review rule)
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 1> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 2> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 3> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs dhruvkelawala/skills main
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs dhruvkelawala/t3code main
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 4> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <work repo 1> <default branch>
+review required: 1 approval
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <work repo 2> <default branch>
+review required: 1 approval
+exit 0
+
+# head aedb43f, live repos (private repo names redacted; work repos 1-2 have a review rule)
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 1> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 2> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 3> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs dhruvkelawala/skills main
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs dhruvkelawala/t3code main
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <private repo 4> <default branch>
+no review required
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <work repo 1> <default branch>
+review required: 1 approval
+exit 0
+$ node skills/issue-to-pr/scripts/required-review.mjs <work repo 2> <default branch>
+review required: 1 approval
+exit 0
