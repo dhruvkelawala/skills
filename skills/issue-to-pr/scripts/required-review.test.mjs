@@ -10,7 +10,8 @@ const SCRIPT = fileURLToPath(new URL("./required-review.mjs", import.meta.url));
 
 // Runs the script for o/r's branch main with a gh on PATH that answers as GitHub does. `ref` is the
 // branch's rules in GraphQL's shape, as GitHub returned them for cli/cli and nodejs/node on
-// 2026-10-23, or "spent" once the account's GraphQL quota is. `rulesets` and `protected` are what
+// 2026-10-23, or "spent" once the account's GraphQL quota is. `pulls` is the reviewDecision of each
+// of the newest PRs into main, or a failure message for that read. `rulesets` and `protected` are what
 // REST shows; `rulesets: "forbidden"` is a plan without rulesets. `broken` fails every call.
 function requiredReview(t, github) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-required-review-"));
@@ -24,6 +25,11 @@ const fail = (message) => { process.stderr.write(message + "\\n"); process.exit(
 if (github.broken) fail("gh: " + github.broken);
 if (args[0] === "api" && args[1] === "graphql") {
   if (github.ref === "spent") fail("gh: API rate limit already exceeded for user ID 1.");
+  if (args.some((arg) => arg.includes("pullRequests("))) {
+    if (!["o=o", "n=r", "b=main"].every((field) => args.includes(field))) fail("unexpected query: " + args.join(" "));
+    if (typeof github.pulls === "string") fail("gh: " + github.pulls);
+    answer({ data: { repository: { pullRequests: { nodes: (github.pulls ?? []).map((reviewDecision) => ({ reviewDecision })) } } } });
+  }
   if (!["o=o", "n=r", "q=refs/heads/main"].every((field) => args.includes(field))) fail("unexpected query: " + args.join(" "));
   answer({ data: { repository: { ref: github.ref } } });
 }
@@ -45,11 +51,13 @@ const pullRequestRule = (count) => ({ type: "PULL_REQUEST", parameters: { requir
 
 test("says how many approvals a branch's protection or rulesets ask for, through GraphQL or, with its quota spent, REST", (t) => {
   for (const [name, github, says] of [
-    ["unprotected", { ref: ref(null) }, "no review required"],
+    ["unprotected, no PRs yet", { ref: ref(null), pulls: [] }, "no review required"],
+    ["unprotected, its newest PRs with no review decision", { ref: ref(null), pulls: [null, null] }, "no review required"],
     ["classic protection", { ref: ref({ requiredApprovingReviewCount: 1 }, [{ type: "COPILOT_CODE_REVIEW", parameters: {} }]) }, "review required: 1 approval"],
     ["a ruleset", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "DELETION", parameters: null }, pullRequestRule(1)]) }, "review required: 1 approval"],
-    ["both, the higher count", { ref: ref({ requiredApprovingReviewCount: 2 }, [pullRequestRule(1)]) }, "review required: 2 approvals"],
+    ["both, the higher count", { ref: ref({ requiredApprovingReviewCount: 2 }, [pullRequestRule(1)]), pulls: ["APPROVED"] }, "review required: 2 approvals"],
     ["protection with no review rule", { ref: ref({ requiredApprovingReviewCount: 0 }, [{ type: "REQUIRED_LINEAR_HISTORY", parameters: null }]) }, "no review required"],
+    ["a rule the caller can bypass, which reads 0 but shows on a newest PR", { ref: ref({ requiredApprovingReviewCount: 0 }), pulls: [null, "REVIEW_REQUIRED", "APPROVED"] }, "review required: 1 approval"],
     ["quota spent, a ruleset", { ref: "spent", rulesets: [{ type: "pull_request", parameters: { required_approving_review_count: 2 } }] }, "review required: 2 approvals"],
     ["quota spent, a protected branch REST can't see into", { ref: "spent", protected: true }, "review required: 1 approval"],
     ["quota spent, unprotected on a plan without rulesets", { ref: "spent", rulesets: "forbidden" }, "no review required"],
@@ -60,9 +68,15 @@ test("says how many approvals a branch's protection or rulesets ask for, through
   }
 });
 
-test("a failed read of the branch rules exits 2 rather than reporting no review", (t) => {
-  const run = requiredReview(t, { broken: "HTTP 401: Bad credentials (https://api.github.com/graphql)" });
-  assert.equal(run.status, 2);
-  assert.equal(run.stdout, "");
-  assert.match(run.stderr, /Bad credentials/);
+test("a failed read of the branch rules or of its newest PRs exits 2 rather than reporting no review", (t) => {
+  for (const [name, github, says] of [
+    ["rules", { broken: "HTTP 401: Bad credentials (https://api.github.com/graphql)" }, /Bad credentials/],
+    ["PRs", { ref: ref(null), pulls: "HTTP 502: Bad Gateway (https://api.github.com/graphql)" }, /Bad Gateway/],
+    ["PRs, the quota spent between reads", { ref: ref(null), pulls: "API rate limit already exceeded for user ID 1." }, /rate limit/],
+  ]) {
+    const run = requiredReview(t, github);
+    assert.equal(run.status, 2, name);
+    assert.equal(run.stdout, "", name);
+    assert.match(run.stderr, says, name);
+  }
 });
