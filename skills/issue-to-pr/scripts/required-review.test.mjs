@@ -68,9 +68,15 @@ test("says how many approvals a branch's protection or rulesets ask for, through
   }
 });
 
-test("a failed read of the branch rules exits 2 rather than reporting no review", (t) => {
-  const run = requiredReview(t, { broken: "HTTP 401: Bad credentials (https://api.github.com/graphql)" });
-  assert.equal(run.status, 2);
-  assert.equal(run.stdout, "");
-  assert.match(run.stderr, /Bad credentials/);
+test("a failed read of the branch rules or of its newest PRs exits 2 rather than reporting no review", (t) => {
+  for (const [name, github, says] of [
+    ["rules", { broken: "HTTP 401: Bad credentials (https://api.github.com/graphql)" }, /Bad credentials/],
+    ["PRs", { ref: ref(null), pulls: "HTTP 502: Bad Gateway (https://api.github.com/graphql)" }, /Bad Gateway/],
+    ["PRs, the quota spent between reads", { ref: ref(null), pulls: "API rate limit already exceeded for user ID 1." }, /rate limit/],
+  ]) {
+    const run = requiredReview(t, github);
+    assert.equal(run.status, 2, name);
+    assert.equal(run.stdout, "", name);
+    assert.match(run.stderr, says, name);
+  }
 });
