@@ -38,7 +38,7 @@ test('the watcher sends a run\'s stage and its own sessions\' usage, once', asyn
     ]));
     const config = { enabled: true, directory: join(home, 'state', 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z', context: { attempt: 'attempt' } };
 
-    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 1, transcripts: 2, requests: 2, unavailable: 0 });
+    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 1, transcripts: 2, requests: 2, unavailable: 0, pending: 0, exhausted: 0 });
     const metadata = (span, key) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.' + key)?.value.stringValue;
     const stage = spans.find((span) => span.name === 'stage');
     assert.equal(metadata(stage, 'stage'), 'awaiting-human');
@@ -48,7 +48,7 @@ test('the watcher sends a run\'s stage and its own sessions\' usage, once', asyn
     assert.ok(requests.every((span) => metadata(span, 'workflow') === metadata(stage, 'workflow')));
 
     spans.length = 0;
-    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0 });
+    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0, pending: 0, exhausted: 0 });
     assert.equal(spans.length, 0);
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
 });
@@ -63,7 +63,11 @@ test('a transcript whose capture fails is tried again on the next run', async ()
       count(50), count(10),
     ]));
     const config = { enabled: true, directory: join(home, 'state', 'outbox'), endpoint: 'http://127.0.0.1:9', publicKey: 'test', secretKey: 'test', timeoutMs: 200, since: '2000-01-01T00:00:00Z', context: { attempt: 'attempt' } };
-    for (let i = 0; i < 2; i++) assert.equal((await watch(config, home)).unavailable, 1);
+    for (let i = 0; i < 2; i++) {
+      const summary = await watch(config, home);
+      assert.equal(summary.unavailable, 1);
+      assert.equal(summary.pending, 1, 'the undelivered stage marker shows as pending');
+    }
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
@@ -106,7 +110,7 @@ test('a session that worked on two runs is not counted, and a repeated stage sen
     await write(join(home, '.claude', 'projects', '-shop', 'stack.jsonl'), jsonl([1, 2].map((n) => (
       { type: 'assistant', sessionId: 'stack', cwd: join(home, 'shop'), gitBranch: `fix/${n}`, timestamp: '2026-11-02T10:00:00Z', message: { id: `msg-${n}`, usage } }))));
     const config = { enabled: true, directory: join(home, 'state', 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z', context: { attempt: 'attempt' } };
-    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 2, transcripts: 0, requests: 0, unavailable: 0 });
+    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 2, transcripts: 0, requests: 0, unavailable: 0, pending: 0, exhausted: 0 });
     const later = async (stage) => { await new Promise((resolve) => setTimeout(resolve, 5)); await record(1, stage); return watch(config, home); };
     await later('awaiting-human');
     assert.equal((await later('building')).markers, 1);

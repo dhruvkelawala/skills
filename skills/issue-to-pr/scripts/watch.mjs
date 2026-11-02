@@ -19,7 +19,7 @@ export async function watch(config, home = homedir()) {
   const since = Date.parse(config.since);
   const statePath = join(dirname(config.directory), 'watch.json');
   const state = await readFile(statePath, 'utf8').then(JSON.parse, () => ({ records: {}, transcripts: {} }));
-  const summary = { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0 };
+  const summary = { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0, pending: 0, exhausted: 0 };
 
   const runs = [];
   for (const record of await files(join(home, '.agent', 'issue-to-pr'), '.md', since)) {
@@ -55,7 +55,12 @@ export async function watch(config, home = homedir()) {
     }
   }
 
-  for (const run of runs) await flush(outbox(config, run));
+  // Each pass retries every run's outbox; what is still undelivered shows in the summary, which the scheduled job logs.
+  for (const run of runs) {
+    const delivery = await flush(outbox(config, run));
+    summary.pending += delivery.pending ?? 0;
+    summary.exhausted += delivery.exhausted ?? 0;
+  }
   await writeFile(statePath, JSON.stringify(state), { mode: 0o600 });
   return summary;
 }
