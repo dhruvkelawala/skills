@@ -31,6 +31,7 @@ test('the watcher sends a run\'s stage and its own sessions\' usage, once', asyn
     ]));
     await write(join(home, '.claude', 'projects', '-other', 'bystander.jsonl'), jsonl([
       { type: 'assistant', sessionId: 'bystander', cwd: join(home, 'code', 'shop'), gitBranch: 'main', timestamp: '2026-11-02T10:00:00Z', message: { id: 'msg-bystander', usage } },
+      { type: 'assistant', sessionId: 'bystander', cwd: join(home, 'code', 'tools'), gitBranch: 'fix/7-cart', timestamp: '2026-11-02T10:00:01Z', message: { id: 'msg-bystander-2', usage } },
     ]));
     await write(join(home, '.codex', 'sessions', '2026', '11', '02', 'rollout-x-namesake.jsonl'), jsonl([
       { type: 'session_meta', payload: { id: 'namesake', cwd: join(home, 'other', 'shop'), git: { branch: 'fix/7-cart', repository_url: 'https://github.com/other/shop.git' } } },

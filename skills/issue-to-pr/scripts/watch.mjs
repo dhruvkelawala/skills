@@ -44,7 +44,7 @@ export async function watch(config, home = homedir()) {
       if (seen === transcript.mtime) continue;
       const session = seen?.mtime === transcript.mtime ? seen.session : await sessionOf(runtime, transcript.path);
       // A session that worked on several runs, such as a stack or a root thread, can't be split between them yet.
-      const matches = session ? runs.filter((r) => r.branch && session.branches.includes(r.branch) && session.places.some((place) => inRepository(place, r.repository))) : [];
+      const matches = session ? runs.filter((r) => r.branch && session.worked.some(([place, branch]) => branch === r.branch && inRepository(place, r.repository))) : [];
       const run = matches.length === 1 ? matches[0] : null;
       if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }
       const result = await captureHook({ ...outbox(config, run), skillDirectory: SKILL, context: { ...config.context, ...run, session: session.id } }, runtime, { session_id: session.id, transcript_path: transcript.path }).catch(() => ({ status: 'unavailable' }));
@@ -70,16 +70,18 @@ function outbox(config, run) {
   return { ...config, directory: join(dirname(config.directory), 'runs', digest(run.workflow).slice(0, 16)), maxEvents: 100000, maxBytes: 256 * 1024 * 1024 };
 }
 
-// Which session a transcript belongs to, and the branches and places it worked in.
+// Which session a transcript belongs to, and each place and branch it worked on together.
 async function sessionOf(runtime, path) {
   if ((await stat(path)).size > 64 * 1024 * 1024) return null;
   const rows = (await readFile(path, 'utf8')).split('\n').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
   if (runtime === 'claude') {
     const id = rows.find((row) => row.sessionId)?.sessionId;
-    return id ? { id, branches: [...new Set(rows.map((row) => row.gitBranch).filter(Boolean))], places: [...new Set(rows.map((row) => row.cwd).filter(Boolean))] } : null;
+    const worked = new Set(rows.filter((row) => row.cwd && row.gitBranch).map((row) => JSON.stringify([row.cwd, row.gitBranch])));
+    return id ? { id, worked: [...worked].map((pair) => JSON.parse(pair)) } : null;
   }
   const meta = rows.find((row) => row.type === 'session_meta')?.payload;
-  return meta?.id ? { id: meta.id, branches: [meta.git?.branch].filter(Boolean), places: [meta.git?.repository_url ?? meta.cwd].filter(Boolean) } : null;
+  const place = meta?.git?.repository_url ?? meta?.cwd;
+  return meta?.id ? { id: meta.id, worked: place && meta.git?.branch ? [[place, meta.git.branch]] : [] } : null;
 }
 
 // A repository URL must name the record's repository exactly; a working directory needs the repository's name in its path.
