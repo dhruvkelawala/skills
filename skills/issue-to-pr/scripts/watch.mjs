@@ -38,10 +38,12 @@ export async function watch(config, home = homedir()) {
     const runtime = name.startsWith('.claude') ? 'claude' : name.startsWith('.codex') ? 'codex' : null;
     if (!runtime) continue;
     for (const transcript of await files(join(home, name, runtime === 'claude' ? 'projects' : 'sessions'), '.jsonl', since)) {
-      if (state.transcripts[transcript.path] === transcript.mtime) continue;
-      const session = await sessionOf(runtime, transcript.path);
-      const run = session && runs.find((r) => r.branch && session.branches.has(r.branch) && session.places.some((place) => inRepository(place, r.repository)));
-      if (!run) { state.transcripts[transcript.path] = transcript.mtime; continue; }
+      // A transcript that matched no run keeps its session, so a record that gains its branch later still finds it without a reread.
+      const seen = state.transcripts[transcript.path];
+      if (seen === transcript.mtime) continue;
+      const session = seen?.mtime === transcript.mtime ? seen.session : await sessionOf(runtime, transcript.path);
+      const run = session && runs.find((r) => r.branch && session.branches.includes(r.branch) && session.places.some((place) => inRepository(place, r.repository)));
+      if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }
       const result = await captureHook({ ...outbox(config, run), skillDirectory: SKILL, context: { ...config.context, ...run, session: session.id } }, runtime, { session_id: session.id, transcript_path: transcript.path }).catch(() => ({ status: 'unavailable' }));
       summary.transcripts++;
       // A failed or partial capture leaves the transcript unmarked, so the next run tries it again.
@@ -66,10 +68,10 @@ async function sessionOf(runtime, path) {
   const rows = (await readFile(path, 'utf8')).split('\n').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
   if (runtime === 'claude') {
     const id = rows.find((row) => row.sessionId)?.sessionId;
-    return id ? { id, branches: new Set(rows.map((row) => row.gitBranch).filter(Boolean)), places: [...new Set(rows.map((row) => row.cwd).filter(Boolean))] } : null;
+    return id ? { id, branches: [...new Set(rows.map((row) => row.gitBranch).filter(Boolean))], places: [...new Set(rows.map((row) => row.cwd).filter(Boolean))] } : null;
   }
   const meta = rows.find((row) => row.type === 'session_meta')?.payload;
-  return meta?.id ? { id: meta.id, branches: new Set([meta.git?.branch].filter(Boolean)), places: [meta.git?.repository_url ?? meta.cwd].filter(Boolean) } : null;
+  return meta?.id ? { id: meta.id, branches: [meta.git?.branch].filter(Boolean), places: [meta.git?.repository_url ?? meta.cwd].filter(Boolean) } : null;
 }
 
 // A repository URL must name the record's repository exactly; a working directory needs the repository's name in its path.
