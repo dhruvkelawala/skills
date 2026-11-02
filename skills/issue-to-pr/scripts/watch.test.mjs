@@ -89,3 +89,27 @@ test('a session seen before its record names the branch is captured once the rec
     assert.equal(spans.filter((span) => span.name === 'provider.request').length, 1);
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
 });
+
+test('a session that worked on two runs is not counted, and a repeated stage sends a new marker', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'skill-watch-'));
+  const spans = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    spans.push(...(JSON.parse(body).resourceSpans?.[0].scopeSpans[0].spans ?? []));
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const record = (n, stage) => write(join(home, '.agent', 'issue-to-pr', 'shop', `${n}.md`), `issue: ${n}\nrepo: example/shop\nbranch: fix/${n}\nstage: ${stage}\nhead: abc123\n`);
+    await record(1, 'building'); await record(2, 'building');
+    const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    await write(join(home, '.claude', 'projects', '-shop', 'stack.jsonl'), jsonl([1, 2].map((n) => (
+      { type: 'assistant', sessionId: 'stack', cwd: join(home, 'shop'), gitBranch: `fix/${n}`, timestamp: '2026-11-02T10:00:00Z', message: { id: `msg-${n}`, usage } }))));
+    const config = { enabled: true, directory: join(home, 'state', 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z', context: { attempt: 'attempt' } };
+    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 2, transcripts: 0, requests: 0, unavailable: 0 });
+    const later = async (stage) => { await new Promise((resolve) => setTimeout(resolve, 5)); await record(1, stage); return watch(config, home); };
+    await later('awaiting-human');
+    assert.equal((await later('building')).markers, 1);
+    assert.equal(new Set(spans.filter((span) => span.name === 'stage').map((span) => span.spanId)).size, 4);
+  } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
+});

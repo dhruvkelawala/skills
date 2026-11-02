@@ -25,12 +25,13 @@ export async function watch(config, home = homedir()) {
   for (const record of await files(join(home, '.agent', 'issue-to-pr'), '.md', since)) {
     const run = await runOf(record.path, config);
     runs.push(run);
-    const eventKey = `${run.stage}@${run.head}`;
-    if (!run.stage || state.records[record.path] === eventKey) continue;
+    const progress = `${run.stage}@${run.head}`;
+    if (!run.stage || state.records[record.path] === progress) continue;
     const kind = FINISHED.has(run.stage) ? 'skill.finished' : 'stage';
-    const marker = { ...config.context, ...run, kind, eventKey, execution: EXECUTION[run.stage] ?? 'running', time: new Date(record.mtime).toISOString() };
+    // The record's change time tells a return to an earlier stage apart from a retry of the same transition.
+    const marker = { ...config.context, ...run, kind, eventKey: `${progress}@${Math.floor(record.mtime)}`, execution: EXECUTION[run.stage] ?? 'running', time: new Date(record.mtime).toISOString() };
     if ((await emit(outbox(config, run), marker)).status !== 'accepted') continue;
-    state.records[record.path] = eventKey;
+    state.records[record.path] = progress;
     summary.markers++;
   }
 
@@ -42,7 +43,9 @@ export async function watch(config, home = homedir()) {
       const seen = state.transcripts[transcript.path];
       if (seen === transcript.mtime) continue;
       const session = seen?.mtime === transcript.mtime ? seen.session : await sessionOf(runtime, transcript.path);
-      const run = session && runs.find((r) => r.branch && session.branches.includes(r.branch) && session.places.some((place) => inRepository(place, r.repository)));
+      // A session that worked on several runs, such as a stack or a root thread, can't be split between them yet.
+      const matches = session ? runs.filter((r) => r.branch && session.branches.includes(r.branch) && session.places.some((place) => inRepository(place, r.repository))) : [];
+      const run = matches.length === 1 ? matches[0] : null;
       if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }
       const result = await captureHook({ ...outbox(config, run), skillDirectory: SKILL, context: { ...config.context, ...run, session: session.id } }, runtime, { session_id: session.id, transcript_path: transcript.path }).catch(() => ({ status: 'unavailable' }));
       summary.transcripts++;
