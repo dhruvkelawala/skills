@@ -9,31 +9,35 @@ import { captureHook, configuration } from '../../../instrumentation/cli.mjs';
 import { digest, skillRevision } from '../../../instrumentation/contract.mjs';
 import { emit, flush } from '../../../instrumentation/delivery.mjs';
 
-const SKILL = fileURLToPath(new URL('..', import.meta.url));
+export const SKILL = fileURLToPath(new URL('..', import.meta.url));
+const revision = skillRevision(SKILL);
 
 export async function observe(recordPath, input, config, env = process.env) {
   if (!config.enabled) return { status: 'disabled' };
-  const record = await readFile(recordPath, 'utf8');
-  const event = {
-    ...config.context, ...input,
-    workflow: header(record, 'telemetry_workflow') || digest(header(record, 'repo') + ':' + header(record, 'issue')),
-    attempt: header(record, 'telemetry_attempt') || config.context?.attempt,
-    invocation: 'issue-to-pr', skill: 'issue-to-pr',
-    repository: header(record, 'repo'), head: header(record, 'head'),
-    stage: header(record, 'stage').split(':')[0],
-    revision: await skillRevision(SKILL),
-  };
-  const result = { ...(await emit(config, event)), delivery: await flush(config) };
+  const run = await runOf(recordPath, config);
+  const result = { ...(await emit(config, { ...config.context, ...input, ...run })), delivery: await flush(config) };
   let usage = { status: 'unavailable' };
   try {
     const session = await currentSession(env);
     if (session) {
-      const { workflow, attempt, invocation, skill, repository, head } = event;
-      const context = { ...config.context, workflow, attempt, invocation, skill, repository, head, session: session.session_id };
+      const context = { ...config.context, ...run, session: session.session_id };
       usage = await captureHook({ ...config, skillDirectory: SKILL, context }, session.runtime, session);
     }
   } catch {}
   return { ...result, usage };
+}
+
+// A run's identity and progress, from its record's header.
+export async function runOf(recordPath, config) {
+  const record = await readFile(recordPath, 'utf8');
+  return {
+    workflow: header(record, 'telemetry_workflow') || digest(header(record, 'repo') + ':' + header(record, 'issue')),
+    attempt: header(record, 'telemetry_attempt') || config.context?.attempt,
+    invocation: 'issue-to-pr', skill: 'issue-to-pr',
+    repository: header(record, 'repo'), branch: header(record, 'branch'), head: header(record, 'head'),
+    stage: header(record, 'stage').match(/^[a-z-]+/)?.[0] ?? null,
+    revision: await revision,
+  };
 }
 
 // The owning session's own transcript, found from the ID its runtime exports to shell commands.

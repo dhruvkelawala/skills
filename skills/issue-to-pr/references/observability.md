@@ -2,6 +2,8 @@
 
 Use the shared [pilot setup](../../../instrumentation/README.md) only when the user opted in. The run record remains authoritative for orchestration. Only its owning thread writes it.
 
+`scripts/watch.mjs` captures runs without the agent's help. A scheduled job on the machine runs it every few minutes. It sends a marker when a record's `stage` or `head` changes, and the token usage of every Claude or Codex session whose branch and working directory match the record's `branch` and `repo`. A session on another branch, such as a root thread that drives several runs, is not counted. The steps below add markers the watcher cannot see, such as gates, repairs and waits.
+
 The owning thread records `telemetry_workflow` and `telemetry_attempt` in the header after opt-in. Keep the workflow on resume; generate a fresh attempt with `node -e 'console.log(crypto.randomUUID())'`. Configure runtime capture with those same identities and invocation `issue-to-pr`. Hash the actual skill directory, including its scripts and references; the emitter computes that revision.
 
 After saving each stage's record, write a metadata JSON file outside the repository and run:
