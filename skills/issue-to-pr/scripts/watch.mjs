@@ -39,13 +39,13 @@ export async function watch(config, home = homedir()) {
     if (!runtime) continue;
     for (const transcript of await files(join(home, name, runtime === 'claude' ? 'projects' : 'sessions'), '.jsonl', since)) {
       if (state.transcripts[transcript.path] === transcript.mtime) continue;
-      state.transcripts[transcript.path] = transcript.mtime;
       const session = await sessionOf(runtime, transcript.path);
       const run = session && runs.find((r) => r.branch && session.branches.has(r.branch) && session.places.some((place) => inRepository(place, r.repository)));
-      if (!run) continue;
+      if (!run) { state.transcripts[transcript.path] = transcript.mtime; continue; }
       const result = await captureHook({ ...outbox(config, run), skillDirectory: SKILL, context: { ...config.context, ...run, session: session.id } }, runtime, { session_id: session.id, transcript_path: transcript.path }).catch(() => ({ status: 'unavailable' }));
       summary.transcripts++;
-      if (result.status === 'captured') summary.requests += result.accepted;
+      // A failed or partial capture leaves the transcript unmarked, so the next run tries it again.
+      if (result.status === 'captured') { summary.requests += result.accepted; state.transcripts[transcript.path] = transcript.mtime; }
       else summary.unavailable++;
     }
   }
@@ -57,7 +57,7 @@ export async function watch(config, home = homedir()) {
 
 // Each run gets its own outbox: delivered requests stay in an outbox so later reads skip them, and they count against its size.
 function outbox(config, run) {
-  return { ...config, directory: join(dirname(config.directory), 'runs', digest(run.workflow).slice(0, 16)), maxBytes: 256 * 1024 * 1024 };
+  return { ...config, directory: join(dirname(config.directory), 'runs', digest(run.workflow).slice(0, 16)), maxEvents: 100000, maxBytes: 256 * 1024 * 1024 };
 }
 
 // Which session a transcript belongs to, and the branches and places it worked in.
@@ -69,12 +69,13 @@ async function sessionOf(runtime, path) {
     return id ? { id, branches: new Set(rows.map((row) => row.gitBranch).filter(Boolean)), places: [...new Set(rows.map((row) => row.cwd).filter(Boolean))] } : null;
   }
   const meta = rows.find((row) => row.type === 'session_meta')?.payload;
-  return meta?.id ? { id: meta.id, branches: new Set([meta.git?.branch].filter(Boolean)), places: [meta.cwd, meta.git?.repository_url].filter(Boolean) } : null;
+  return meta?.id ? { id: meta.id, branches: new Set([meta.git?.branch].filter(Boolean)), places: [meta.git?.repository_url ?? meta.cwd].filter(Boolean) } : null;
 }
 
+// A repository URL must name the record's repository exactly; a working directory needs the repository's name in its path.
 function inRepository(place, repository) {
-  const name = repository.split('/').pop();
-  return place.split('/').includes(name) || place.replace(/\.git$/, '').endsWith('/' + repository);
+  if (place.includes('://') || place.includes('@')) return place.replace(/\.git$/, '').endsWith('/' + repository) || place.replace(/\.git$/, '').endsWith(':' + repository);
+  return place.split('/').includes(repository.split('/').pop());
 }
 
 async function files(root, extension, since) {
