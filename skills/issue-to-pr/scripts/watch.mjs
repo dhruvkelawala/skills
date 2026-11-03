@@ -22,8 +22,10 @@ export async function watch(config, home = homedir()) {
   const summary = { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0, pending: 0, exhausted: 0 };
 
   const runs = [];
-  for (const record of await files(join(home, '.agent', 'issue-to-pr'), '.md', since)) {
-    const run = await runOf(record.path, config);
+  // A record is `<repo>/<issue>.md`; deeper files, such as evidence copies, are not runs.
+  const records = (await files(join(home, '.agent', 'issue-to-pr'), '.md', since)).filter((r) => r.name.split('/').length === 2);
+  for (const record of records) {
+    const run = await runOf(record.path);
     runs.push(run);
     const progress = `${run.stage}@${run.head}`;
     if (!run.stage || state.records[record.path] === progress) continue;
@@ -96,7 +98,7 @@ async function files(root, extension, since) {
   for (const name of names.filter((n) => n.endsWith(extension))) {
     const path = join(root, name);
     const { mtimeMs } = await stat(path).catch(() => ({ mtimeMs: 0 }));
-    if (mtimeMs >= since) found.push({ path, mtime: mtimeMs });
+    if (mtimeMs >= since) found.push({ name, path, mtime: mtimeMs });
   }
   return found;
 }

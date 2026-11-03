@@ -118,3 +118,29 @@ test('a session that worked on two runs is not counted, and a repeated stage sen
     assert.equal(new Set(spans.filter((span) => span.name === 'stage').map((span) => span.spanId)).size, 4);
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
 });
+
+test('each run gets its own attempt, and only records directly in a repository folder are runs', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'skill-watch-'));
+  const spans = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    spans.push(...(JSON.parse(body).resourceSpans?.[0].scopeSpans[0].spans ?? []));
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const text = (n) => `issue: ${n}\nrepo: example/shop\nbranch: fix/${n}\nstage: building\nhead: abc123\n`;
+    await write(join(home, '.agent', 'issue-to-pr', 'shop', '1.md'), text(1));
+    await write(join(home, '.agent', 'issue-to-pr', 'shop', '2.md'), text(2));
+    await write(join(home, '.agent', 'issue-to-pr', 'shop', 'evidence-1', 'copy', '1.md'), text(1));
+    await write(join(home, '.claude', 'projects', '-shop', 'owner.jsonl'), jsonl([
+      { type: 'assistant', sessionId: 'owner', cwd: join(home, 'shop'), gitBranch: 'fix/1', timestamp: '2026-11-02T10:00:00Z', message: { id: 'msg-1', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } },
+    ]));
+    const config = { enabled: true, directory: join(home, 'state', 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z', context: { attempt: 'machine-attempt' } };
+    assert.deepEqual(await watch(config, home), { status: 'watched', markers: 2, transcripts: 1, requests: 1, unavailable: 0, pending: 0, exhausted: 0 });
+    const attempt = (span) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.attempt').value.stringValue;
+    const attempts = spans.filter((span) => span.name === 'stage').map(attempt);
+    assert.equal(new Set(attempts).size, 2);
+    assert.ok(!attempts.includes('machine-attempt'));
+  } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
+});

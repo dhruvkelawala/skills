@@ -14,7 +14,7 @@ const revision = skillRevision(SKILL);
 
 export async function observe(recordPath, input, config, env = process.env) {
   if (!config.enabled) return { status: 'disabled' };
-  const run = await runOf(recordPath, config);
+  const run = await runOf(recordPath);
   const result = { ...(await emit(config, { ...config.context, ...input, ...run })), delivery: await flush(config) };
   let usage = { status: 'unavailable' };
   try {
@@ -28,11 +28,13 @@ export async function observe(recordPath, input, config, env = process.env) {
 }
 
 // A run's identity and progress, from its record's header.
-export async function runOf(recordPath, config) {
+export async function runOf(recordPath) {
   const record = await readFile(recordPath, 'utf8');
+  const workflow = header(record, 'telemetry_workflow') || digest(header(record, 'repo') + ':' + header(record, 'issue'));
   return {
-    workflow: header(record, 'telemetry_workflow') || digest(header(record, 'repo') + ':' + header(record, 'issue')),
-    attempt: header(record, 'telemetry_attempt') || config.context?.attempt,
+    workflow,
+    // A record without its own attempt gets one per run, never the machine-wide default.
+    attempt: header(record, 'telemetry_attempt') || digest('attempt:' + workflow).slice(0, 32),
     invocation: 'issue-to-pr', skill: 'issue-to-pr',
     repository: header(record, 'repo'), branch: header(record, 'branch'), head: header(record, 'head'),
     stage: header(record, 'stage').match(/^[a-z-]+/)?.[0] ?? null,

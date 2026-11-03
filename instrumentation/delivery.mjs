@@ -32,9 +32,10 @@ function usageDetails(u) {
   const details = {};
   if (u.input != null) details.input = Math.max(0, u.input - (u.inputIncludesCache ? u.cacheRead ?? 0 : 0));
   if (u.output != null) details.output = Math.max(0, u.output - (u.outputIncludesReasoning ? u.reasoning ?? 0 : 0));
-  for (const [from, to] of [['cacheRead', 'cache_read'], ['cacheWrite5m', 'cache_write_5m'], ['cacheWrite1h', 'cache_write_1h'], ['reasoning', 'reasoning']]) if (u[from] != null) details[to] = u[from];
+  // Langfuse prices a usage key only when its model price list has the same name.
+  for (const [from, to] of [['cacheRead', 'input_cache_read'], ['cacheWrite5m', 'input_cache_creation_5m'], ['cacheWrite1h', 'input_cache_creation_1h'], ['reasoning', 'output_reasoning']]) if (u[from] != null) details[to] = u[from];
   const unsplit = (u.cacheWrite ?? 0) - (u.cacheWrite5m ?? 0) - (u.cacheWrite1h ?? 0);
-  if (unsplit > 0) details.cache_write_unknown_duration = unsplit;
+  if (unsplit > 0) details.input_cache_creation = unsplit;
   return details;
 }
 
