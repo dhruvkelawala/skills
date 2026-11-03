@@ -57,8 +57,8 @@ if (command === 'seed') {
     const generation = unique.find((o) => o.type === 'GENERATION');
     assert.equal(generation.usageDetails.input, 150);
     assert.equal(generation.usageDetails.output, 30);
-    assert.equal(generation.usageDetails.cache_read, 50);
-    assert.equal(generation.usageDetails.reasoning, 10);
+    assert.equal(generation.usageDetails.input_cache_read, 50);
+    assert.equal(generation.usageDetails.output_reasoning, 10);
     assert.equal(scores.data.filter((s) => s.name === 'evidence-failure').length, 1);
     const result = { phase: 'backend-only-fixture', capturedHead: state.head, workflow: state.workflow, traceId, uniqueObservations: unique.length, rawRows: rows.data.length, sourceTotals: state.expected, metrics, usageDetails: generation.usageDetails, evidenceFailureScores: scores.data.filter((s) => s.name === 'evidence-failure').length, storedCanaryAbsent: true };
     await writeFile(join(work, 'readback.json'), JSON.stringify({ rows, metrics, scores }), { mode: 0o600 });

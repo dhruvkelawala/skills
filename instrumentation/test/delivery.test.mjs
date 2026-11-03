@@ -5,7 +5,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { emit, flush, status } from '../delivery.mjs';
+import { emit, flush, ingestion, status } from '../delivery.mjs';
 import { captureHook } from '../cli.mjs';
 import { digest } from '../contract.mjs';
 
@@ -138,4 +138,12 @@ test('a hook reaches new requests within the session-end deadline after a large 
     assert.equal(JSON.parse(output).delivery.delivered, 1);
     t.diagnostic(`repeat CLI hook with 2000 acknowledgements and one new request: ${(performance.now() - started).toFixed(0)} ms`);
   } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('request usage uses the backend price list\'s token names, so cache and reasoning tokens are priced', () => {
+  const details = (usage) => JSON.parse(ingestion({ ...event, kind: 'request', eventId: digest('r'), request: 'r', model: 'm', usage }).trace.resourceSpans[0].scopeSpans[0].spans[0].attributes.find((a) => a.key === 'langfuse.observation.usage_details').value.stringValue);
+  assert.deepEqual(details({ input: 2, output: 30, cacheRead: 100, cacheWrite: 12, cacheWrite5m: 5, cacheWrite1h: 4, reasoning: null, inputIncludesCache: false, outputIncludesReasoning: true }),
+    { input: 2, output: 30, input_cache_read: 100, input_cache_creation_5m: 5, input_cache_creation_1h: 4, input_cache_creation: 3 });
+  assert.deepEqual(details({ input: 150, output: 30, cacheRead: 100, cacheWrite: null, cacheWrite5m: null, cacheWrite1h: null, reasoning: 10, inputIncludesCache: true, outputIncludesReasoning: true }),
+    { input: 50, output: 20, input_cache_read: 100, output_reasoning: 10 });
 });
