@@ -58,38 +58,17 @@ Before and after, from `support-report-pr-349-eli25.html`:
 
 ## 3. Build the page
 
-1. Write `~/.agent/diagrams/<slug>-eli25.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same file in place and show it again.
-2. Build it in the Field Guide look, from the `visual-explainer` folder in your skills directory. Read its `references/field-guide.md`, then take the parts the page needs from its `templates/field-guide.html`: the tokens, fonts, plates, chips and cards, not the outline. A short page needs few of them.
-3. Follow T3's light or dark mode. T3 gives a visual page its colours as CSS variables but leaves `prefers-color-scheme` unset, so Field Guide's switch cannot see the mode. Drop the Light and Dark switch and its stored choice, keep the dark token blocks, and put this script first in `<head>`:
+1. Write `~/.agent/diagrams/<slug>-eli25.src.html`, where `<slug>` uses lowercase letters, digits and hyphens. When the user asks to update the explainer, edit that same source in place, render it again and show it again.
+2. Build it in the Field Guide register, from the `visual-explainer` folder in your skills directory. Read its `references/kit.md` and `references/field-guide.md`; its `templates/field-guide.src.html` shows every part. Take the parts the page needs, such as the field note, plates, chips and specimen cards, not the outline. A short page needs few of them. Leave out `data-register`, so the page gets Field Guide.
+3. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width and height.
+4. Run `../unslop/SKILL.md` on the page's prose. Keep the page's shape and word budget, and leave code as it is.
+5. Render it with `node <visual-explainer folder>/kit/render.mjs ~/.agent/diagrams/<slug>-eli25.src.html --t3`, and fix every `✗` it lists in the source. It writes `<slug>-eli25.html` beside the source. The renderer adds the kit and the script that follows T3's light or dark mode, and leaves out the Light and Dark switch in T3, so the source holds neither.
 
-   ```html
-   <script>
-     (() => {
-       const root = document.documentElement;
-       const c = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-       const pick = () => {
-         const bg = getComputedStyle(root).getPropertyValue("--background");
-         if (!bg) return;
-         c.fillStyle = bg;
-         c.fillRect(0, 0, 1, 1);
-         const [r, g, b] = c.getImageData(0, 0, 1, 1).data;
-         root.dataset.theme = r * 299 + g * 587 + b * 114 < 128000 ? "dark" : "light";
-       };
-       pick();
-       new MutationObserver(pick).observe(document.head, { childList: true, subtree: true, characterData: true });
-     })();
-   </script>
-   ```
-
-   The script picks dark when the thread's background is dark, and picks again when the user switches T3's mode with the page open, because T3 then rewrites its theme style in `<head>`. Outside T3, as on a Vercel deploy, it does nothing and the page follows the system scheme. Paint the page ground with `var(--background, var(--bg))`, so it matches the thread in T3 and stays bone elsewhere.
-4. Where `html_render`'s description and Field Guide differ, follow `html_render`. It owns the frame's width and height.
-5. Run `../unslop/SKILL.md` on the page's prose last. Keep the page's shape and word budget, and leave code as it is.
-
-**Done when** the file holds a Field Guide page with the script first in `<head>` and no theme switch, and unslop has run on its prose.
+**Done when** the source renders with no `✗` and unslop has run on its prose.
 
 ## 4. Preview and show
 
-1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 360 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. These checks replace Field Guide's first delivery check, on its switch and widths, and its other checks still apply.
+1. Preview the page with `html_preview` in light and in dark, at 728 pixels and at 360 for a phone. Fix every console error and anything wider than the frame. Look at each screenshot: the light one is light, the dark one is dark, and every label reads. These checks replace Field Guide's T3 delivery check, and its other checks still apply.
 2. Show it with `html_render`. Set its height to the `contentHeight` of the 360-pixel preview, because T3 uses the height only on phones, which are about 360 pixels wide. Open no local browser: the page lives in the thread, where the user reads it on any device.
 
 **Done when** `html_render` has shown the page in the thread.
