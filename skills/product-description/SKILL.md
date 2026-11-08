@@ -5,6 +5,8 @@ description: Build a "product description" repo for a software product — a set
 
 # Product description repo
 
+Adapted from Steve Ruiz's [product-description gist](https://gist.github.com/steveruizok/83ae5c53f2784ebf8f5fe0a3fb94480f/f9435a3c7b022ecadc8441542675a9163cdb6b7f), revision `f9435a3`.
+
 A product description treats the product as a large state chart the user moves through with input. The repo describes that state chart feature by feature, in plain language, from the user's point of view, with the same skeleton for every document so that gaps and inconsistencies show up by comparison. Documents are drafted from the source code and its tests, then verified by hand against the running product, and everything that looks like a defect is collected into one triage file.
 
 The files under `references/`:
