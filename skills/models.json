@@ -11,6 +11,17 @@
       "use": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
       "ifUnavailable": "thread"
     },
+    "parallel-worker": {
+      "for": "arena candidates and separate coverage workers, including swarm-style runs",
+      "use": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+      "ifUnavailable": "thread"
+    },
+    "artifact-review": {
+      "for": "arena's independent judge and show-me-your-work's decision-trail audit",
+      "onClaudeThread": { "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
+      "onCodexThread": { "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "high" },
+      "ifUnavailable": "thread"
+    },
     "reviewers": {
       "for": "/code-review's two reviewers",
       "use": { "driver": "claudeAgent", "model": "claude-opus-5-5" },
