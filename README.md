@@ -70,8 +70,8 @@ Changes travel only through git. To add an outside skill, or bring back a cut on
 
 Skills marked (pstack) are adapted for Pi from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, at `cursor/plugins@fae2c6e` or later; each skill's attribution line names its exact commit. Each carries the upstream license in its directory. `promote` adapts pstack's `reflect` and `correct`. `pr` adapts HumanLayer's PR template and Dex Horthy's show-me visuals, MIT licensed, with the license in its directory. `test-audit` adapts OpenClaw's `test-audit`, MIT licensed, at `openclaw/openclaw@3195fba`, with the license in its directory. `unslop` adapts Siqi Chen's `humanizer`, MIT licensed, at `blader/humanizer@d8085c7`, with the license in its directory. `modernize` adapts Theo Browne's `modernize` from [tstack](https://github.com/t3dotgg/tstack), MIT licensed, at `t3dotgg/tstack@7de017b`, with the license in its directory; `pr-watch`'s comment label, scope rule and T3 watch notes, and `pr`'s title rule, come from the same repo's `leaving-pr-comments`, `babysit-pr` and `file-pr`.
 
-`product-description` is adapted from Steve Ruiz's [product-description gist](https://gist.github.com/steveruizok/83ae5c53f2784ebf8f5fe0a3fb94480f/f9435a3c7b022ecadc8441542675a9163cdb6b7f), revision `f9435a3`.
+`product-description` is adapted from Steve Ruiz's [product-description gist](https://gist.github.com/steveruizok/83ae5c53f2784ebf8f5fe0a3fb94480f/f9435a3c7b022ecadc8441542675a9163cdb6b7f), revision `f9435a3`. The gist has no licence, so this skill is not covered by the repo's MIT licence. Its rights remain with the author.
 
 ## License
 
-MIT
+MIT, except `skills/product-description`, which is not covered (see [Credits](#credits)).
