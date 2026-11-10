@@ -130,21 +130,21 @@ export function walkStack(prs, bottomNumber) {
 // GitHub's compare lists at most this many files.
 const COMPARE_FILE_LIMIT = 300;
 
-// Base drift: commits on the PR's base that its head lacks and that change a file the PR changes.
-// A check may have run on a test merge that held some of them, but ship cannot tell which, so any one
-// stops the PR until a rebase puts it under the PR's checks. Takes the PR's files and GitHub's compare
-// from the head to the base, both as REST returns them; a renamed file counts under both names, and a
-// compare that hit its file limit counts as changing every file.
-export function baseDrift(prFiles, compare, base) {
+// Base drift blocks overlapping changes the head lacks. completeFiles replaces a capped REST list;
+// without it, a capped list cannot establish that landing is safe. Renames count under both names.
+export function baseDrift(prFiles, compare, base, completeFiles) {
   const missing = compare.ahead_by ?? 0;
   if (missing === 0) return null;
+  const retry = `rebase onto ${base}, push, wait for required checks, then run again`;
+  if (!completeFiles && (compare.files ?? []).length >= COMPARE_FILE_LIMIT) {
+    return `${base} has ${missing} commit${missing === 1 ? "" : "s"} this head lacks; the compare file list was cut off at ${COMPARE_FILE_LIMIT} files and the complete file list could not be read; ${retry}`;
+  }
   const names = (files) => files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
-  const changed = new Set(names(compare.files ?? []));
-  const limited = (compare.files ?? []).length >= COMPARE_FILE_LIMIT;
-  const shared = [...new Set(names(prFiles))].filter((file) => limited || changed.has(file));
+  const changed = new Set(names(completeFiles ?? compare.files ?? []));
+  const shared = [...new Set(names(prFiles))].filter((file) => changed.has(file));
   if (shared.length === 0) return null;
   const listed = shared.slice(0, 3).join(", ") + (shared.length > 3 ? ` and ${shared.length - 3} more` : "");
-  return `${base} has ${missing} commit${missing === 1 ? "" : "s"} this head lacks that change ${listed}; rebase onto ${base}, push, wait for required checks, then run again`;
+  return `${base} has ${missing} commit${missing === 1 ? "" : "s"} this head lacks that change ${listed}; ${retry}`;
 }
 
 // Rule B: a PR needs an independent verdict only when its door is one-way or unstated, when the caller
@@ -437,11 +437,35 @@ function mergeAt(n, head, repo, force) {
   throw new Error(`PR #${n} did not merge at once, so the merge was not pinned to ${head.slice(0, 12)}${pr.autoMerge ? "; its auto-merge request is now disabled" : ""}`);
 }
 
-// Base drift for one PR, read through REST.
 function driftFor(pr, repo) {
   const owner = nameWithOwner(repo);
   const compare = JSON.parse(sh("gh", ["api", `repos/${owner}/compare/${pr.headRefOid}...${pr.baseRefName}`, "--jq", "{ ahead_by, files: [.files[]? | { filename, previous_filename }] }"]));
-  return compare.ahead_by ? baseDrift(restList(`repos/${owner}/pulls/${pr.number}/files?per_page=100`), compare, pr.baseRefName) : null;
+  if (!compare.ahead_by) return null;
+  let completeFiles;
+  if (compare.files.length >= COMPARE_FILE_LIMIT) {
+    try { completeFiles = driftFiles(pr, owner); } catch {}
+  }
+  return baseDrift(restList(`repos/${owner}/pulls/${pr.number}/files?per_page=100`), compare, pr.baseRefName, completeFiles);
+}
+
+function driftFiles(pr, repo) {
+  const remote = sh("git", ["config", "--get", "remote.origin.url"]);
+  const url = new URL(remote.replace(/^([^/]+@[^:]+):/, "ssh://$1/"));
+  const path = url.pathname.replace(/^\/+/, "").replace(/\/$/, "").replace(/\.git$/, "");
+  if (url.hostname.toLowerCase() !== (process.env.GH_HOST ?? "github.com").toLowerCase() || path.toLowerCase() !== repo.toLowerCase()) {
+    throw new Error("origin does not identify the PR repository");
+  }
+  const base = `refs/ship/drift/${process.pid}/${pr.number}/base`;
+  const head = `refs/ship/drift/${process.pid}/${pr.number}/head`;
+  try {
+    sh("git", ["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${pr.baseRefName}:${base}`, `+refs/pull/${pr.number}/head:${head}`]);
+    if (sh("git", ["rev-parse", head]) !== pr.headRefOid) throw new Error("PR head moved during drift recovery");
+    const from = sh("git", ["merge-base", head, base]);
+    const files = sh("git", ["diff", "--no-relative", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--no-renames", "--name-only", "-z", from, base], { maxBuffer: 1 << 28, trimOutput: false });
+    return files.split("\0").filter(Boolean).map((filename) => ({ filename }));
+  } finally {
+    for (const ref of [base, head]) try { sh("git", ["update-ref", "-d", ref]); } catch {}
+  }
 }
 
 function statusFor(pr, repo, trusted, me, patch = currentPatch(pr)) {

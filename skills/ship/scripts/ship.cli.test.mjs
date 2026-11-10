@@ -164,7 +164,7 @@ switch (method + " " + endpoint) {
   case "GET repos/fixture/repo/pulls/7":
     answer({ ...pr, state: state.mergedAs ? "closed" : "open", merged: Boolean(state.mergedAs), merge_commit_sha: state.mergedAs, auto_merge: null });
   case "GET repos/fixture/repo/pulls/7/reviews": answer(pages(state.reviews));
-  case "GET repos/fixture/repo/pulls/7/files": answer(pages([{ filename: "sample.txt" }]));
+  case "GET repos/fixture/repo/pulls/7/files": answer(pages(state.prFiles ?? [{ filename: "sample.txt" }]));
   case "GET repos/fixture/repo/issues/7/comments": answer(pages(state.comments));
   case "POST repos/fixture/repo/issues/7/comments": {
     const comment = { body: field("body"), user: { login: state.login }, created_at: "2026-10-21T12:00:00Z" };
@@ -389,4 +389,58 @@ test("run: a base commit the head lacks holds the PR when it changes one of the 
     ceiling: { number: 7, blocker: "main has 2 commits this head lacks that change sample.txt; rebase onto main, push, wait for required checks, then run again" },
     stackStop: null,
   });
+});
+
+test("run: a capped compare recovers real base changes, including both names of a rename", (t) => {
+  const baseFiles = Array.from({ length: 300 }, (_, n) => ({ filename: `gen/${n}.txt` }));
+  const { dir, git, cli, setState, state } = fixtureGitHub(t, { graphql: true, baseAhead: 1, baseFiles });
+  git("remote", "set-url", "origin", "https://github.com/fixture/repo.git");
+  git("config", `url.${dir}.insteadOf`, "https://github.com/fixture/repo.git");
+  git("checkout", "--quiet", "main");
+  mkdirSync(join(dir, "gen"));
+  for (let n = 0; n < 301; n++) writeFileSync(join(dir, "gen", `${n}.txt`), "base only\n");
+  git("add", "gen");
+  git("commit", "--quiet", "-m", "base changes over 300 unrelated files");
+  const allowed = cli("run", "7");
+  assert.deepEqual(allowed.run.map((p) => p.number), [7], "unrelated base changes no longer require a rebase");
+  assert.equal(allowed.ceiling, null);
+
+  git("mv", "sample.txt", "renamed name\n.txt");
+  git("commit", "--quiet", "-m", "base renames the PR file");
+  setState({ baseAhead: 2 });
+  const blocked = cli("run", "7");
+  assert.deepEqual(blocked.run, []);
+  assert.match(blocked.ceiling.blocker, /that change sample\.txt;/, "the old name of a rename counts");
+  assert.doesNotMatch(blocked.ceiling.blocker, /cut off/);
+
+  git("checkout", "--quiet", "feature");
+  writeFileSync(join(dir, "renamed name\n.txt"), "PR adds this name\n");
+  git("add", ".");
+  git("commit", "--quiet", "-m", "PR also changes the renamed path");
+  const head = git("rev-parse", "HEAD");
+  git("update-ref", "refs/pull/7/head", head);
+  setState({ pr: { ...state().pr, head: { ...state().pr.head, sha: head } }, prFiles: [{ filename: "sample.txt" }, { filename: "renamed name\n.txt" }] });
+  assert.match(cli("run", "7").ceiling.blocker, /that change sample\.txt, renamed name\n\.txt;/, "both names and embedded newlines survive Git output");
+});
+
+test("run: a capped compare keeps a conservative refusal when complete recovery fails", (t) => {
+  const baseFiles = Array.from({ length: 300 }, (_, n) => ({ filename: `gen/${n}.txt` }));
+  const { dir, git, cli } = fixtureGitHub(t, { graphql: true, baseAhead: 1, baseFiles });
+  const refused = (why) => {
+    const blocked = cli("run", "7");
+    assert.deepEqual(blocked.run, [], why);
+    assert.match(blocked.ceiling.blocker, /file list was cut off at 300/, why);
+    assert.doesNotMatch(blocked.ceiling.blocker, /that change sample\.txt/, why);
+  };
+  refused("origin does not identify the PR repository");
+  git("remote", "set-url", "origin", "https://github.com/fixture/repo.git");
+  git("config", `url.${dir}.insteadOf`, "https://github.com/fixture/repo.git");
+  git("update-ref", "refs/ship/drift", "HEAD");
+  refused("Git cannot fetch into the drift ref namespace");
+  git("update-ref", "-d", "refs/ship/drift");
+  writeFileSync(join(dir, "next.txt"), "new PR head\n");
+  git("add", "next.txt");
+  git("commit", "--quiet", "-m", "PR moved after the API read");
+  git("update-ref", "refs/pull/7/head", "HEAD");
+  refused("fetched PR head differs from the API snapshot");
 });

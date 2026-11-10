@@ -197,12 +197,21 @@ test("landableRun: a bot author's own verdict, recorded under its bare login, do
   assert.match(r.ceiling.blocker, /not recorded by someone other than the PR author/);
 });
 
-test("baseDrift: a base commit that changed a file the PR renamed counts, and so does a compare cut off at GitHub's file limit", () => {
+test("baseDrift: a base commit that changed a file the PR renamed counts", () => {
   const files = [{ filename: "src/a.ts" }, { filename: "src/new.ts", previous_filename: "src/old.ts" }];
   assert.equal(baseDrift(files, { ahead_by: 1, files: [{ filename: "src/old.ts" }] }, "main"),
     "main has 1 commit this head lacks that change src/old.ts; rebase onto main, push, wait for required checks, then run again");
-  const limited = { ahead_by: 400, files: Array.from({ length: 300 }, (_, n) => ({ filename: `gen/${n}.ts` })) };
-  assert.match(baseDrift(files, limited, "main"), /^main has 400 commits this head lacks that change src\/a\.ts, src\/new\.ts, src\/old\.ts;/);
+});
+
+test("baseDrift: a capped compare uses recovered files and refuses when recovery fails", () => {
+  const files = [{ filename: "src/a.ts" }, { filename: "src/new.ts", previous_filename: "src/old.ts" }];
+  const generated = Array.from({ length: 301 }, (_, n) => ({ filename: `gen/${n}.ts` }));
+  const compare = { ahead_by: 400, files: generated.slice(0, 300) };
+  assert.equal(baseDrift(files, compare, "main", generated), null, "a complete set above the cap has no shared file");
+  assert.equal(baseDrift(files, compare, "main", [...generated, { filename: "src/old.ts" }]),
+    "main has 400 commits this head lacks that change src/old.ts; rebase onto main, push, wait for required checks, then run again");
+  assert.match(baseDrift(files, compare, "main"), /file list was cut off at 300/);
+  assert.doesNotMatch(baseDrift(files, compare, "main"), /that change src\//, "unknown overlap must not be claimed as fact");
 });
 
 test("landableRun: base drift stops a PR before its verdict is weighed, since the rebase can change the patch", () => {
