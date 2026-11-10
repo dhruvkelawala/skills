@@ -455,10 +455,11 @@ function driftFiles(pr, repo) {
   if (url.hostname.toLowerCase() !== (process.env.GH_HOST ?? "github.com").toLowerCase() || path.toLowerCase() !== repo.toLowerCase()) {
     throw new Error("origin does not identify the PR repository");
   }
+  const baseTip = restJson(`repos/${repo}/git/ref/heads/${pr.baseRefName}`).object.sha;
   const base = `refs/ship/drift/${process.pid}/${pr.number}/base`;
   const head = `refs/ship/drift/${process.pid}/${pr.number}/head`;
   try {
-    sh("git", ["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${pr.baseRefName}:${base}`, `+refs/pull/${pr.number}/head:${head}`]);
+    sh("git", ["fetch", "--quiet", "--no-tags", "origin", `+${baseTip}:${base}`, `+refs/pull/${pr.number}/head:${head}`]);
     if (sh("git", ["rev-parse", head]) !== pr.headRefOid) throw new Error("PR head moved during drift recovery");
     const from = sh("git", ["merge-base", head, base]);
     const files = sh("git", ["diff", "--no-relative", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--no-renames", "--name-only", "-z", from, base], { maxBuffer: 1 << 28, trimOutput: false });

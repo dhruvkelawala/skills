@@ -98,7 +98,7 @@ function fixtureGitHub(t, changes = {}) {
   };
   const statePath = join(dir, "state.json");
   writeFileSync(statePath, JSON.stringify({
-    login: "dhruv", graphql: false, pr, reviewDecision: "", comments: [], reviews: [], protected: false, rulesets: [],
+    login: "dhruv", graphql: false, pr, baseTip: git("rev-parse", "main"), reviewDecision: "", comments: [], reviews: [], protected: false, rulesets: [],
     branch: { mergeQueue: null, ref: { refUpdateRule: null, rules: { nodes: [] } } }, merged: [], mergedAs: null, calls: [], ...changes,
   }));
   mkdirSync(join(dir, "bin"));
@@ -160,6 +160,7 @@ switch (method + " " + endpoint) {
   case "GET user": answer(state.login + "\\n");
   case "GET repos/fixture/repo": answer({ full_name: "fixture/repo", default_branch: "main", archived: Boolean(state.archived) });
   case "GET repos/fixture/repo/branches/main": answer({ name: "main", protected: state.protected });
+  case "GET repos/fixture/repo/git/ref/heads/main": answer({ object: { sha: state.baseTip } });
   case "GET repos/fixture/repo/pulls": answer(pages(state.mergedAs ? [] : [pr]));
   case "GET repos/fixture/repo/pulls/7":
     answer({ ...pr, state: state.mergedAs ? "closed" : "open", merged: Boolean(state.mergedAs), merge_commit_sha: state.mergedAs, auto_merge: null });
@@ -401,13 +402,14 @@ test("run: a capped compare recovers real base changes, including both names of 
   for (let n = 0; n < 301; n++) writeFileSync(join(dir, "gen", `${n}.txt`), "base only\n");
   git("add", "gen");
   git("commit", "--quiet", "-m", "base changes over 300 unrelated files");
+  setState({ baseTip: git("rev-parse", "main") });
   const allowed = cli("run", "7");
   assert.deepEqual(allowed.run.map((p) => p.number), [7], "unrelated base changes no longer require a rebase");
   assert.equal(allowed.ceiling, null);
 
   git("mv", "sample.txt", "renamed name\n.txt");
   git("commit", "--quiet", "-m", "base renames the PR file");
-  setState({ baseAhead: 2 });
+  setState({ baseAhead: 2, baseTip: git("rev-parse", "main") });
   const blocked = cli("run", "7");
   assert.deepEqual(blocked.run, []);
   assert.match(blocked.ceiling.blocker, /that change sample\.txt;/, "the old name of a rename counts");
@@ -425,19 +427,26 @@ test("run: a capped compare recovers real base changes, including both names of 
 
 test("run: a capped compare keeps a conservative refusal when complete recovery fails", (t) => {
   const baseFiles = Array.from({ length: 300 }, (_, n) => ({ filename: `gen/${n}.txt` }));
-  const { dir, git, cli } = fixtureGitHub(t, { graphql: true, baseAhead: 1, baseFiles });
+  const { dir, git, cli, setState } = fixtureGitHub(t, { graphql: true, baseAhead: 1, baseFiles });
   const refused = (why) => {
     const blocked = cli("run", "7");
     assert.deepEqual(blocked.run, [], why);
     assert.match(blocked.ceiling.blocker, /file list was cut off at 300/, why);
     assert.doesNotMatch(blocked.ceiling.blocker, /that change sample\.txt/, why);
   };
-  refused("origin does not identify the PR repository");
+  for (const remote of ["https://github.com/other/repo.git", "https://other.example/fixture/repo.git"]) {
+    git("remote", "set-url", "origin", remote);
+    git("config", `url.${dir}.insteadOf`, remote);
+    refused("origin does not identify the PR repository");
+  }
   git("remote", "set-url", "origin", "https://github.com/fixture/repo.git");
   git("config", `url.${dir}.insteadOf`, "https://github.com/fixture/repo.git");
   git("update-ref", "refs/ship/drift", "HEAD");
   refused("Git cannot fetch into the drift ref namespace");
   git("update-ref", "-d", "refs/ship/drift");
+  setState({ baseTip: "f".repeat(40) });
+  refused("origin cannot supply the base tip reported by GitHub");
+  setState({ baseTip: git("rev-parse", "main") });
   writeFileSync(join(dir, "next.txt"), "new PR head\n");
   git("add", "next.txt");
   git("commit", "--quiet", "-m", "PR moved after the API read");
