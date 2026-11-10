@@ -44,7 +44,7 @@
       "for": "the council's preferred members, two models from each of two labs, with available-family fallback",
       "members": [
         { "name": "Opus", "driver": "claudeAgent", "model": "claude-opus-5-5", "effort": "xhigh" },
-        { "name": "Fable", "driver": "claudeAgent", "model": "claude-fable-5-1", "effort": "xhigh" },
+        { "name": "Fable", "driver": "claudeAgent", "model": "claude-fable-5-2", "effort": "high" },
         { "name": "Sol", "driver": "codex", "model": "gpt-6.1-sol", "effort": "xhigh" },
         { "name": "Astra", "driver": "codex", "model": "gpt-6-astra", "effort": "xhigh" }
       ],

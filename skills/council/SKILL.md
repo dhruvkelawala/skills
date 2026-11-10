@@ -1,6 +1,7 @@
 ---
 name: council
-description: Use for /council, when the user asks to consult the council, or wants several other models to challenge a plan, decision, design, diagnosis, draft or PR before acting on it. Each member reviews the same brief alone and read-only for up to three rounds while the thread changes its position or rebuts with evidence, then reports the changes, the dissent and the follow-ups. `/council pr <n>`, or "merge once the council is happy", gates a merge: the PR lands through ship only after every member passes the same head.
+description: >-
+  Use for /council, when the user asks to consult the council, or wants several other models to challenge a plan, decision, design, diagnosis, draft or PR before acting on it. Each member reviews the same brief alone and read-only for up to three rounds while the thread changes its position or rebuts with evidence, then reports the changes, the dissent and the follow-ups. `/council pr NUMBER`, or "merge once the council is happy", gates a merge: the PR lands through ship only after every member passes the same head.
 ---
 
 # Council
