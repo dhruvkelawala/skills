@@ -19,7 +19,7 @@ The user's explicit account choice wins. Otherwise preserve an existing project'
 
 Check the repository's deployment instructions, `.vercel/project.json` and any `VERCEL_ORG_ID` or `VERCEL_PROJECT_ID` overrides. If the requested account differs from the configured account, select the project in the requested account explicitly. Ask only when the artifact, project or account cannot be determined from the request and existing configuration.
 
-Keep the requested preview or production environment. For an existing app, default to preview unless the user or its deployment instructions specify production. Publishing a standalone static page uses production for its stable URL.
+Keep the requested preview or production environment. For an existing app, default to preview unless the user or its deployment instructions specify production. For a standalone static page with no requested environment, default to production for its stable URL.
 
 **Done when** the source, scope, project and environment are known.
 

@@ -23,10 +23,10 @@ mkdir -p "$site_dir"
 cp "$html_path" "$site_dir/index.html"
 cd "$site_dir"
 vercel link --yes --project "$slug" --scope "$scope"
-vercel deploy --prod --yes --scope "$scope"
+vercel deploy --yes --scope "$scope"
 ```
 
-For a page with relative assets, stage those assets with the same relative paths before deploying. Link each staged directory to the same named project on later updates so its production alias stays the same.
+The final command creates a preview. Add `--prod` only when the selected environment is production. For a page with relative assets, stage those assets with the same relative paths before deploying. Link each staged directory to the same named project on later updates so production deployments keep the same alias.
 
 ## Completion
 
