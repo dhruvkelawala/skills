@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vercel deploy"
+  short_description: "Deploy apps and static pages to Work or personal Vercel"
+  default_prompt: "Use $vercel-deploy to deploy this project or page to the requested Vercel account."

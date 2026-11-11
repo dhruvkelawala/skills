@@ -1,6 +1,6 @@
 ---
 name: eli25
-description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, to update an explainer, or to deploy one to Vercel. Also use unasked after a review intro or a recap whose PR adds a part, changes a flow across parts, or is a stack, and when the user still doesn't get a chat answer. Writes a page of about 400 words in the Field Guide look and shows it in the thread as a T3 visual page.
+description: Use for /eli25, or when the user asks to explain a PR, stack, plan, spike, system, incident or concept as a short visual page, or to update an explainer. Also use unasked after a review intro or a recap whose PR adds a part, changes a flow across parts, or is a stack, and when the user still doesn't get a chat answer. Writes a page of about 400 words in the Field Guide look and shows it in the thread as a T3 visual page.
 ---
 
 # eli25
@@ -73,16 +73,8 @@ Before and after, from `support-report-pr-349-eli25.html`:
 
 **Done when** `html_render` has shown the page in the thread.
 
-## 5. Deploy on request
+## Optional publishing
 
-Deploy only when the user asks, for a page meant for a teammate. The user names the target in plain words, now or in a later message. The commands are in `references/deploy.md`.
+When the user asks to publish the page on Vercel, hand the rendered HTML path and their requested target to [vercel-deploy](../vercel-deploy/SKILL.md). It owns deployment and account selection. A request to deploy an existing page starts there.
 
-| The user says | Target |
-| --- | --- |
-| "argentlabs vercel", "work vercel", "company vercel" | Vercel, work scope |
-| "personal vercel", "my vercel" | Vercel, personal scope |
-| "vercel" alone | Work scope for an argentlabs repo, personal scope otherwise |
-
-Report each URL as a plain URL on its own line.
-
-**Done when** the user has the URL.
+**Done when** the requested deployment has returned its URL.
