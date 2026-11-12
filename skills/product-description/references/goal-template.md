@@ -55,7 +55,7 @@ Do not describe code. Describe what the user sees and does. Technical detail goe
 
 ## Working rules
 
-- Commit after each document or coherent group of documents with a message of the form `docs: add {path}` or `docs: revise {path}`. {State the repo's convention on AI attribution in commits.}
+- Commit after each document or coherent group of documents with a message of the form `docs: add {path}` or `docs: revise {path}`. Plain messages, with no AI attribution or co-author trailers.
 - Do not modify anything in {the source repo}. It is read-only reference material.
 - Do not add files outside the README's structure without updating the structure and coverage table to match.
 - When a behavior cannot be determined from code and tests, write down what you could determine, put the rest in "Open questions", and move on. Do not guess and do not block.

@@ -1,11 +1,11 @@
 ---
 name: product-description
-description: Build a "product description" repo for a software product — a set of prose documents describing, from the outside in, what the user sees, what they can do, and exactly what happens when they do it, written from the code and tests, then verified against the running product and triaged into a bug list. Works for any product with a user (canvas editors, web apps, CLIs, chat products, mobile apps). Use when the user asks to "write a product description for X", "describe the user experience of X", "document how X behaves for the user", "make a behavior-spec repo", or wants a feature-by-feature, event-by-event account of an app's behavior rather than API docs. Also use to resume or extend an existing product description repo.
+description: Build a "product description" repo for a software product — a set of prose documents describing, from the outside in, what the user sees, what they can do, and exactly what happens when they do it, written from the code and tests, then verified against the running product and triaged into a bug list. Works for any product with a user (canvas editors, web apps, CLIs, chat products, mobile apps). Use when the user asks to "write a product description for X", "describe the user experience of X", "document how X behaves for the user", "make a behavior-spec repo", or wants a feature-by-feature, event-by-event account of an app's behavior rather than API docs. Also use to refresh an existing set after the code moves, rebuild one the code has outgrown, or resume or extend one.
 ---
 
 # Product description repo
 
-Adapted from Steve Ruiz's [product-description gist](https://gist.github.com/steveruizok/83ae5c53f2784ebf8f5fe0a3fb94480f/f9435a3c7b022ecadc8441542675a9163cdb6b7f), revision `f9435a3`.
+Forked from Steve Ruiz's [product-description gist](https://gist.github.com/steveruizok/83ae5c53f2784ebf8f5fe0a3fb94480f/f9435a3c7b022ecadc8441542675a9163cdb6b7f), revision `f9435a3`. This fork adds the refresh and rebuild paths that keep a set true to a product that keeps moving.
 
 A product description treats the product as a large state chart the user moves through with input. The repo describes that state chart feature by feature, in plain language, from the user's point of view, with the same skeleton for every document so that gaps and inconsistencies show up by comparison. Documents are drafted from the source code and its tests, then verified by hand against the running product, and everything that looks like a defect is collected into one triage file.
 
@@ -18,6 +18,10 @@ The files under `references/`:
 | `document-template.md` | The eight-section skeleton every feature document follows. |
 | `verification-template.md`, `bug-triage-template.md` | Skeletons for the checking half. |
 | `check-links.py` | Link and anchor checker for the consistency pass. `python3 check-links.py {repo}`. |
+| `refresh.md` | The refresh path: diff from the last verified commit and revise only what changed. |
+| `rebuild.md` | The rebuild path: archive, recon, parallel drafting, triage re-assessment, one driver. |
+| `drafting-brief-template.md` | The brief every parallel drafter gets in a rebuild (and in a large build). |
+| `running-the-product.md` | Launching the product for verification, and the traps hit so far. Read before the first launch. |
 
 ## Outputs
 
@@ -31,6 +35,24 @@ CLAUDE.md            "Read @AGENTS.md."
 verification/        README.md (protocol) + one checklist file per cluster of documents
 bug-triage.md        every suspected defect, deduplicated, with repro, cause, severity, decision needed
 ```
+
+## Choose the path
+
+Before any work, decide which of three paths fits, and state the choice and its reason in one line to the user:
+
+- **Build.** No set exists for this product yet. Run Phase 0 to Phase 6 below.
+- **Refresh.** A set exists and the code has moved, but the documents' cited source files still exist and fewer than about 50 user-facing PRs have landed since the last verified commit. Revise only the affected documents: [references/refresh.md](references/refresh.md).
+- **Rebuild.** A set exists but the code has changed structurally: most of the source files its technical notes cite are gone, or 50 or more user-facing PRs have landed, or the product's shape changed (placeholders became real features, the framework or design system was replaced). Archive the old set and write a new one: [references/rebuild.md](references/rebuild.md).
+
+The last verified commit is the one every document's footer cites. Measure drift from it to the remote default branch, not the local one, which may lag or have diverged.
+
+A scheduled or routine run never starts a rebuild. When drift calls for one, it reports the rebuild (what moved, how far, the estimated size of the work) and waits for the user's go. A routine may refresh.
+
+## Running the product
+
+Verification runs the real product from a clean clone of the target commit, outside the user's own checkout, through the repo's own launch recipe when it has one (a `verify-*` skill, `EVIDENCE.md`). Read [references/running-the-product.md](references/running-the-product.md) before the first launch: it lists the setup traps hit so far. One agent drives the simulator or browser at a time; drafters read code and tests and never touch it.
+
+On a run longer than about 20 minutes, post a one-line progress update to the user whenever a phase ends or a finding changes the plan.
 
 ## Phase 0: scope
 
@@ -109,7 +131,7 @@ From `bug-triage-template.md`: collect every suspected defect from every documen
 A later session, or a request to add a feature that was out of scope, starts here rather than at Phase 0.
 
 1. Read `AGENTS.md`, `README.md` (structure, coverage table, scope decisions), `goal.md` (established facts), and `glossary.md`. Read the pilot to recalibrate depth.
-2. Confirm the source repo's commit. If it has moved, decide with the user whether new documents cite the new commit (and say so in their footer) or the repo pins the old one. Do not silently mix.
+2. Confirm the source repo's commit. If it has moved, take the refresh or rebuild path from [Choose the path](#choose-the-path) before adding anything, so new and old documents never cite different commits unannounced.
 3. To add a document: add it to the README structure and coverage table first, write it, add its checklist table to the right `verification/` file (new ID prefix, numbered from 01), add any new triage entries to `bug-triage.md` with the next `B-NN`, and commit each step: `docs: add {path}`, `docs: add the {name} checklist ({PREFIX}-01 to {PREFIX}-NN) to verification/{cluster}.md`, `docs: add B-NN to B-MM to bug-triage.md from the {name} work`.
 4. To revise a document after a verification pass: change the document, update the checklist row's Result and note, update the triage entry's Status, and commit as `docs: revise {path}`.
 5. Never renumber checklist IDs or triage IDs once a pass or an issue has used them.
@@ -124,7 +146,7 @@ A later session, or a request to add a feature that was out of scope, starts her
 - Cross-reference with relative links instead of repeating. The foundation documents own thresholds and definitions.
 - One Mermaid `stateDiagram-v2` per interaction, limited to the states the user passes through.
 - Footer: `## Open questions and verification`, a bullet list, then `Verified against {repo} commit \`{sha}\``.
-- Commits: `docs: add {path}` / `docs: revise {path}`. Follow whatever the user's repo does about AI attribution in commit messages.
+- Commits: `docs: add {path}` / `docs: revise {path}`, plain messages with no AI attribution or co-author trailers, whatever earlier commits carry. A history with trailers has to be rewritten before it can go to a shared remote.
 - Never modify the source repo. It is read-only reference material.
 - When a behavior cannot be determined from code and tests, write what can be determined, put the rest in "Open questions", move on. Do not guess, do not block.
 
