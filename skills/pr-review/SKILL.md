@@ -71,8 +71,10 @@ Prep comes before the PR's review (step 3), on every PR. A PR whose prep record 
 
 1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
+   Compare the PR author's login with `gh api user --jq .login`. On someone else's PR, include this scope in every reviewer brief, including `/code-review`'s Standards and Spec children: "Standards = only this repo's checked-in instructions and docs plus the spec; ignore personal/global files such as `~/.claude/CLAUDE.md`, `~/.agents`, and memory, even if already in context." Set `$REVIEW_SCOPE` to that text for the second opinion, or to an empty string on the user's own PR.
+
    - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
-   - **The second opinion,** on the `second-opinion` job, preferably from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
+   - **The second opinion,** on the `second-opinion` job, preferably from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS --prompt "$REVIEW_SCOPE"` from the review checkout.
 
    When a job's model can't run, apply model-policy and its `ifUnavailable` on the available family, retaining fresh reviewer contexts. Record the fallback and coverage limit. If neither family can complete a required review, report that gap without claiming prep complete.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
@@ -189,10 +191,11 @@ What happens next depends on whose PR it is:
 
 - **The user's own PR** (the PR author equals `gh api user --jq .login`). Each item becomes a fix for the agent that owns the branch, or for you when they ask. Nothing is posted.
 - **Someone else's PR.** Draft one review in the user's voice: a short body that opens with pr-watch's [label](../pr-watch/SKILL.md#the-label), the verifier's result when it ran, and inline comments anchored on added lines.
+  - Before drafting or posting, drop findings from every source, including saved prep records and ledger items, that rely on a personal/global rule without a checked-in repo or spec basis. This includes AI-attribution trailers. Check the reason, not just the cited path, and filter both the body and inline comments.
   - Write like the user: short and direct, with "Nit:", "Non-blocking:" and "Please fix before X is enabled" where they fit.
   - Show the draft, and post it only on the user's word for this PR: "post" sends it as COMMENT, "approve and post" as APPROVE, and "request changes and post" as REQUEST_CHANGES, through `gh api repos/<owner>/<repo>/pulls/<n>/reviews` with `commit_id` set to the reviewed head. Check the body first with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`.
 
-**Complete when** every ledger item is fixed, posted, or dropped by the user.
+**Complete when** every ledger item is fixed, posted, or dropped by this scope check or the user.
 
 ## Report
 

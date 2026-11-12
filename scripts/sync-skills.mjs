@@ -28,7 +28,7 @@ function main(argv) {
   const show = (path) => (path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path);
   const own = ownSkills(checkout);
   const cache = join(process.env.XDG_CACHE_HOME?.trim() || join(home, ".cache"), "sync-skills");
-  const outside = readList(join(checkout, "outside-skills.json"), own).map((skill) => ({ ...skill, pinned: pinnedFiles(cache, skill) }));
+  const outside = readList(join(checkout, "outside-skills.json"), own).map((skill) => ({ ...skill, pinned: pinnedFiles(cache, skill, checkout) }));
 
   const { store, folders, skipped } = agentFolders(home, process.env, checkout, show);
   const plans = folders.map((folder) => ({ folder, steps: planFolder(folder.path, store.path, checkout, own, outside, flags, show) }));
@@ -185,7 +185,7 @@ function inspect(path) {
 // Compares in git's terms (path, mode and blob id), so an installed folder is checked against the
 // pinned tree without fetching any file contents.
 function sameFiles(dir, files) {
-  const pinned = files.map((file) => `${file.path}\t${file.mode} ${file.id}`).sort();
+  const pinned = files.map((file) => `${file.path}\t${file.mode} ${file.contents ? blobId(file.contents) : file.id}`).sort();
   const installed = [];
   const walk = (prefix) => {
     for (const entry of readdirSync(join(dir, prefix), { withFileTypes: true })) {
@@ -228,7 +228,7 @@ function install(pinned, path) {
 
 // One bare repo per source in the cache. Each pinned commit is fetched once with its trees but no
 // file contents, since some sources are hundreds of megabytes, and kept under refs/pins/<sha>.
-function pinnedFiles(cache, skill) {
+function pinnedFiles(cache, skill, checkout) {
   const repo = join(cache, `${skill.source.replace(/[^\w.-]+/g, "_")}.git`);
   if (!hasPin(repo, skill.ref)) fetchPin(repo, skill);
   const dir = posix.dirname(skill.skillPath);
@@ -250,6 +250,18 @@ function pinnedFiles(cache, skill) {
   }
   if (files.find((file) => file.path === "SKILL.md").mode === "120000") {
     throw new Error(`${skill.name}: SKILL.md must be a regular file to attach the local model policy`);
+  }
+  if (skill.amendments) {
+    const file = files.find((file) => file.path === "SKILL.md");
+    let contents = git(repo, "cat-file", "blob", file.id);
+    const amendments = JSON.parse(readFileSync(resolve(checkout, skill.amendments), "utf8"));
+    for (const { after, insert } of amendments) {
+      if (typeof after !== "string" || !after || typeof insert !== "string" || contents.indexOf(after) < 0 || contents.indexOf(after) !== contents.lastIndexOf(after)) {
+        throw new Error(`${skill.name}: amendment needs a unique, nonempty 'after' anchor and string 'insert'`);
+      }
+      contents = contents.replace(after, () => after + insert);
+    }
+    file.contents = Buffer.from(contents);
   }
   return { repo, files };
 }
@@ -288,7 +300,7 @@ function writePinned({ repo, files }, dest) {
     const headerEnd = out.indexOf(10, at);
     const [id, type, size] = out.toString("latin1", at, headerEnd).split(" ");
     if (id !== file.id || type !== "blob") throw new Error(`the cache is missing ${file.path} (${file.id})`);
-    const contents = out.subarray(headerEnd + 1, headerEnd + 1 + Number(size));
+    const contents = file.contents ?? out.subarray(headerEnd + 1, headerEnd + 1 + Number(size));
     at = headerEnd + 1 + Number(size) + 1;
     const path = join(dest, file.path);
     mkdirSync(dirname(path), { recursive: true });
