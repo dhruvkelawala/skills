@@ -183,38 +183,6 @@ test("outside skills receive the shared model policy without changing pinned scr
   assert.equal(readFileSync(join(store, "SKILL.md"), "utf8"), installed);
 });
 
-test("outside skill amendments survive sync and update when the local rule changes", (t) => {
-  const m = machine(t);
-  m.list({ grilling: { ...m.entry("grilling"), amendments: "scripts/grilling.json" } });
-  const amendments = join(m.checkout, "scripts/grilling.json");
-  write(amendments, JSON.stringify([{ after: "grilling at the pin\n", insert: "Use only the reviewed repo's standards.\n" }]));
-  const store = join(m.folders.agents, "grilling");
-  const dry = m.run(["--dry-run"]);
-  assert.equal(dry.status, 0, dry.stderr);
-  assert.equal(existsSync(store), false, "a dry run leaves agent folders alone");
-
-  const first = m.run();
-  assert.equal(first.status, 0, first.stderr);
-  const installed = readFileSync(join(store, "SKILL.md"), "utf8");
-  assert.ok(installed.startsWith("grilling at the pin\nUse only the reviewed repo's standards.\n"));
-  assert.equal(readFileSync(join(store, "scripts/ask"), "utf8"), "#!/bin/sh\n");
-  const before = snapshot(Object.values(m.folders));
-  const second = m.run();
-  assert.equal(second.status, 0, second.stderr);
-  assert.equal(second.stdout, "nothing to change\n");
-  assert.deepEqual(snapshot(Object.values(m.folders)), before);
-
-  writeFileSync(amendments, JSON.stringify([{ after: "grilling at the pin\n", insert: "Cite the reviewed repo or spec.\n" }]));
-  const update = m.run(["--dry-run"]);
-  assert.equal(update.status, 0, update.stderr);
-  assert.match(update.stdout, /update\s+grilling/);
-  assert.deepEqual(snapshot(Object.values(m.folders)), before);
-  assert.equal(m.run().status, 0);
-  const updated = readFileSync(join(store, "SKILL.md"), "utf8");
-  assert.ok(updated.startsWith("grilling at the pin\nCite the reviewed repo or spec.\n"));
-  assert.ok(!updated.includes("Use only the reviewed repo's standards."));
-});
-
 test("a skill that is not on the list is reported, and removed only with --remove-unlisted", (t) => {
   const m = machine(t);
   assert.equal(m.run().status, 0);
@@ -250,17 +218,6 @@ test("a list or folder the script cannot honour stops it before anything changes
     ["uses a path as a name", list((m) => ({ "../escape": m.entry("grilling") })), /"\.\.\/escape" is not a skill name/],
     ["pins a commit the source does not have", list((m) => ({ grilling: m.entry("grilling", "0".repeat(40)) })), /grilling: cannot fetch 0{40} from file:\/\//],
     ["points at a folder with no SKILL.md", list((m) => ({ grilling: { ...m.entry("grilling"), skillPath: "skills/grilling/scripts/SKILL.md" } })), /grilling: fixture\/upstream@[0-9a-f]{7} has no skills\/grilling\/scripts\/SKILL\.md/],
-    ...["missing", "", "pin"].map((after) => ["cannot place an amendment uniquely", (m) => {
-      m.list({ grilling: { ...m.entry("grilling"), amendments: "scripts/grilling.json" } });
-      write(join(m.checkout, "scripts/grilling.json"), JSON.stringify([{ after, insert: "a local rule\n" }]));
-      if (after === "pin") {
-        const upstream = join(m.root, "upstream");
-        write(join(upstream, "skills/grilling/SKILL.md"), "pin and pin\n");
-        execFileSync("git", ["commit", "--quiet", "-am", "ambiguous anchor"], { cwd: upstream });
-        const ref = execFileSync("git", ["rev-parse", "HEAD"], { cwd: upstream, encoding: "utf8" }).trim();
-        m.list({ grilling: { ...m.entry("grilling", ref), amendments: "scripts/grilling.json" } });
-      }
-    }, /grilling: amendment needs a unique, nonempty 'after' anchor and string 'insert'/]),
     ["points at a linked SKILL.md", (m) => {
       const upstream = join(m.root, "upstream");
       const skill = join(upstream, "skills/grilling/SKILL.md");

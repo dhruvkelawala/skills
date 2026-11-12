@@ -1,7 +1,7 @@
 {
   "version": 1,
   "skills": {
-    "code-review": { "source": "mattpocock/skills", "sourceType": "github", "sourceUrl": "https://github.com/mattpocock/skills.git", "ref": "5beb35b040e3de97e54fa9e386d7e42d15c295c2", "skillPath": "skills/engineering/code-review/SKILL.md", "amendments": "scripts/skill-amendments/code-review.json" },
+    "code-review": { "source": "mattpocock/skills", "sourceType": "github", "sourceUrl": "https://github.com/mattpocock/skills.git", "ref": "5beb35b040e3de97e54fa9e386d7e42d15c295c2", "skillPath": "skills/engineering/code-review/SKILL.md" },
     "wait-what": { "source": "mattpocock/skills", "sourceType": "github", "sourceUrl": "https://github.com/mattpocock/skills.git", "ref": "5beb35b040e3de97e54fa9e386d7e42d15c295c2", "skillPath": "skills/productivity/wait-what/SKILL.md" },
     "handoff": { "source": "mattpocock/skills", "sourceType": "github", "sourceUrl": "https://github.com/mattpocock/skills.git", "ref": "5beb35b040e3de97e54fa9e386d7e42d15c295c2", "skillPath": "skills/productivity/handoff/SKILL.md" },
     "wayfinder": { "source": "mattpocock/skills", "sourceType": "github", "sourceUrl": "https://github.com/mattpocock/skills.git", "ref": "5beb35b040e3de97e54fa9e386d7e42d15c295c2", "skillPath": "skills/engineering/wayfinder/SKILL.md" },
