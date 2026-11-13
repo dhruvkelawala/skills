@@ -67,33 +67,37 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 ## 2. Prep
 
-Prep comes before the PR's review (step 3), on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
+Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) is complete only when it contains completed Standards, Spec and second-opinion reports for the current head. If complete, start no reviewer, check its guide as item 6 does, then go to step 3. Otherwise run prep below, retaining completed reports for this head and starting the missing reviews.
 
-1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
+1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it. When the guide tools are unavailable or require a T3 thread credential, mark the PR as having no guide and use the chat tour.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
-   - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
-   - **The second opinion,** on the `second-opinion` job, preferably from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
+   Compare the PR author's login with `gh api user --jq .login`. On someone else's PR, include this scope in every reviewer brief, including `/code-review`'s Standards and Spec children: "Standards = only this repo's checked-in instructions and docs plus the spec; ignore personal/global files such as `~/.claude/CLAUDE.md`, `~/.agents`, and memory, even if already in context." Set `$REVIEW_SCOPE` to that text for the second opinion, or to an empty string on the user's own PR.
+
+   - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job when T3 delegation is available. Otherwise use the local route below.
+   - **The second opinion,** on the `second-opinion` job, preferably from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS --prompt "$REVIEW_SCOPE"` from the review checkout.
+
+   **Local reviewers.** When `delegate_task` is unavailable, the session is outside a T3 thread, or delegation fails with a thread/credential error such as `thread_credential_required`, start fresh local `Agent` subagents for Standards and Spec in parallel in the foreground, using the `reviewers` job's model. Resolve the local `Agent.model` alias from that entry. This is the default route in that case; start it without asking the user. Give each the same `/code-review` brief, pinned base and head, review checkout, spec, and repo-scope rule. Include the full smell baseline in the Standards brief. Keep completed reports if only one axis needs replacement, and stop any still-running attempt before replacing it. The second opinion remains required. If local subagents cannot run, record the missing reports and leave prep incomplete.
 
    When a job's model can't run, apply model-policy and its `ifUnavailable` on the available family, retaining fresh reviewer contexts. Record the fallback and coverage limit. If neither family can complete a required review, report that gap without claiming prep complete.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
-4. Once both reviewers have reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
+4. Once Standards, Spec and the second opinion have all reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
-6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
-7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported with their actual models and any fallback reason, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
+6. Check the guide with `read_pull_request_guide`, unless item 1 already established there is no guide. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
+7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported with their actual models and any fallback reason, and each finding with its reviewer, priority, `file:line` and how you sorted it. For local reviewers, record `local Agent`, each axis's model, and why T3 delegation was unavailable. A return visit reads it.
 
 For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
-**Complete when** both reviewers have reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide.
+**Complete when** Standards, Spec and the second opinion have all reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide. Until then, report the pending reviews without a suggested verdict. A single-pass review by this thread never substitutes for either axis.
 
 ## 3. Walk one PR at a time
 
 Send each PR's review as one message: the intro, then the wrap-up. In a sitting, the first one opens with the queue table. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
 
-**The next PR's prep runs while the user reads.** In a sitting or a stack, when the walk reaches a PR, start the next PR's prep in the background, unless its prep record is already written for its head:
+**The next PR's prep runs while the user reads.** In a sitting or a stack, when the walk reaches a PR, start the next PR's prep in the background, unless its prep record is complete for its head as step 2 defines:
 
 - Give it to one `delegate_task` child, async, on the `teammate-prep` job in the models file for someone else's PR, or on the thread's model for the user's own. When the job's model can't run, do what its `ifUnavailable` says.
 - Its task names the PR's URL and head. The child loads this skill, runs step 1 and prep for that PR only (step 2, or step 4's for a return visit), the reviewers included, and adds a draft of the review message to the prep record. It sends the user nothing, posts nothing, and leaves the `seen` ref alone.
-- On `next`, wait for the child if it is still running, then start the next PR from its prep record, and from its draft when it has one. When it failed, prep the PR yourself.
+- On `next`, wait for the child if it is still running, then start the next PR from its completed prep record, and from its draft when it has one. When it failed or its record is incomplete, finish prep yourself.
 - A background prep still running at `stop` finishes on its own, and its record lets the next sitting start that PR without rerunning its reviewers.
 
 **Intro.**
@@ -101,6 +105,7 @@ Send each PR's review as one message: the intro, then the wrap-up. In a sitting,
 1. The PR link, `https://github.com/<owner>/<repo>/pull/<n>`, first. In T3 it opens the PR panel beside the thread. Then say that the tour is in that panel's Guide tab or, when the PR has no guide, why the tour is in chat.
 2. What the PR is and why, in a short paragraph of plain English, with one real example that uses real names and values.
 3. One extra line only when something changes how you review: red CI, a claim backed by tests only, a one-way door or no `**Door:**` line, or review churn on an agent-written PR.
+   When local reviewers ran, include one line naming their route, actual model and the T3 failure reason.
 4. When the PR changes something a user sees or does and shows no recording of it, only tests, one line suggesting `try`.
 
 When the change can't be followed from the intro and the diff, such as a new subsystem, a flow across several parts or a PR over about 2,000 changed lines, follow the message with an `/eli25` page.
@@ -131,7 +136,7 @@ Each stop is one numbered item: the file and lines, the name the lines define (a
 1. **Findings.** The reviewers' P0 and P1 findings and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer, and its file and line. A finding you think is wrong stays here with your reason.
 2. **Questions for the author.** What neither the reviewers nor the code could settle.
 3. **Verifier.** Its result, when it ran.
-4. **Suggested verdict.** One line with the reason. Choose one of:
+4. **Suggested verdict.** Only after the prep completion gate in step 2 passes, one line with the reason. Choose one of:
    - approve
    - approve with "please fix before <flag> is enabled", for features shipped behind a switch
    - request changes, only for a P0 or P1, or a change to production authority
@@ -171,7 +176,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Then start and check its guide as prep's items 1 and 6 do. A pure rebase needs a new guide too.
 
 1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
-2. **A pure rebase.** Compute the patch ID as prep does. When it matches the record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour.
+2. **A pure rebase.** Compute the patch ID as prep does. When it matches a completed prep record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour. Complete any missing reviews in a partial record as step 2 requires before giving a verdict.
 3. **A real change** reruns both reviewers on the new head, over the whole PR, as in step 2. Show only the new findings, and mark each earlier one fixed or still open. Say what changed since the user last looked: `git range-diff <old base>..<seen> <base>..<head>` when the branch was also rebased, otherwise `git diff <seen>..<head>`. A chat tour covers only those changes. Then the wrap-up, as in step 3.
 4. Update the prep record to the new head.
 

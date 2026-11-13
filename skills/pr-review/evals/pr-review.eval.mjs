@@ -22,7 +22,7 @@ const { jobs } = JSON.parse(readFileSync(join(skillsDir, "models.json"), "utf8")
 const reviewersModel = jobs.reviewers.use.model;
 const prepModel = jobs["teammate-prep"].use.model;
 const codeReview = join(homedir(), ".agents", "skills", "code-review");
-const TOOLS = "Bash,Read,Write,Edit,Glob,Grep,Skill,ToolSearch,mcp__t3-code";
+const TOOLS = "Bash,Read,Write,Edit,Glob,Grep,Skill,ToolSearch,Agent,mcp__t3-code";
 
 const git = (cwd, ...a) => execFileSync("git", ["-c", "user.name=eval", "-c", "user.email=eval@example.com", ...a], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const readLog = (file) => (existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -79,10 +79,10 @@ function scratch(kind) {
   executable(join(c.bin, "gh"), "fake-gh.mjs");
   executable(join(c.home, ".agents", "skills", "autoreview", "scripts", "autoreview"), "fake-autoreview.mjs");
   c.mcp = join(root, "mcp.json");
-  writeFileSync(c.mcp, JSON.stringify({ mcpServers: { "t3-code": { command: process.execPath, args: [join(evalsDir, "fake-t3.mjs")], env: { FAKE_DIR: c.fake, FAKE_HOME: c.home, FAKE_MODELS: join(c.config, "skills", "models.json"), FAKE_GUIDES: kind === "off" ? "off" : "on" } } } }));
+  writeFileSync(c.mcp, JSON.stringify({ mcpServers: kind === "unavailable" ? {} : { "t3-code": { command: process.execPath, args: [join(evalsDir, "fake-t3.mjs")], env: { FAKE_DIR: c.fake, FAKE_HOME: c.home, FAKE_MODELS: join(c.config, "skills", "models.json"), FAKE_GUIDES: ["off", "credential"].includes(kind) ? "off" : "on", FAKE_DELEGATION: kind } } } }));
   c.env = { ...process.env, HOME: c.home, CLAUDE_CONFIG_DIR: c.config, PATH: `${c.bin}:${process.env.PATH}`, FAKE_DIR: c.fake, GH_TOKEN: "eval-invalid", GITHUB_TOKEN: "eval-invalid", GH_PROMPT_DISABLED: "1" };
   // Drop the markers of an enclosing Claude Code session, and the other agents' homes, so each run stands alone.
-  for (const key of Object.keys(c.env)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_") || ["AGENTS_HOME", "CODEX_HOME", "PI_CODING_AGENT_DIR"].includes(key)) delete c.env[key];
+  for (const key of Object.keys(c.env)) if (key === "CLAUDECODE" || key.startsWith("CLAUDE_CODE_") || key.startsWith("NODE_TEST_") || ["AGENTS_HOME", "CODEX_HOME", "PI_CODING_AGENT_DIR"].includes(key)) delete c.env[key];
   return c;
 }
 
@@ -120,8 +120,8 @@ async function turn(c, name, prompt, session) {
   const head = git(c.origin, "rev-parse", `refs/pull/${PR}/head`);
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--allowedTools", TOOLS, "--mcp-config", c.mcp, "--strict-mcp-config", "--add-dir", c.home, ...(session ? ["--resume", session] : [])];
   const start = Date.now();
-  const lines = await new Promise((resolve, reject) => {
-    const child = spawn("claude", args, { cwd: c.work, env: c.env, stdio: ["ignore", "pipe", "inherit"] });
+  const { lines, code } = await new Promise((resolve, reject) => {
+    const child = spawn(process.env.CLAUDE_BIN ?? "claude", args, { cwd: c.work, env: c.env, stdio: ["ignore", "pipe", "inherit"] });
     const seen = [];
     let buffer = "";
     child.stdout.on("data", (chunk) => {
@@ -130,15 +130,17 @@ async function turn(c, name, prompt, session) {
       for (const line of parts) if (line.startsWith("{")) seen.push({ at: Date.now(), line });
     });
     child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve(seen) : reject(new Error(`${c.kind} ${name}: claude exited ${code}`))));
+    child.on("close", (code) => resolve({ lines: seen, code }));
   });
   const end = Date.now();
   const transcript = join(c.root, `${name}.jsonl`);
   writeFileSync(transcript, lines.map((l) => l.line).join("\n"));
   const events = lines.map(({ at, line }) => ({ at, ...JSON.parse(line) }));
   const result = events.findLast((e) => e.type === "result");
-  if (!result || result.is_error) throw new Error(`${c.kind} ${name}: the agent run failed, transcript ${transcript}`);
+  if (code !== 0 || !result || result.is_error) throw new Error(`${c.kind} ${name}: the agent run failed (exit ${code}), transcript ${transcript}`);
   const texts = events.filter((e) => e.type === "assistant").flatMap((e) => e.message.content.filter((b) => b.type === "text").map((b) => ({ at: e.at, text: b.text })));
+  const agents = events.filter((e) => e.type === "assistant").flatMap((e) => e.message.content.filter((b) => b.type === "tool_use" && b.name === "Agent").map((b) => ({ at: e.at, ...b })));
+  const agentReports = events.filter((e) => e.type === "user").flatMap((e) => (e.message?.content ?? []).filter((b) => b.type === "tool_result" && agents.some((a) => a.id === b.tool_use_id)).map((b) => ({ at: e.at, ...b })));
   // The intro opens the review with the PR link; a short status line that mentions the link is not one.
   const intro = texts.findIndex((t) => t.text.includes(PR_URL) && t.text.length >= 200);
   const during = (log) => readLog(join(c.fake, log)).filter((e) => e.at >= start && e.at <= end);
@@ -154,6 +156,9 @@ async function turn(c, name, prompt, session) {
     reply: texts.slice(Math.max(intro, 0)).map((t) => t.text).join("\n\n"),
     t3: during("t3.jsonl"),
     secondOpinion: during("autoreview.jsonl"),
+    agents,
+    agentReports,
+    prep: existsSync(join(c.home, ".agent", "pr-review", "demo", `${PR}.md`)) ? readFileSync(join(c.home, ".agent", "pr-review", "demo", `${PR}.md`), "utf8") : "",
   };
 }
 
@@ -226,6 +231,39 @@ const queueRows = (text) =>
 const firstVisits = (t) => Promise.all(["push", "rebase"].map((k) => chain(k).first)).then((vs) => (vs.forEach((v) => describeVisit(t, v)), vs));
 
 describe("pr-review", { concurrency: true }, () => {
+  test("uses local Opus reviewers before a verdict when T3 cannot delegate", async (t) => {
+    for (const kind of ["credential", "unavailable"]) {
+      await t.test(kind, async (t) => {
+        const c = scratch(kind);
+        const v = await turn(c, "first-visit", `/pr-review ${PR}`);
+        describeVisit(t, v);
+        if (kind === "credential") assert.ok(v.t3.some((e) => e.error === "thread_credential_required"), "the delegate failure was not exercised");
+        const reviewers = ["standards", "spec"].map((axis) => {
+          const agent = v.agents.find((a) => new RegExp(axis, "i").test(a.input.description));
+          assert.ok(agent, `${kind}: no local ${axis} reviewer`);
+          assert.ok(["opus", reviewersModel].includes(agent.input.model), `${kind}: ${axis} did not use Opus`);
+          assert.notEqual(agent.input.run_in_background, true, `${kind}: ${axis} returned a launch receipt rather than its report`);
+          assert.match(agent.input.prompt, /checked.in/i, `${kind}: ${axis} has no repository scope`);
+          assert.match(agent.input.prompt, /personal|global/i, `${kind}: ${axis} has no personal-rule exclusion`);
+          return agent;
+        });
+        const reports = reviewers.map((a) => v.agentReports.find((r) => r.tool_use_id === a.id && !r.is_error));
+        assert.ok(reports.every(Boolean), `${kind}: both local reviewers did not return`);
+        const verdicts = v.texts.filter((x) => /suggested verdict/i.test(x.text));
+        assert.ok(verdicts.length, `${kind}: no verdict after the reviewers`);
+        assert.ok(verdicts.every((x) => reports.every((r) => r.at <= x.at)), `${kind}: a verdict preceded a reviewer report`);
+        assert.ok(secondOpinionsAt(v).length, `${kind}: the fallback dropped the second opinion`);
+        const second = secondOpinionsAt(v)[0];
+        assert.match(second.args[second.args.indexOf("--prompt") + 1], /checked.in/i, `${kind}: second opinion lost the repository scope`);
+        assert.ok(verdicts.every((x) => second.at <= x.at), `${kind}: a verdict preceded the second opinion`);
+        assert.match(v.prep, /local.*(?:Agent|Opus)|(?:Agent|Opus).*local/is, `${kind}: prep omits the fallback route`);
+        assert.match(v.prep, kind === "credential" ? /thread_credential_required/ : /unavailable|not available|no T3|not exposed/i, `${kind}: prep omits the reason`);
+        assert.match(v.reply, /local.*(?:Opus|Agent)|(?:Opus|Agent).*local/is, `${kind}: review summary omits the fallback`);
+        assert.equal(readLog(join(c.fake, "gh.jsonl")).filter((e) => e.args[0] === "pr" && e.args[1] === "review").length, 0, `${kind}: posted a review`);
+      });
+    }
+  });
+
   test("runs /code-review's two reviewers and the second opinion, and has their reports before the intro", async (t) => {
     for (const v of await firstVisits(t)) {
       const tasks = reviewerTasks(v);
