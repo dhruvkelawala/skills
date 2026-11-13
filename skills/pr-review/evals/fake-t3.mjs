@@ -103,10 +103,14 @@ const TOOLS = {
       required: ["task"],
     },
     call: (input) => {
+      if (process.env.FAKE_DELEGATION === "credential") {
+        log({ tool: "delegate_task", error: "thread_credential_required" });
+        throw new Error("thread_credential_required: delegate_task requires a T3 thread credential.");
+      }
       const taskId = `task-${tasks.size + 1}`;
       const text = `${input.title ?? ""}\n${input.task}`;
       const mentions = openPrs().filter((n) => new RegExp(`(?:#|/pull/|\\bPR )${n}\\b`).test(text));
-      if (input.target?.model === prepModel) {
+      if (input.target?.model === prepModel && /prep/i.test(input.title ?? "")) {
         const number = [...text.matchAll(/\/pull\/(\d+)\b/g)].map(([, n]) => Number(n)).find((n) => openPrs().includes(n)) ?? mentions[0];
         tasks.set(taskId, { axis: "prep", summary: number ? prepare(number) : "No PR named to prep.", delivered: false });
         log({ tool: "delegate_task", taskId, axis: "prep", number: number ?? null, mentions, target: input.target, mode: input.mode ?? "async", title: input.title ?? null });
