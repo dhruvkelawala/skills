@@ -1,0 +1,51 @@
+# Criterion 3: reset.mjs keeps land, repairs, draft, guide and stage across a reset
+head 0149e43f1cf86d69a0928687b19a84e46f9c55eb tree 64fcff310663c9de4c476ba1edbc4ddb5f6aa88b
+
+## Unchanged record
+$ node skills/issue-to-pr/scripts/reset.mjs before <tmp>/7.md
+reset snapshot saved: stage published, repairs 2/10, draft no, guide none, land --merge
+exit=0
+
+$ grep '^reset:' <tmp>/7.md
+reset: {"at":"<time>","stage":"published","repairs":"2/10","draft":"no","guide":null,"land":"--merge"}
+
+$ node skills/issue-to-pr/scripts/reset.mjs after <tmp>/7.md
+record unchanged across the reset: stage published, repairs 2/10, draft no, guide none, land --merge
+first request after the reset: 67433 input tokens, within the 100000 limit
+exit=0
+
+record bytes unchanged by after: yes
+
+## repairs moved across the reset
+$ node skills/issue-to-pr/scripts/reset.mjs after <tmp>/7.md
+repairs: 2/10 before the reset, 3/10 now
+first request after the reset: 67433 input tokens, within the 100000 limit
+exit=1
+
+## land line lost across the reset
+$ node skills/issue-to-pr/scripts/reset.mjs after <tmp>/7.md
+land: --merge before the reset, none now
+first request after the reset: 67433 input tokens, within the 100000 limit
+exit=1
+
+## second reset refused
+$ node skills/issue-to-pr/scripts/reset.mjs before <tmp>/7.md
+already reset: {"at":"2026-11-18T14:13:22.532Z","stage":"published","repairs":"2/10","draft":"no","guide":null,"land":"--merge"}. The fresh context resumes as resume.md says and never resets again.
+exit=1
+
+## after without a snapshot
+$ node skills/issue-to-pr/scripts/reset.mjs after <tmp>/7.md
+reset: no reset snapshot in <tmp>/7.md; run reset.mjs before first
+exit=2
+
+## tests
+$ node --test skills/issue-to-pr/scripts/reset.test.mjs
+✔ a record the fresh context finds as the reset left it passes the after check without being written (71.036416ms)
+✔ a field that moved across the reset fails the after check and names it (332.535666ms)
+✔ a land held before the reset is lost when the line is gone afterwards (72.364708ms)
+✔ a second reset of the same run is refused, so a fresh context never resets again (71.54425ms)
+✔ after without a snapshot exits 2 instead of passing (34.627625ms)
+✔ after reports the fresh session's first request against the 100k limit (210.705167ms)
+ℹ tests 6
+ℹ pass 6
+ℹ fail 0

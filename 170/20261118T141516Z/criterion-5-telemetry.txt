@@ -1,0 +1,23 @@
+# Criterion 5: the reset is tagged in telemetry, and the first request after it is reported against 100k
+head 0149e43f1cf86d69a0928687b19a84e46f9c55eb tree 64fcff310663c9de4c476ba1edbc4ddb5f6aa88b
+
+$ node --test instrumentation/test/contract.test.mjs
+✔ workflow identity survives resume while invocation, load, completion and actual revision remain distinct (4.184166ms)
+✔ a resumed marker after a context reset keeps its reason, and an invented reason is dropped (0.126792ms)
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+
+## Declaration (skills/issue-to-pr/references/observability.md)
+17:Use `kind: skill.loaded` only for loading; `skill.started` for invocation; `stage` at each stage boundary; `waiting` with execution `waiting-human` or `waiting-external` before yielding; `interrupted` when the host reports interruption; `resumed` with execution `running` under the new attempt, except after the stage 5 context reset, where the run never stopped: there it keeps the record's attempt and carries `reason: context-reset`; `skill.finished` with the actual terminal execution state. Each marker needs a unique `eventKey` within its invocation/attempt/kind. Retry the same key for the same event. Missing host markers remain a capture gap, never inferred success.
+27:After 10 runs that reset their context at stage 5, compare them with the 1 to 11 November 2026 baseline of runs without it: the context size of each watch wake and the handoff, the cost per run from the captured usage, and the repair outcomes. The `context-reset` markers and each run's `first request after the reset` line find the runs; the user makes the comparison. Roll the reset back, by reverting its stage 5 step, when a repair made after a reset causes an accepted P0 or P1.
+
+## Declaration (skills/issue-to-pr/references/resume.md)
+9:   When the message says `fresh context after the stage 5 reset` and the record still says `published`, follow [after a context reset](#after-a-context-reset) in place of step 3. Any other resume takes step 3, even with a `reset:` line in the record.
+25:2. Run `node <issue-to-pr>/scripts/reset.mjs after <record>`. On exit 1, the record moved across the reset: record `blocked: reset moved <fields>` with the lines it printed, call `unwatch_pull_request`, and ask the user. Exit 2 means no snapshot, so continue as an ordinary resume. Save its `first request after the reset` line in the stage report. An `over` there is reported for the rollout check in [observability](observability.md#context-reset-rollout), and never stops the run.
+26:3. When observability is enabled, send a `resumed` marker with execution `running` and `reason: context-reset`, under the record's attempt, because the run did not stop, as [observability](observability.md) says.
+
+## First request of a fresh session after a reset (criterion 1's live reset)
+session d210f21d-4240-40db-b79f-012931f6255b: input 2 + cache_read 29,834 + cache_creation 37,597 = 67,433 tokens, within 100,000
+
+Live context-reset marker readback: pending this run's own stage 5 reset; appended after it.
