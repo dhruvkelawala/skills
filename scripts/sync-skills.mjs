@@ -258,10 +258,10 @@ function patchedFiles(pinned, skill, checkout) {
   if (!skill.patch) return pinned;
   if (typeof skill.patch !== "string" || skill.patch.split(/[\\/]/).some((part) => !part || part === "." || part === "..")) throw new Error(`${skill.name}: invalid patch path`);
   const patch = readFileSync(join(checkout, skill.patch));
-  const names = execFileSync("git", ["apply", "--numstat", "-"], { input: patch, encoding: "utf8" }).trim().split("\n").map((line) => line.split("\t")[2]);
-  if (!names.length || names.some((name) => !pinned.files.some((file) => file.path === name && file.mode !== "120000"))) throw new Error(`${skill.name}: patches may change only pinned regular files`);
   const temp = mkdtempSync(join(tmpdir(), "sync-skill-patch-"));
   try {
+    const names = execFileSync("git", ["apply", "--numstat", "-"], { cwd: temp, input: patch, encoding: "utf8" }).trim().split("\n").map((line) => line.split("\t")[2]);
+    if (!names.length || names.some((name) => !pinned.files.some((file) => file.path === name && file.mode !== "120000"))) throw new Error(`${skill.name}: patches may change only pinned regular files`);
     for (const name of names) {
       const file = pinned.files.find((file) => file.path === name);
       const path = join(temp, name);

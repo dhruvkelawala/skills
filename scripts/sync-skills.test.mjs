@@ -41,10 +41,10 @@ function machine(t, { agents = [".claude", ".codex", ".pi/agent"] } = {}) {
   const list = (skills) => writeFileSync(join(checkout, "outside-skills.json"), JSON.stringify({ version: 1, skills }, null, 2));
   list({ grilling: entry("grilling") });
 
-  const run = (args = [], extraEnv = {}) => {
+  const run = (args = [], extraEnv = {}, cwd) => {
     const env = { ...process.env, HOME: home, ...extraEnv };
     for (const key of ["CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR", "XDG_CACHE_HOME"]) if (!(key in extraEnv)) delete env[key];
-    return spawnSync(process.execPath, [join(checkout, "scripts", "sync-skills.mjs"), ...args], { env, encoding: "utf8" });
+    return spawnSync(process.execPath, [join(checkout, "scripts", "sync-skills.mjs"), ...args], { cwd, env, encoding: "utf8" });
   };
   const folders = { agents: join(home, ".agents/skills"), claude: join(home, ".claude/skills"), codex: join(home, ".codex/skills"), pi: join(home, ".pi/agent/skills") };
   return { root, home, checkout, pin, entry, list, run, folders };
@@ -300,10 +300,12 @@ test("each agent's folder follows its config variable, and an agent that is not 
 
 test('a pinned outside-skill patch is installed once and a bad patch preserves the installed copy', (t) => {
   const m = machine(t);
+  execFileSync('git', ['init', '--quiet'], { cwd: m.checkout });
   const patch = 'patches/grilling.patch';
   write(join(m.checkout, patch), '--- a/scripts/ask\n+++ b/scripts/ask\n@@ -1 +1,2 @@\n #!/bin/sh\n+echo measured\n');
   m.list({ grilling: { ...m.entry('grilling'), patch } });
-  assert.equal(m.run().status, 0);
+  const first = m.run([], {}, join(m.checkout, 'skills'));
+  assert.equal(first.status, 0, first.stderr);
   const installed = join(m.folders.agents, 'grilling/scripts/ask');
   assert.equal(readFileSync(installed, 'utf8'), '#!/bin/sh\necho measured\n');
   const before = snapshot(Object.values(m.folders));
