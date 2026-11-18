@@ -1,9 +1,8 @@
-import { readFile } from 'node:fs/promises';
+import { transcriptRows } from '../../../instrumentation/transcript.mjs';
 
 export async function sessionOf(runtime, path) {
-  const rows = (await readFile(path, 'utf8')).split('\n').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
   let id, first, worked = new Set();
-  for (const row of rows) {
+  for await (const row of transcriptRows(path)) {
     if (runtime === 'claude') {
       id ??= row.sessionId;
       if (row.cwd && row.gitBranch) worked.add(JSON.stringify([row.cwd, row.gitBranch]));

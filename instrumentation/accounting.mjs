@@ -1,3 +1,4 @@
+import { transcriptRows } from './transcript.mjs';
 import { digest, metadataEvent } from './contract.mjs';
 
 const KEYS = ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite5m', 'cacheWrite1h', 'reasoning'];
@@ -5,17 +6,29 @@ const counter = (value) => Number.isSafeInteger(value) && value >= 0 ? value : n
 
 // Bounded adapters for the pinned runtimes' usage records; content is never projected.
 export function captureRequests(runtime, rows, context) {
+  const capture = requestCapture(runtime, context);
+  for (const row of rows) capture.add(row);
+  return capture.events();
+}
+
+export async function captureTranscript(runtime, path, context) {
+  const capture = requestCapture(runtime, context);
+  for await (const row of transcriptRows(path)) capture.add(row);
+  return capture.events();
+}
+
+function requestCapture(runtime, context) {
   if (!['claude', 'codex'].includes(runtime)) throw new Error('unsupported runtime');
   if (!context.session) throw new Error('capture requires session identity');
   const requests = new Map();
   let previous = {}, turn = context.turn, model = context.model, provider = context.provider, effort = context.effort;
-  for (const row of rows) {
+  function add(row) {
     let source, usage, failed = false;
     const p = row.payload;
     if (runtime === 'claude') {
-      if (row.type !== 'assistant') continue;
+      if (row.type !== 'assistant') return;
       source = row.message?.id ?? (row.isApiErrorMessage ? row.uuid : null);
-      if (!source) continue;
+      if (!source) return;
       failed = row.isApiErrorMessage === true;
       const u = row.message?.usage;
       model = row.message?.model ?? model;
@@ -27,10 +40,10 @@ export function captureRequests(runtime, rows, context) {
     } else {
       if (row.type === 'session_meta') provider = p?.model_provider ?? provider;
       if (row.type === 'turn_context') { turn = p?.turn_id ?? turn; model = p?.model ?? model; effort = p?.effort ?? p?.reasoning_effort ?? effort; }
-      if (row.type !== 'event_msg' || p?.type !== 'token_count' || !p.info?.total_token_usage) continue;
+      if (row.type !== 'event_msg' || p?.type !== 'token_count' || !p.info?.total_token_usage) return;
       const u = p.info.total_token_usage;
       const current = { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cached_input_tokens), cacheWrite: null, cacheWrite5m: null, cacheWrite1h: null, reasoning: counter(u.reasoning_output_tokens) };
-      if (KEYS.every((key) => current[key] === (previous[key] ?? null))) continue;
+      if (KEYS.every((key) => current[key] === (previous[key] ?? null))) return;
       const reset = KEYS.some((key) => current[key] !== null && previous[key] != null && current[key] < previous[key]);
       if (reset) throw new Error('cumulative usage reset; capture unavailable without request identity');
       source = p.request_id ?? digest(JSON.stringify(current));
@@ -50,7 +63,7 @@ export function captureRequests(runtime, rows, context) {
     }
     requests.set(request, event);
   }
-  return [...requests.values()];
+  return { add, events: () => [...requests.values()] };
 }
 
 export function totals(events, invocation) {

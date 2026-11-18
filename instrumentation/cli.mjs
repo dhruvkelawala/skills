@@ -2,7 +2,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { metadataEvent, skillRevision } from './contract.mjs';
-import { captureRequests } from './accounting.mjs';
+import { captureTranscript } from './accounting.mjs';
 import { emit, emitBatch, flush, status } from './delivery.mjs';
 
 export async function configuration(path = process.env.SKILL_OBSERVABILITY_CONFIG) {
@@ -18,17 +18,10 @@ export async function captureHook(config, runtime, payload) {
   if (!Number.isFinite(Date.parse(config.since))) return { status: 'unavailable' };
   if (!payload.transcript_path || !payload.session_id) return { status: 'unavailable' };
   if (payload.session_id !== config.context?.session) return { status: 'unavailable' };
-  if ((await stat(payload.transcript_path)).size > 64 * 1024 * 1024) return { status: 'unavailable' };
-  const text = await readFile(payload.transcript_path, 'utf8');
-  const lines = text.split('\n');
-  const rows = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    try { rows.push(JSON.parse(lines[i])); }
-    catch { if (i !== lines.length - 1) return { status: 'unavailable' }; }
-  }
   const revision = await skillRevision(config.skillDirectory);
-  const events = captureRequests(runtime, rows, { ...config.context, revision });
+  let events;
+  try { events = await captureTranscript(runtime, payload.transcript_path, { ...config.context, revision }); }
+  catch { return { status: 'unavailable' }; }
   const batch = await emitBatch(config, events.filter((event) => Date.parse(event.time) >= Date.parse(config.since)).map((event) => ({ ...event, eventKey: event.request })), { remember: true });
   const delivery = await flush(config);
   return { status: batch.status === 'accepted' ? 'captured' : 'unavailable', accepted: batch.accepted ?? 0, delivery, coverage: 'partial' };

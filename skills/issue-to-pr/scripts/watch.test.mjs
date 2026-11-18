@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watch } from './watch.mjs';
@@ -182,5 +184,33 @@ test('only an unambiguous run marker in the first user message attributes an off
     const metadata = (span, key) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.' + key)?.value.stringValue;
     assert.deepEqual(requests.map((span) => metadata(span, 'session')).sort(), ['claude-verifier', 'codex-verifier']);
     assert.ok(requests.every((span) => metadata(span, 'workflow') === 'run-1'));
+  } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
+});
+
+
+test('the watcher captures usage at the end of a transcript over 64 MB within a 48 MB heap', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'skill-watch-large-'));
+  const spans = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    spans.push(...(JSON.parse(body).resourceSpans?.[0].scopeSpans[0].spans ?? []));
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    await write(join(home, '.agent/issue-to-pr/shop/1.md'), 'issue: 1\nrepo: example/shop\nbranch: fix/1\nstage: building\nhead: abc123\n');
+    const path = join(home, '.codex/sessions/large.jsonl');
+    await write(path, jsonl([{ type: 'session_meta', payload: { id: 'large', cwd: join(home, 'shop'), git: { branch: 'fix/1' } } }]));
+    const block = jsonl([{ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'x'.repeat(1024 * 1024) }] } }]);
+    for (let n = 0; n < 65; n++) await appendFile(path, block);
+    await appendFile(path, jsonl([{ type: 'event_msg', timestamp: '2026-11-18T10:00:00Z', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 123, output_tokens: 17 } } } }]));
+    assert.ok((await stat(path)).size > 64 * 1024 * 1024);
+    const config = { enabled: true, directory: join(home, 'state/outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z' };
+    const code = `import { watch } from ${JSON.stringify(new URL('./watch.mjs', import.meta.url).href)}; console.log(JSON.stringify(await watch(${JSON.stringify(config)}, ${JSON.stringify(home)})));`;
+    const { stdout } = await promisify(execFile)(process.execPath, ['--max-old-space-size=48', '--input-type=module', '-e', code], { timeout: 30000 });
+    assert.equal(JSON.parse(stdout).requests, 1);
+    assert.equal(spans.filter((span) => span.name === 'provider.request').length, 1);
+    const usage = spans.find((span) => span.name === 'provider.request').attributes.find((a) => a.key === 'langfuse.observation.usage_details').value.stringValue;
+    assert.deepEqual(JSON.parse(usage), { input: 123, output: 17 });
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
 });

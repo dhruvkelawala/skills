@@ -45,7 +45,7 @@ export async function watch(config, home = homedir()) {
       // A transcript that matched no run keeps its session, so a record that gains its branch later still finds it without a reread.
       const seen = state.transcripts[transcript.path];
       if (seen === transcript.mtime) continue;
-      const session = seen?.mtime === transcript.mtime && seen.session?.version === 1 ? seen.session : await sessionOf(runtime, transcript.path);
+      const session = seen?.mtime === transcript.mtime && seen.session?.version === 1 ? seen.session : await sessionOf(runtime, transcript.path).catch(() => null);
       // A session that worked on several runs, such as a stack or a root thread, can't be split between them yet.
       const run = attributeSession(session, runs);
       if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }
