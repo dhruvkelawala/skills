@@ -1,0 +1,121 @@
+Issue #168 CLI capture
+Base: 50a69250cffe0dbcc22fcfd44c092b01cdf1de1e
+Head: aaee24af0bfaebf9f1594e5931829bdd96d21deb
+Tree: 243a5dbcb3e483cf9f443db91e3472323a5f5b0e
+All records are isolated synthetic fixtures; no real run records were modified.
+
+BEFORE
+Base: 50a69250cffe0dbcc22fcfd44c092b01cdf1de1e
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0 --fix "lower-priority finding" --priority P2
+exit: 2
+
+usage: repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--asked]
+       repairs.mjs more <record>
+record unchanged: True
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0 --fix "lower-priority finding" --priority P3
+exit: 2
+
+usage: repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--asked]
+       repairs.mjs more <record>
+record unchanged: True
+
+AFTER
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "lower-priority finding" --priority P2
+exit: 1
+Not recorded: abcdef0 fixes only P2 findings. Add the finding to the PR's follow-ups list instead.
+record unchanged: True
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "lower-priority finding" --priority P3
+exit: 1
+Not recorded: abcdef0 fixes only P3 findings. Add the finding to the PR's follow-ups list instead.
+record unchanged: True
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "P0 bug" --priority P0
+exit: 0
+Fixed: P0 bug (abcdef0). Repair 1 of 10.
+record unchanged: False
+persisted: repairs: 1/10; - fix abcdef0, repair 1 of 10: P0 bug
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "P1 bug with P3 cleanup" --priority P1
+exit: 0
+Fixed: P1 bug with P3 cleanup (abcdef0). Repair 1 of 10.
+record unchanged: False
+persisted: repairs: 1/10; - fix abcdef0, repair 1 of 10: P1 bug with P3 cleanup
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "human-requested fix" --priority P0 --asked
+exit: 0
+Fixed: human-requested fix (abcdef0), as asked, so it doesn't count. Repairs: 10 of 10.
+record unchanged: False
+persisted: repairs: 10/10; - fix abcdef0, asked for, not counted: human-requested fix
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "human-requested fix" --priority P1 --asked
+exit: 0
+Fixed: human-requested fix (abcdef0), as asked, so it doesn't count. Repairs: 10 of 10.
+record unchanged: False
+persisted: repairs: 10/10; - fix abcdef0, asked for, not counted: human-requested fix
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "human-requested fix" --priority P2 --asked
+exit: 0
+Fixed: human-requested fix (abcdef0), as asked, so it doesn't count. Repairs: 10 of 10.
+record unchanged: False
+persisted: repairs: 10/10; - fix abcdef0, asked for, not counted: human-requested fix
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "human-requested fix" --priority P3 --asked
+exit: 0
+Fixed: human-requested fix (abcdef0), as asked, so it doesn't count. Repairs: 10 of 10.
+record unchanged: False
+persisted: repairs: 10/10; - fix abcdef0, asked for, not counted: human-requested fix
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "failed check" 
+exit: 0
+Fixed: failed check (abcdef0). Repair 1 of 10.
+record unchanged: False
+persisted: repairs: 1/10; - fix abcdef0, repair 1 of 10: failed check
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "red /verify" 
+exit: 0
+Fixed: red /verify (abcdef0). Repair 1 of 10.
+record unchanged: False
+persisted: repairs: 1/10; - fix abcdef0, repair 1 of 10: red /verify
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "verifier FAIL" 
+exit: 0
+Fixed: verifier FAIL (abcdef0). Repair 1 of 10.
+record unchanged: False
+persisted: repairs: 1/10; - fix abcdef0, repair 1 of 10: verifier FAIL
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "conflict rebase" 
+exit: 0
+Fixed: conflict rebase (abcdef0). Repair 1 of 10.
+record unchanged: False
+persisted: repairs: 1/10; - fix abcdef0, repair 1 of 10: conflict rebase
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit abcdef0123456789 --fix "invalid priority" --priority P4
+exit: 2
+usage: repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--priority P0|P1|P2|P3] [--asked]
+       repairs.mjs more <record>
+record unchanged: True
+
+DECLARED WORKFLOW CHANGES
+These are agent instructions, not an automated GitHub bot handler. The text below was read from the committed files at the captured head. No live lower-priority bot thread or model evaluation batch was created.
+skills/issue-to-pr/SKILL.md:159
+Rate each finding after checking it against the code. P0 breaks normal use, security or data. P1 is a real bug or an unmet criterion, which includes a criterion whose only test matches a `/test-audit` junk pattern. P2 is maintainability or a judgement call, including every `/code-review` baseline smell and every other junk-pattern match. P3 is a nit. Fix accepted P0 and P1 findings as repairs, recording each with `repairs.mjs add --priority <P0|P1>` for the highest-priority finding the commit fixes, and run the focused tests after each. A repair that adds or rewrites a test passes the `/test-audit` authoring gate and also gets a red line: swap out the code path its criterion names, such as a worker pool for an inline runner, and keep the assertion that fails. Put P2 and P3 findings in the follow-ups list for the PR body. A P2 or P3 fix may ride along in a commit fixing a P0 or P1 finding, using that commit's highest priority. A P2/P3-only repair needs a user or human reviewer's clear request, recorded with `--asked`; otherwise defer it before making a commit. Give each rejected finding its reason. Append every finding to the run record with its priority, source, the head it was reviewed at, and its repair commit or rejection.
+
+skills/issue-to-pr/SKILL.md:201
+2. Record each pr-watch fix with `repairs.mjs add`, as the [repair budget](references/pr-thread.md#repair-budget) says, its `--fix` naming the source thread or check and the head it was reviewed at, and post the line it prints. For review or bot findings, pass `--priority P0|P1|P2|P3` for the highest-priority finding the commit fixes. P2/P3 fixes may ride along with a P0/P1 fix in that commit; otherwise put them in follow-ups, and let pr-watch reply to and resolve the bot thread. A human reviewer's clear request is `--asked`, at any priority. Failed checks, a red `/verify`, a verifier FAIL and conflict rebases need no `--priority`.
+
+skills/issue-to-pr/references/pr-thread.md:47
+For a review or bot finding, pass `--priority P0|P1|P2|P3` for the highest-priority finding the commit fixes. A P2 or P3 fix may ride along in the same commit as a P0 or P1 fix, using the higher priority. Defer P2/P3-only findings to the PR's follow-ups list before making a commit, unless the user or a human reviewer clearly requested the fix. Failed checks, a red `/verify`, a verifier FAIL and conflict rebases keep working without `--priority`.
+
+skills/issue-to-pr/references/pr-thread.md:56
+`add` refuses a P2/P3-only fix without `--asked`, records nothing and says to add the finding to follow-ups instead. This refusal spends no budget and does not call for "more".
+
+skills/pr-watch/SKILL.md:113
+   - **Unresolved thread with `bot: true`.** Read the whole thread with `gh api graphql` or `gh pr view --comments` (REST: `gh api repos/{owner}/{repo}/pulls/<n>/comments`, where a reply's `in_reply_to_id` names the thread's first comment), and rate the finding after checking it against the code and the PR's [scope](#scope). Fix accepted P0/P1 findings. For a P2 or P3 finding, add it and its thread link to the PR body's follow-ups list, reply with the [label](#the-label) and "Deferred to the PR's follow-ups list because this is a P2/P3 finding", naming its actual priority, then resolve the thread after posting the reply so the gate can proceed. A P2/P3 fix may ride along in the same commit as a P0/P1 fix; reply with the pushed commit and resolve it then. For an incorrect finding, reply with the reason and resolve it. Resolving has no REST call, so while the quota is spent, reply now and resolve after it resets.
+
+VERIFICATION
+node --test: 362 passed, 0 failed, 0 skipped
+python3 skills/cleanup/scripts/test-worktree-audit.py: PASS
+python3 skills/cleanup/scripts/test-artifact-audit.py: PASS
+Focused CLI suite: 10 passed, 0 failed
+Hosted bot reply/resolve behavior: not exercised against a live P2/P3 thread.
