@@ -51,6 +51,7 @@ export function metadataEvent(input) {
   event.request = token(input.request);
   event.allocation = choice(input.allocation, ['exclusive', 'ambiguous']) ?? 'ambiguous';
   event.childCoverage = choice(input.childCoverage, ['complete', 'partial', 'unknown']) ?? 'unknown';
+  event.helper = choice(input.helper, ['build', 'reviewer', 'verifier', 'council', 'autoreview']) ?? (input.kind === 'request' ? 'build' : null);
   return event;
 }
 

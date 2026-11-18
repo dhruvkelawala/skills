@@ -15,7 +15,8 @@ export async function sessionOf(runtime, path) {
     first ??= userText(runtime, row);
   }
   const markers = [...(first ?? '').matchAll(/^issue-to-pr-run: ([\w.%:/@+-]{1,200})\s*$/gm)].map((match) => match[1]);
-  return id ? { version: 1, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)] } : null;
+  const roles = [...(first ?? '').matchAll(/^issue-to-pr-helper: (reviewer|verifier|council)\s*$/gm)].map((match) => match[1]);
+  return id ? { version: 2, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build' } : null;
 }
 
 export function attributeSession(session, runs) {

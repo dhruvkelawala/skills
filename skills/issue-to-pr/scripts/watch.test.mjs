@@ -49,6 +49,7 @@ test('the watcher sends a run\'s stage and its own sessions\' usage, once', asyn
     const requests = spans.filter((span) => span.name === 'provider.request');
     assert.deepEqual(requests.map((span) => metadata(span, 'session')).sort(), ['helper', 'owner']);
     assert.ok(requests.every((span) => metadata(span, 'workflow') === metadata(stage, 'workflow')));
+    assert.ok(requests.every((span) => metadata(span, 'helper') === 'build'));
 
     spans.length = 0;
     assert.deepEqual(await watch(config, home), { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0, pending: 0, exhausted: 0 });
@@ -174,7 +175,8 @@ test('only an unambiguous run marker in the first user message attributes an off
         { type: 'session_meta', payload: { id, cwd: join(home, 'elsewhere'), git: { branch: 't3/isolated' } } },
         { type: 'event_msg', timestamp: '2026-11-18T10:00:00Z', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 10, output_tokens: 2 } } } },
       ];
-      rows.splice(1, 0, user(first));
+      rows.splice(1, 0, user(first + '\nissue-to-pr-helper: verifier'));
+      if (name == 'verifier') rows.push(user('issue-to-pr-helper: council'));
       if (later) rows.push(user(later));
       await write(join(home, `.${runtime}`, runtime === 'claude' ? 'projects/shop' : 'sessions', `${id}.jsonl`), jsonl(rows));
     }
@@ -184,6 +186,7 @@ test('only an unambiguous run marker in the first user message attributes an off
     const metadata = (span, key) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.' + key)?.value.stringValue;
     assert.deepEqual(requests.map((span) => metadata(span, 'session')).sort(), ['claude-verifier', 'codex-verifier']);
     assert.ok(requests.every((span) => metadata(span, 'workflow') === 'run-1'));
+    assert.deepEqual(requests.map((span) => metadata(span, 'helper')), ['verifier', 'verifier']);
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
 });
 
