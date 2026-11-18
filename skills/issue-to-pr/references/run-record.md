@@ -34,6 +34,7 @@ spec: <spec URL>   (a ticket a spec thread started)
 draft: yes | no   (from stage 5; yes until the user's "done" in stage 8)
 guide: written for <head> | none: <reason>   (once stage 7 checked it)
 land: held at <head>, patch <fingerprint> | --merge | dropped at <head>: <reason>   (only land.mjs writes it)
+reset: <single-line JSON snapshot of stage, repairs, draft, guide and land>   (only reset.mjs writes it, at stage 5)
 ```
 
 Stage reports go below the header, appended in order:
@@ -45,6 +46,7 @@ Stage reports go below the header, appended in order:
 - the evidence links, each with the head it was captured at
 - the verifier's verdict and the rule B reason it ran, or why it was skipped
 - each verification disposition, `reused`, `deferred` or `new`, with its reason, published head, criteria source and evidence; for a new child, its task, actual model and effort; for an interrupted attempt, the cancellation reason and validity limits of retained partial evidence
+- the decisions block, at stage 5, before the reset
 - the user's review: each comment with its fix commit or answer
 - each watch pass: its gate result, its repairs and the stage it left
 - the handoff block
@@ -57,6 +59,17 @@ The contract lists its criteria under a line that reads `Acceptance criteria:`, 
 A spec's contract lists its tickets instead, under a line that reads `Tickets:`, as `scripts/spec.mjs tickets` prints them: one numbered `#<n> <title>` line per ticket, with its open blockers on an indented `blocked by:` line. The spec's brief plans those tickets, and its recap gives each one a line. `spec.mjs started` adds a `started: #<n> in thread <id>, <UTC time>` line for each build the spec thread starts, and `spec.mjs next` reads those lines and each ticket's record beside this one.
 
 `scripts/messages.mjs` appends the brief and each recap as a `## Brief, <UTC time>` or `## Recap, <UTC time>` section, with the text in a fenced block. Add them only through the script, because it reads those sections to find the last 10 sign-offs.
+
+## Decisions
+
+Stage 5 appends a `## Decisions, <UTC time>` section before the thread resets its context. It is the memory the fresh context and the user's "why X?" in stage 8 read, so it holds every choice the PR's shape depends on that the code and the contract don't already say:
+
+```md
+## Decisions, <UTC time>
+- <decision, as the PR shows it>: <why>. Source: contract | finding <key> | build | user
+```
+
+Cover the contract's decisions, each rejected finding with its reason, each P2 or P3 deferred to follow-ups, each judgement call made while building, such as a test seam or a dropped approach, and each thing the user asked for. Later stages append their decisions to the same section's list as they make them.
 
 ## When a record already exists
 

@@ -6,6 +6,7 @@ A spec's record with `spec_mode: stack` has no branch of its own. For it, run [s
 
 1. Work on the recorded branch, in the worktree that has it checked out (`git worktree list`). When `t3_worktree_status` shows this thread in that worktree, continue here. When another worktree has it, call `t3_thread_launch` with `workspaceStrategy` set to `{"type": "existing_worktree", "worktreePath": "<path>", "branch": "<branch>"}` and `message` set to `/issue-to-pr <n> resume`, give the user its link, and stop. When no worktree has it, record `blocked: branch not selectable` and stop, before any repair. Never switch this thread's checkout to the branch. Then `git status` must be clean and `HEAD` must equal the recorded head or the PR's `headRefOid`.
 2. Run the checks in [run record](run-record.md) under "When a record already exists".
+   After a context reset, also run the checks in [after a context reset](#after-a-context-reset).
 3. Pick the case:
    - **Predecessor moved.** The run is stacked, and the predecessor's `headRefOid` differs from `base_sha`, or the predecessor merged.
    - **Review came in.** A review, a review thread, or a PR comment from someone other than the PR author is newer than the recorded head. The gate lists unanswered ones in `threads`.
@@ -15,6 +16,15 @@ A spec's record with `spec_mode: stack` has no branch of its own. For it, run [s
 The repair budget in the record still applies.
 
 Retain `review_policy`, `autoreview_plan`, the actual extra-opinion outcome and its reviewed basis on resume. Before stage 3 completes, rerun the planner on the live tree, contract and explicit facts; a changed basis requires reassessment. A completed extra opinion is once-only. After stage 3, preserve skips and disclose later repairs through the existing `--skip-review` publication calls. If an enrolled PR is instead handled by standalone `/pr-watch`, record `pilot_exit: standalone pr-watch at <head>, <UTC time>` before handing off, because its repair publication can run autoreview. Record any other departure from the pilot explicitly, preserving historical decisions and outcomes. Standalone APR and pr-watch keep their defaults.
+
+## After a context reset
+
+The stage 5 reset starts this thread again in a fresh context, with a message naming the record. The record's `reset:` line holds the snapshot, and the stage is `published`.
+
+1. Read the record and the PR. Take decisions, findings and their reasons from the record, never from the conversation before the reset, which this context no longer has.
+2. Run `node <issue-to-pr>/scripts/reset.mjs after <record>`. On exit 1, the record moved across the reset: record `blocked: reset moved <fields>` with the lines it printed, call `unwatch_pull_request`, and ask the user. Exit 2 means no snapshot, so continue as an ordinary resume. Save its `first request after the reset` line in the stage report.
+3. When observability is enabled, send a `resumed` marker with execution `running` and `reason: context-reset`, under the record's attempt, because the run did not stop, as [observability](observability.md) says.
+4. Continue at stage 6 step 1, keeping the watch stage 5 set. The run never goes back through stage 5, so it never resets again.
 
 ## Predecessor moved
 
