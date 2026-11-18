@@ -42,3 +42,10 @@ issue-to-pr-helper-id: <helper-id>
 Put these lines in the first task message, before the brief. Each helper message names one run. The command uses the record's workflow, or the same stable fallback as the watcher for older records. It works without an enabled upload configuration. Source reviewers use `reviewer`, ship's independent child uses `verifier`, and council members use `council` in every round. Native agent-tool children also receive these lines when launched explicitly. Register a replacement with a fresh ID; missing usage from a cancelled attempt remains a capture gap.
 
 Only the owning thread changes the inventory. An explicitly empty `telemetry_helpers: []` means no helpers are expected. The watcher records a helper receipt only after its requests and counters were accepted by the outbox. `observe.mjs` uses those receipts for markers and owner usage, so callers cannot declare coverage complete themselves. Delivery failures remain visible in outbox status.
+
+
+## Ephemeral autoreview usage
+
+For each autoreview availability attempt, register role `autoreview` and a fresh ID, and pass `--status-output <record-without-md>.autoreview-<helper-id>.json`. For example, `173.md` with helper ID `opinion-1` uses `173.autoreview-opinion-1.json` beside the record. Keep these files private. The patched pinned autoreview records usage for both engines in JSON and streaming modes, including failed or unknown attempts. Its counters distinguish Claude input and cache tokens from Codex input that already includes cache reads.
+
+The watcher consumes registered sidecars and uses a stable request identity for each run/helper ID. Re-reading the file updates that request rather than creating another one. It tags the request `helper: autoreview`; only complete measured attempts complete the helper's coverage receipt. Missing sidecars, unknown counters and partial attempts remain gaps. No transcript or review prose is exported.

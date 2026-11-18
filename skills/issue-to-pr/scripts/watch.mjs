@@ -12,6 +12,7 @@ import { digest } from '../../../instrumentation/contract.mjs';
 import { emit, flush } from '../../../instrumentation/delivery.mjs';
 import { sessionOf, attributeSession } from './attribution.mjs';
 import { helperCoverage, recordHelper } from './helper-coverage.mjs';
+import { captureAutoreview } from './autoreview-usage.mjs';
 
 const EXECUTION = { 'awaiting-human': 'waiting-human', watching: 'waiting-external', blocked: 'failed', stopped: 'cancelled', merged: 'completed', landed: 'completed', done: 'completed' };
 const FINISHED = new Set(['stopped', 'merged', 'landed', 'done']);
@@ -21,6 +22,7 @@ export async function watch(config, home = homedir()) {
   const since = Date.parse(config.since);
   const statePath = join(dirname(config.directory), 'watch.json');
   const state = await readFile(statePath, 'utf8').then(JSON.parse, () => ({ records: {}, transcripts: {} }));
+  state.autoreviews ??= {};
   const summary = { status: 'watched', markers: 0, transcripts: 0, requests: 0, unavailable: 0, pending: 0, exhausted: 0 };
 
   const runs = [];
@@ -30,6 +32,17 @@ export async function watch(config, home = homedir()) {
     const run = await runOf(record.path);
     run.childCoverage = await helperCoverage(config, run);
     runs.push(run);
+    for (const id of run.expectedHelpers ?? []) {
+      const path = record.path.replace(/\.md$/, `.autoreview-${id}.json`);
+      const modified = await stat(path).then((s) => s.mtimeMs, () => null);
+      if (modified === null || modified < since || state.autoreviews[path] === modified) continue;
+      const result = await captureAutoreview(outbox(config, run), run, path, id).catch(() => ({ status: 'unavailable' }));
+      if (result.status === 'accepted') {
+        state.autoreviews[path] = modified;
+        summary.requests += result.accepted;
+        if (result.measured) await recordHelper(config, run, id, result.session);
+      } else summary.unavailable++;
+    }
     const progress = `${run.stage}@${run.head}`;
     if (!run.stage || state.records[record.path] === progress) continue;
     const kind = FINISHED.has(run.stage) ? 'skill.finished' : 'stage';

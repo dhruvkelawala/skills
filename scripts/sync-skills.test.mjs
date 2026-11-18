@@ -297,3 +297,19 @@ test("each agent's folder follows its config variable, and an agent that is not 
     assert.equal(existsSync(path), false, path);
   }
 });
+
+test('a pinned outside-skill patch is installed once and a bad patch preserves the installed copy', (t) => {
+  const m = machine(t);
+  const patch = 'patches/grilling.patch';
+  write(join(m.checkout, patch), '--- a/scripts/ask\n+++ b/scripts/ask\n@@ -1 +1,2 @@\n #!/bin/sh\n+echo measured\n');
+  m.list({ grilling: { ...m.entry('grilling'), patch } });
+  assert.equal(m.run().status, 0);
+  const installed = join(m.folders.agents, 'grilling/scripts/ask');
+  assert.equal(readFileSync(installed, 'utf8'), '#!/bin/sh\necho measured\n');
+  const before = snapshot(Object.values(m.folders));
+  assert.match(m.run().stdout, /nothing to change/);
+  assert.deepEqual(snapshot(Object.values(m.folders)), before);
+  write(join(m.checkout, patch), '--- a/scripts/ask\n+++ b/scripts/ask\n@@ -1 +1 @@\n-this no longer matches\n+echo broken\n');
+  assert.notEqual(m.run().status, 0);
+  assert.deepEqual(snapshot(Object.values(m.folders)), before);
+});
