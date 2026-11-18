@@ -28,7 +28,7 @@ function before(path) {
   const record = readFileSync(path, "utf8");
   const saved = header(record, "reset");
   if (saved) {
-    console.log(`already reset: ${saved}. The fresh context resumes at stage 6 and never resets again.`);
+    console.log(`already reset: ${saved}. The fresh context resumes as resume.md says and never resets again.`);
     return 1;
   }
   const fields = snapshotOf(record);
