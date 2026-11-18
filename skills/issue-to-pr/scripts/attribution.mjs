@@ -17,7 +17,7 @@ export async function sessionOf(runtime, path) {
   const markers = [...(first ?? '').matchAll(/^issue-to-pr-run: ([\w.%:/@+-]{1,200})\s*$/gm)].map((match) => match[1]);
   const roles = [...(first ?? '').matchAll(/^issue-to-pr-helper: (reviewer|verifier|council)\s*$/gm)].map((match) => match[1]);
   const ids = [...(first ?? '').matchAll(/^issue-to-pr-helper-id: ([\w.-]{1,100})\s*$/gm)].map((match) => match[1]);
-  return id ? { version: 3, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build', helperId: new Set(ids).size === 1 ? ids[0] : null } : null;
+  return id ? { version: 4, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build', helperId: new Set(ids).size === 1 ? ids[0] : null } : null;
 }
 
 export function attributeSession(session, runs) {
@@ -33,9 +33,9 @@ function userText(runtime, row) {
   const message = runtime === 'claude' && row.type === 'user' ? row.message
     : row.type === 'response_item' && row.payload?.type === 'message' && row.payload.role === 'user' ? row.payload : null;
   if (message) {
-    if (typeof message.content === 'string') return message.content;
-    const text = message.content?.filter((part) => ['text', 'input_text'].includes(part.type)).map((part) => part.text).join('\n');
-    if (text) return text;
+    const text = typeof message.content === 'string' ? message.content : message.content?.filter((part) => ['text', 'input_text'].includes(part.type)).map((part) => part.text).join('\n');
+    if (runtime === 'codex' && text?.startsWith('# AGENTS.md instructions') && text.includes('<environment_context>')) return undefined;
+    if (text !== undefined) return text;
   }
   if (runtime === 'codex' && row.type === 'event_msg' && row.payload?.type === 'user_message') return row.payload.message;
   return undefined;

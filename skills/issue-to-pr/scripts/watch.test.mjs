@@ -175,7 +175,8 @@ test('only an unambiguous run marker in the first user message attributes an off
         { type: 'session_meta', payload: { id, cwd: join(home, 'elsewhere'), git: { branch: 't3/isolated' } } },
         { type: 'event_msg', timestamp: '2026-11-18T10:00:00Z', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 10, output_tokens: 2 } } } },
       ];
-      rows.splice(1, 0, user(first + '\nissue-to-pr-helper: verifier'));
+      if (runtime === 'codex') rows.splice(1, 0, user('# AGENTS.md instructions for /work\n<INSTRUCTIONS>\nissue-to-pr-run: run-2\n</INSTRUCTIONS><environment_context>host setup</environment_context>'));
+      rows.splice(runtime === 'codex' ? 2 : 1, 0, user(first + '\nissue-to-pr-helper: verifier'));
       if (name == 'verifier') rows.push(user('issue-to-pr-helper: council'));
       if (later) rows.push(user(later));
       await write(join(home, `.${runtime}`, runtime === 'claude' ? 'projects/shop' : 'sessions', `${id}.jsonl`), jsonl(rows));
