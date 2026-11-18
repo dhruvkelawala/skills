@@ -22,9 +22,10 @@ export async function captureHook(config, runtime, payload) {
   let events;
   try { events = await captureTranscript(runtime, payload.transcript_path, { ...config.context, revision }); }
   catch { return { status: 'unavailable' }; }
-  const batch = await emitBatch(config, events.filter((event) => Date.parse(event.time) >= Date.parse(config.since)).map((event) => ({ ...event, eventKey: event.request })), { remember: true });
+  const requests = events.filter((event) => Date.parse(event.time) >= Date.parse(config.since));
+  const batch = await emitBatch(config, requests.map((event) => ({ ...event, eventKey: event.request })), { remember: true });
   const delivery = await flush(config);
-  return { status: batch.status === 'accepted' ? 'captured' : 'unavailable', accepted: batch.accepted ?? 0, delivery, coverage: config.context?.childCoverage ?? 'unknown', measured: events.some((event) => event.usage?.input != null && event.usage?.output != null) };
+  return { status: batch.status === 'accepted' ? 'captured' : 'unavailable', accepted: batch.accepted ?? 0, delivery, coverage: config.context?.childCoverage ?? 'unknown', measured: batch.status === 'accepted' && requests.some((event) => event.usage?.input != null && event.usage?.output != null) };
 }
 
 async function stdin() {
