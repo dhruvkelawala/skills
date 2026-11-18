@@ -1,0 +1,20 @@
+[
+  {
+    "helper": "autoreview",
+    "requests": 1,
+    "unpriced": 0,
+    "cost": 0.320708
+  },
+  {
+    "helper": "reviewer",
+    "requests": 51,
+    "unpriced": 0,
+    "cost": 3.6904485999889998
+  },
+  {
+    "helper": "unknown",
+    "requests": 78,
+    "unpriced": 0,
+    "cost": 2.4398395999790004
+  }
+]

@@ -1,0 +1,187 @@
+{
+  "head": "e1eacc9b83595c2b6af3b89ab23a1546b63b8b27",
+  "tree": "2e509c879da9d65698542078971450605cca644b",
+  "kind": "annotated historical dry-run",
+  "originalHistoricalBriefsHaveMarkers": false,
+  "sourceFilesUnchanged": true,
+  "networkWrites": 0,
+  "sessions": 435,
+  "newlyAttributed": 9,
+  "unchangedControls": 426,
+  "changedOwner": 0,
+  "new": [
+    {
+      "session": "ce75090b401238f7ec0e01630cd7f9da0b7576b5835186e96e3602abaaeb54ee",
+      "helper": "verifier",
+      "usage": {
+        "input": 20288471,
+        "output": 98527,
+        "cacheRead": 19694080,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 47052,
+        "total": 20386998
+      }
+    },
+    {
+      "session": "afca745b76575c50e865486395e4f80439b17f81b1f08bf3b810d8beac6a50c1",
+      "helper": "council",
+      "usage": {
+        "input": 816354,
+        "output": 6323,
+        "cacheRead": 713728,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 2710,
+        "total": 822677
+      }
+    },
+    {
+      "session": "c1a6eb9cafc0efae01f753bec8eabfbceccda78769345146b849e71443257773",
+      "helper": "council",
+      "usage": {
+        "input": 707610,
+        "output": 5294,
+        "cacheRead": 609408,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 2152,
+        "total": 712904
+      }
+    },
+    {
+      "session": "c9a09214754e703cc136a67be0323e3870fabd3b44755cd603287f70a447cfce",
+      "helper": "verifier",
+      "usage": {
+        "input": 10472094,
+        "output": 47415,
+        "cacheRead": 10159488,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 17287,
+        "total": 10519509
+      }
+    },
+    {
+      "session": "cf90358563f18aa00925f1002d70c165f9e869f6682d02121f9399fa138a1aa3",
+      "helper": "verifier",
+      "usage": {
+        "input": 7624254,
+        "output": 38488,
+        "cacheRead": 7439616,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 14403,
+        "total": 7662742
+      }
+    },
+    {
+      "session": "78c96546cd18994434c066a1085c2250f6c061baa8207cefd59f7da086f0fdd1",
+      "helper": "verifier",
+      "usage": {
+        "input": 6793020,
+        "output": 28011,
+        "cacheRead": 6623232,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 12716,
+        "total": 6821031
+      }
+    },
+    {
+      "session": "eafe71819c87e3a56b8acc3138f42f430f53fee5b447595f241b7d3efe4cab93",
+      "helper": "verifier",
+      "usage": {
+        "input": 17033951,
+        "output": 102651,
+        "cacheRead": 16520832,
+        "cacheWrite": null,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": 57593,
+        "total": 17136602
+      }
+    },
+    {
+      "session": "04105b20cf55b2f1fc2afb019ef1252aec72dc477e1757b60f1453727265c935",
+      "helper": "council",
+      "usage": {
+        "input": 36,
+        "output": 23080,
+        "cacheRead": 1735196,
+        "cacheWrite": 96690,
+        "cacheWrite5m": 0,
+        "cacheWrite1h": 96690,
+        "reasoning": null,
+        "total": 1855002
+      }
+    },
+    {
+      "session": "f83ddca5068171e78d55674b81d3f04298c3327f8127769b6a60f5d3780eb937",
+      "helper": "council",
+      "usage": {
+        "input": 22,
+        "output": 8931,
+        "cacheRead": 769031,
+        "cacheWrite": 55143,
+        "cacheWrite5m": 0,
+        "cacheWrite1h": 55143,
+        "reasoning": null,
+        "total": 833127
+      }
+    }
+  ],
+  "originalSources": [
+    {
+      "session": "ce75090b401238f7ec0e01630cd7f9da0b7576b5835186e96e3602abaaeb54ee",
+      "role": "verifier",
+      "originalSha256": "0a6c8a9477bec0a47fb2233ad937dd14e4eab27670fad4ba7df66939fb7a2c97"
+    },
+    {
+      "session": "afca745b76575c50e865486395e4f80439b17f81b1f08bf3b810d8beac6a50c1",
+      "role": "council",
+      "originalSha256": "283249bcfc0daccfa6b49982bc0e209284390e2d62b228c5b1cc2c97b9e8380b"
+    },
+    {
+      "session": "c1a6eb9cafc0efae01f753bec8eabfbceccda78769345146b849e71443257773",
+      "role": "council",
+      "originalSha256": "c4b541532f59395eace3c8a8c6a921073b5526742f3ddb12ba0e28ea139002cf"
+    },
+    {
+      "session": "c9a09214754e703cc136a67be0323e3870fabd3b44755cd603287f70a447cfce",
+      "role": "verifier",
+      "originalSha256": "aeceff79374004b76229b9de24314c9480474a820039919d0c29a12257065d3f"
+    },
+    {
+      "session": "cf90358563f18aa00925f1002d70c165f9e869f6682d02121f9399fa138a1aa3",
+      "role": "verifier",
+      "originalSha256": "701a314d144f549352787898669d66b7c7c80a0ab7cfa9be8d93ab992b458499"
+    },
+    {
+      "session": "78c96546cd18994434c066a1085c2250f6c061baa8207cefd59f7da086f0fdd1",
+      "role": "verifier",
+      "originalSha256": "4ffdac339befefa11dc926754bdbf80cb5ec45264f8a4710fbe41052dafe16f5"
+    },
+    {
+      "session": "eafe71819c87e3a56b8acc3138f42f430f53fee5b447595f241b7d3efe4cab93",
+      "role": "verifier",
+      "originalSha256": "72e0350306f765cb64cba10c803f47046cbe68c33d102a41ded7351d99713702"
+    },
+    {
+      "session": "04105b20cf55b2f1fc2afb019ef1252aec72dc477e1757b60f1453727265c935",
+      "role": "council",
+      "originalSha256": "abcb69c8b750187fc1e1ac8f8bfd09842394a704c3d214dc6cd838d849ab5d54"
+    },
+    {
+      "session": "f83ddca5068171e78d55674b81d3f04298c3327f8127769b6a60f5d3780eb937",
+      "role": "council",
+      "originalSha256": "001e71c224ede60137588b2b4ce52a362106454ff4102d4f581c54a791e32a73"
+    }
+  ]
+}

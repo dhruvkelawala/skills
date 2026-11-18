@@ -1,0 +1,118 @@
+{
+  "kind": "real Langfuse API readback after manual adapter capture",
+  "head": "e1eacc9b83595c2b6af3b89ab23a1546b63b8b27",
+  "tree": "2e509c879da9d65698542078971450605cca644b",
+  "workflow": "e0ea7092-86ed-45cd-b5c2-3085a59ca689",
+  "sourceComparison": [
+    {
+      "helperId": "pass1-standards",
+      "sessionHash": "c51e8d80305f6ab2e6bc2f814197c7c9e0328af71002a2d9d5f34d226446f404",
+      "requests": 9,
+      "sourceTokens": 713422,
+      "sourceCounters": {
+        "input_tokens": 18,
+        "output_tokens": 5974,
+        "cache_read_input_tokens": 634912,
+        "cache_creation_input_tokens": 72518
+      },
+      "storedRequests": 9,
+      "storedScoreTokens": 713422,
+      "models": [
+        "claude-opus-5-5"
+      ],
+      "helper": "reviewer",
+      "inputOutputAbsent": true
+    },
+    {
+      "helperId": "pass1-spec",
+      "sessionHash": "98c68f35ae150000bcd794a8c21ff606f18a1e8a9dfbc18e654da6f15001cdbf",
+      "requests": 8,
+      "sourceTokens": 585554,
+      "sourceCounters": {
+        "input_tokens": 16,
+        "output_tokens": 6725,
+        "cache_read_input_tokens": 517754,
+        "cache_creation_input_tokens": 61059
+      },
+      "storedRequests": 8,
+      "storedScoreTokens": 585554,
+      "models": [
+        "claude-opus-5-5"
+      ],
+      "helper": "reviewer",
+      "inputOutputAbsent": true
+    },
+    {
+      "helperId": "pass2-standards",
+      "sessionHash": "263110143831f921db27328cf6ec7df90d9891e24b459626fe98468f1fb25b68",
+      "requests": 6,
+      "sourceTokens": 412878,
+      "sourceCounters": {
+        "input_tokens": 12,
+        "output_tokens": 4339,
+        "cache_read_input_tokens": 361726,
+        "cache_creation_input_tokens": 46801
+      },
+      "storedRequests": 6,
+      "storedScoreTokens": 412878,
+      "models": [
+        "claude-opus-5-5"
+      ],
+      "helper": "reviewer",
+      "inputOutputAbsent": true
+    },
+    {
+      "helperId": "pass2-spec",
+      "sessionHash": "caaa956eb364e7663c4257ce973442a5fcab2bc18880d7c99598342146967fc3",
+      "requests": 28,
+      "sourceTokens": 2301009,
+      "sourceCounters": {
+        "input_tokens": 58,
+        "output_tokens": 13745,
+        "cache_read_input_tokens": 2174956,
+        "cache_creation_input_tokens": 112250
+      },
+      "storedRequests": 28,
+      "storedScoreTokens": 2301009,
+      "models": [
+        "claude-opus-5-5"
+      ],
+      "helper": "reviewer",
+      "inputOutputAbsent": true
+    },
+    {
+      "helperId": "opinion-1",
+      "requests": 1,
+      "sourceTokens": 45830,
+      "sourceCounters": {
+        "input_tokens": 2,
+        "output_tokens": 6104,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 39724
+      },
+      "storedRequests": 1,
+      "storedScoreTokens": 45830,
+      "models": [
+        "claude-opus-5-5"
+      ],
+      "helper": "autoreview",
+      "inputOutputAbsent": true
+    }
+  ],
+  "totalSelectedSourceTokens": 4058693,
+  "large": {
+    "storedRequests": 1,
+    "storedTokens": 140,
+    "canaryAbsent": true,
+    "inputOutputAbsent": true,
+    "helper": "build"
+  },
+  "codexFixture": {
+    "storedRequests": 1,
+    "storedTokens": 120,
+    "model": "gpt-6.1-sol",
+    "helper": "autoreview"
+  },
+  "automaticFreshT3Hook": false,
+  "storedMarkerCoverage": "complete"
+}

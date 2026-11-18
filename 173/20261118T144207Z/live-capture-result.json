@@ -1,0 +1,83 @@
+{
+  "kind": "manual adapter replay of fresh unmodified T3 reviewer transcripts and a real ephemeral Claude status",
+  "automaticFreshT3Hook": false,
+  "head": "e1eacc9b83595c2b6af3b89ab23a1546b63b8b27",
+  "tree": "2e509c879da9d65698542078971450605cca644b",
+  "workflow": "e0ea7092-86ed-45cd-b5c2-3085a59ca689",
+  "expectedHelpers": [
+    "pass1-standards",
+    "pass1-spec",
+    "opinion-1",
+    "pass2-standards",
+    "pass2-spec"
+  ],
+  "beforeCoverage": "partial",
+  "afterCoverage": "complete",
+  "first": {
+    "status": "watched",
+    "markers": 1,
+    "transcripts": 4,
+    "requests": 52,
+    "unavailable": 0,
+    "pending": 0,
+    "exhausted": 0
+  },
+  "repeated": {
+    "status": "watched",
+    "markers": 0,
+    "transcripts": 0,
+    "requests": 0,
+    "unavailable": 0,
+    "pending": 0,
+    "exhausted": 0
+  },
+  "marker": {
+    "status": "accepted",
+    "eventId": "48138131aba99a7085b6247b6d08d2c6b6f028152580dce9ff23a54b60249e91",
+    "delivery": {
+      "status": "flushed",
+      "delivered": 1,
+      "pending": 0,
+      "exhausted": 0,
+      "remembered": 0,
+      "rejected": 0
+    },
+    "usage": {
+      "status": "unavailable"
+    }
+  },
+  "ownership": [
+    {
+      "helperId": "pass1-standards",
+      "sessionHash": "c51e8d80305f6ab2e6bc2f814197c7c9e0328af71002a2d9d5f34d226446f404",
+      "helper": "reviewer",
+      "branchMatchesRun": true,
+      "before": "e0ea7092-86ed-45cd-b5c2-3085a59ca689",
+      "after": "e0ea7092-86ed-45cd-b5c2-3085a59ca689"
+    },
+    {
+      "helperId": "pass1-spec",
+      "sessionHash": "98c68f35ae150000bcd794a8c21ff606f18a1e8a9dfbc18e654da6f15001cdbf",
+      "helper": "reviewer",
+      "branchMatchesRun": true,
+      "before": "e0ea7092-86ed-45cd-b5c2-3085a59ca689",
+      "after": "e0ea7092-86ed-45cd-b5c2-3085a59ca689"
+    },
+    {
+      "helperId": "pass2-standards",
+      "sessionHash": "263110143831f921db27328cf6ec7df90d9891e24b459626fe98468f1fb25b68",
+      "helper": "reviewer",
+      "branchMatchesRun": false,
+      "before": null,
+      "after": "e0ea7092-86ed-45cd-b5c2-3085a59ca689"
+    },
+    {
+      "helperId": "pass2-spec",
+      "sessionHash": "caaa956eb364e7663c4257ce973442a5fcab2bc18880d7c99598342146967fc3",
+      "helper": "reviewer",
+      "branchMatchesRun": false,
+      "before": null,
+      "after": "e0ea7092-86ed-45cd-b5c2-3085a59ca689"
+    }
+  ]
+}

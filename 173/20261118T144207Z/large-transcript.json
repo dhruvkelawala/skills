@@ -1,0 +1,26 @@
+{
+  "head": "e1eacc9b83595c2b6af3b89ab23a1546b63b8b27",
+  "tree": "2e509c879da9d65698542078971450605cca644b",
+  "kind": "synthetic CLI fixture to real backend",
+  "workflow": "issue173-large-2d8ad796-01d3-4c16-a59a-a248a4320364",
+  "bytes": 68167509,
+  "heapMB": 48,
+  "expectedTokens": 140,
+  "before": {
+    "status": "unavailable"
+  },
+  "after": {
+    "status": "captured",
+    "accepted": 1,
+    "delivery": {
+      "status": "flushed",
+      "delivered": 1,
+      "pending": 0,
+      "exhausted": 0,
+      "remembered": 1,
+      "rejected": 0
+    },
+    "coverage": "unknown",
+    "measured": true
+  }
+}

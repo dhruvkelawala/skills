@@ -1,0 +1,61 @@
+{
+  "mode": "dry-run",
+  "sessions": 5,
+  "newlyAttributed": 0,
+  "changedOwner": 3,
+  "results": [
+    {
+      "session": "3c878f87e4f4b3e9b8534f6c8036d5a5b026622c4239efa1ab95d6030fc22ea7",
+      "before": "fixture-run-2",
+      "after": "fixture-run-1",
+      "helper": "build",
+      "usage": {
+        "input": 10,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": null,
+        "total": 12
+      }
+    },
+    {
+      "session": "cff2e9c9529b3db498804928d0a9abb835e83dae2b84fb8c5796ee60ab09e6e9",
+      "before": "fixture-run-2",
+      "after": null,
+      "helper": "build",
+      "usage": null
+    },
+    {
+      "session": "7d4fd49f7e167c8c51a9f214aa729ae6f93f307c8ac3c4d770f7338d1645ea20",
+      "before": "fixture-run-2",
+      "after": null,
+      "helper": "build",
+      "usage": null
+    },
+    {
+      "session": "089001a35679a33ef3db0ca350db9b9a2f0136e0e327577b04b3b98127470961",
+      "before": null,
+      "after": null,
+      "helper": "build",
+      "usage": null
+    },
+    {
+      "session": "79c50a9e8812c5ec5db12305b2307f093abfab4e277b53f6091ab971312890a7",
+      "before": "fixture-run-2",
+      "after": "fixture-run-2",
+      "helper": "build",
+      "usage": {
+        "input": 10,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cacheWrite5m": null,
+        "cacheWrite1h": null,
+        "reasoning": null,
+        "total": 12
+      }
+    }
+  ]
+}
