@@ -10,7 +10,7 @@ The user says these in the thread, and only the user's word starts each one.
 | --- | --- |
 | "land" | Lands the PR through `ship land`, squashed and pinned to the checked head. Said before the PR is clean, it waits, as [below](#land) says. |
 | "post" | Sends the replies to people that pr-watch holds, as pr-watch's "post" section says. |
-| "more" | Adds 10 repairs to the [repair budget](#repair-budget), then goes on where the run stopped. |
+| "more" | At a three-strikes stop, grants 3 more attempts for that problem only. At the overall budget stop, adds 10 repairs. Then continues where the run stopped, as the [repair budget](#repair-budget) says. |
 | "go on" | Restarts a stopped run: `/issue-to-pr <n> resume` in a build's thread, and the pr-watch loop in an `/apr` thread. |
 | `try` | Runs the PR for the user to test by hand, as [below](#try) says. |
 | `verify` | Runs `/ship verify <n>` on the PR, as in a review sitting. From then on rule B covers the PR, so it lands only on a passing verdict for its current patch. |
@@ -40,20 +40,26 @@ From stage 6 on, the thread fixes failed checks, conflicts and bot findings on i
 
 ## Repair budget
 
-A PR has 10 repairs for its whole life: the build, its watch and the fixes after, until it merges. `--max-repairs` sets another number at the build's start, and each "more" adds 10.
+A PR has 10 repairs for its whole life: the build, its watch and the fixes after, until it merges. `--max-repairs` sets another number at the build's start; bare `repairs.mjs more` adds 10.
 
 A repair is one commit that changes code to fix a review finding, a failed check, a bot finding, a red `/verify`, a review-ready violation or a verifier's FAIL, or one rebase that resolves a conflict. Fixes the user asks for, such as their comments in stage 8, and a human reviewer's clear requests don't count. A restack after the predecessor moved is a repair only when it resolved a conflict.
 
 For a review or bot finding, pass `--priority P0|P1|P2|P3` for the highest-priority finding the commit fixes. A P2 or P3 fix may ride along in the same commit as a P0 or P1 fix, using the higher priority. Defer P2/P3-only findings to the PR's follow-ups list before making a commit, unless the user or a human reviewer clearly requested the fix. Failed checks, a red `/verify`, a verifier FAIL and conflict rebases keep working without `--priority`.
 
-Record each fix right after its commit, counted or not, with `--asked` for one the user or a human reviewer asked for, at any priority. On "more", add 10 to the budget:
+Pass `--problem <key>` for every autonomous repair with an identifiable failure: a check name, verifier criterion, review thread or finding id. Use one stable key across retries and stages, such as `ci/lint` or `verifier/secret-scan`; keep it when the approach changes. Keys start with a letter or digit and contain only letters, digits, `.`, `_`, `:`, `/` or `-`. Legacy calls without a key keep their existing behavior. Requested fixes with `--asked` never count toward strikes, even with a key.
+
+Record each fix right after its commit and before publishing it, counted or not, with `--asked` for one the user or a human reviewer asked for, at any priority:
 
 ```bash
-node <issue-to-pr>/scripts/repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--priority <P0|P1|P2|P3>] [--asked]
-node <issue-to-pr>/scripts/repairs.mjs more <record>
+node <issue-to-pr>/scripts/repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--problem <key>] [--priority <P0|P1|P2|P3>] [--asked]
+node <issue-to-pr>/scripts/repairs.mjs more <record> [--problem <key>]
 ```
 
 `add` refuses a P2/P3-only fix without `--asked`, records nothing and says to add the finding to follow-ups instead. This refusal spends no budget and does not call for "more".
+
+Each problem has 3 attempts, separate from the overall budget. When that problem fails again after using its allowed attempts, stop before another patch. `add` refuses a fourth keyed repair unless the user has granted more attempts, writes nothing, and prints the last three fix lines for that key. Record `stage: blocked: three strikes: <key>`, call `unwatch_pull_request` when a PR exists, and post what each of those attempts tried and the evidence of why each failed. Wait for the user to choose another approach or say "more"; leave any refused commit unpushed.
+
+At this stop, "more" runs `repairs.mjs more <record> --problem <key>` for the blocked key only. It grants 3 more attempts for that key, preserves its history and leaves other keys and the overall budget unchanged. Ask which key only if the stopped key is ambiguous. At an overall-budget stop, "more" runs the bare command and adds 10. If both limits are spent, explain both and get the user's word for each grant before continuing. A different approach or "go on" alone does not grant attempts; keep the key and obtain "more" before another repair.
 
 For an accepted fix, `add` appends it to the record, keeps the header's `repairs: <used>/<budget>`, and prints the line to post. pr-watch gets the repairs left as `--max-repairs`. When `add` says the budget is spent, or refuses a fix because it already was, stop: record `blocked: repair budget`, call `unwatch_pull_request` so the thread moves to the user's inbox, and post what is still open. A refused fix stays unpushed until "more".
 
