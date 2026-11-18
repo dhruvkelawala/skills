@@ -7,6 +7,8 @@ const KINDS = new Set(['skill.loaded', 'skill.started', 'skill.finished', 'stage
 const token = (value) => typeof value === 'string' && /^[\w.%:/@+-]{1,200}$/.test(value) ? value : null;
 const choice = (value, choices) => choices.includes(value) ? value : null;
 const number = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
+export const HELPER_ROLES = ['build', 'reviewer', 'verifier', 'council', 'autoreview'];
+export const helperId = (value) => typeof value === 'string' && /^[\w.-]{1,100}$/.test(value) ? value : null;
 
 export async function skillRevision(directory) {
   const entries = [];
@@ -51,6 +53,7 @@ export function metadataEvent(input) {
   event.request = token(input.request);
   event.allocation = choice(input.allocation, ['exclusive', 'ambiguous']) ?? 'ambiguous';
   event.childCoverage = choice(input.childCoverage, ['complete', 'partial', 'unknown']) ?? 'unknown';
+  event.helper = choice(input.helper, HELPER_ROLES) ?? (input.kind === 'request' ? 'build' : null);
   return event;
 }
 

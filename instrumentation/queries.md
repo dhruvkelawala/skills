@@ -18,3 +18,25 @@ A backend cannot report an event it never received. Pair backend views with `cli
 `monitorRules` creates two workflow-scoped backend predicates. The token warning sums the trace's `runtime-tokens` numeric scores over one hour. Score deduplication prevents transient observation duplicates from inflating this predicate. The evidence rule counts Boolean failure scores with value 1. `tokenWarning` is configurable and imposes no execution limit. The webhook's monitor name includes the workflow and trace evidence; its filters, metric value, threshold, rule and data permalink identify the observed condition. Langfuse owns alert state and unresolved-alert suppression. Deterministic observation and score IDs keep retries on the same evidence.
 
 For the retained local trial, run `pilot/alerts.py configure` once per private registry and `pilot/alerts.py read` after the normal monitor scheduler evaluates. Reuse the registry on replay. The receiver check requires one actual ALERT per predicate, including after event replay. It never uses a test-fire API. `scores` verifies supplied evidence and a versioned check; it provides no autonomous claim grader.
+
+## Cost by helper
+
+Request metadata carries `helper: build | reviewer | verifier | council | autoreview`. New helper briefs supply the role; sessions without a role marker use `build`. Historical unlabelled helpers cannot be separated by role without independent ownership evidence.
+
+Save every page of the workflow's `GET /api/public/v2/observations?traceId=<trace>&fields=core,basic,usage,model,metadata` readback as `observations-<page>.json`. This query deduplicates observation IDs and groups the backend's measured cost by helper:
+
+```sh
+jq -s '
+  [.[].data[] | select(.name == "provider.request")]
+  | unique_by(.id)
+  | group_by(.metadata.helper // "unknown")
+  | map({helper: (.[0].metadata.helper // "unknown"),
+         requests: length,
+         unpriced: ([.[] | select((.calculatedTotalCost // .totalCost) == null)] | length),
+         cost: (if all(.[]; (.calculatedTotalCost // .totalCost) != null)
+                then [ .[] | (.calculatedTotalCost // .totalCost) ] | add
+                else null end)})
+' observations-*.json
+```
+
+A null cost means at least one request has no backend price. Keep it unknown, including partial autoreview attempts. For authoritative token totals keep using `usageQuery`; this cost view uses deduplicated observation prices and can lag ingestion.

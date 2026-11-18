@@ -21,6 +21,8 @@ Invoke as `/council <question>` or `/council pr <n> [--merge]`, adding `--rounds
 
 ## The brief
 
+When the subject belongs to an issue-to-pr run, follow [helper attribution](../issue-to-pr/references/observability.md#helper-attribution) for each member in every round. Use role `council` and a distinct stable ID per member and round, and prepend the emitted lines to that member's first task message.
+
 Write it once, then add the change log and each member's last reply every round after the first.
 
 ```md

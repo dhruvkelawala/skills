@@ -6,8 +6,8 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,7 +28,7 @@ function main(argv) {
   const show = (path) => (path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path);
   const own = ownSkills(checkout);
   const cache = join(process.env.XDG_CACHE_HOME?.trim() || join(home, ".cache"), "sync-skills");
-  const outside = readList(join(checkout, "outside-skills.json"), own).map((skill) => ({ ...skill, pinned: pinnedFiles(cache, skill) }));
+  const outside = readList(join(checkout, "outside-skills.json"), own).map((skill) => ({ ...skill, pinned: patchedFiles(pinnedFiles(cache, skill), skill, checkout) }));
 
   const { store, folders, skipped } = agentFolders(home, process.env, checkout, show);
   const plans = folders.map((folder) => ({ folder, steps: planFolder(folder.path, store.path, checkout, own, outside, flags, show) }));
@@ -254,6 +254,30 @@ function pinnedFiles(cache, skill) {
   return { repo, files };
 }
 
+function patchedFiles(pinned, skill, checkout) {
+  if (!skill.patch) return pinned;
+  if (typeof skill.patch !== "string" || skill.patch.split(/[\\/]/).some((part) => !part || part === "." || part === "..")) throw new Error(`${skill.name}: invalid patch path`);
+  const patch = readFileSync(join(checkout, skill.patch));
+  const temp = mkdtempSync(join(tmpdir(), "sync-skill-patch-"));
+  try {
+    const names = execFileSync("git", ["apply", "--numstat", "-"], { cwd: temp, input: patch, encoding: "utf8" }).trim().split("\n").map((line) => line.split("\t")[2]);
+    if (!names.length || names.some((name) => !pinned.files.some((file) => file.path === name && file.mode !== "120000"))) throw new Error(`${skill.name}: patches may change only pinned regular files`);
+    for (const name of names) {
+      const file = pinned.files.find((file) => file.path === name);
+      const path = join(temp, name);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, execFileSync("git", ["-C", pinned.repo, "cat-file", "blob", file.id], { env: gitEnv() }));
+    }
+    execFileSync("git", ["apply", "--", "-"], { cwd: temp, input: patch, stdio: ["pipe", "pipe", "pipe"] });
+    const files = pinned.files.map((file) => {
+      if (!names.includes(file.path)) return file;
+      const contents = readFileSync(join(temp, file.path));
+      return { ...file, originalId: file.id, id: blobId(contents), contents };
+    });
+    return { ...pinned, files };
+  } finally { rmSync(temp, { recursive: true, force: true }); }
+}
+
 function hasPin(repo, ref) {
   if (!existsSync(repo)) return false;
   try {
@@ -280,20 +304,20 @@ function fetchPin(repo, skill) {
 }
 
 function writePinned({ repo, files }, dest) {
-  const ids = files.map((file) => file.id);
+  const ids = files.map((file) => file.originalId ?? file.id);
   git(repo, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--filter=blob:none", "origin", ...ids);
   const out = execFileSync("git", ["-C", repo, "cat-file", "--batch"], { input: `${ids.join("\n")}\n`, maxBuffer: 1 << 30, env: gitEnv() });
   let at = 0;
   for (const file of files) {
     const headerEnd = out.indexOf(10, at);
     const [id, type, size] = out.toString("latin1", at, headerEnd).split(" ");
-    if (id !== file.id || type !== "blob") throw new Error(`the cache is missing ${file.path} (${file.id})`);
+    if (id !== (file.originalId ?? file.id) || type !== "blob") throw new Error(`the cache is missing ${file.path} (${file.id})`);
     const contents = out.subarray(headerEnd + 1, headerEnd + 1 + Number(size));
     at = headerEnd + 1 + Number(size) + 1;
     const path = join(dest, file.path);
     mkdirSync(dirname(path), { recursive: true });
     if (file.mode === "120000") symlinkSync(contents.toString(), path);
-    else writeFileSync(path, contents, { mode: file.mode === "100755" ? 0o755 : 0o644 });
+    else writeFileSync(path, file.contents ?? contents, { mode: file.mode === "100755" ? 0o755 : 0o644 });
   }
 }
 

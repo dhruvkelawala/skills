@@ -1,0 +1,106 @@
+--- a/scripts/autoreview
++++ b/scripts/autoreview
+@@ -5902,20 +5902,29 @@
+         prefix="autoreview-claude-workspace.",
+         dir=safe_temp_root(repo),
+     ) as tempdir:
+-        result = run_with_heartbeat(
+-            cmd,
+-            Path(tempdir),
+-            input_text=prompt,
+-            label="claude",
+-            max_runtime_seconds=getattr(args, "engine_timeout_seconds", None),
+-            stream_output=args.stream_engine_output,
+-            stream_display=ClaudeStreamDisplay() if args.stream_engine_output else None,
+-            env=safe_engine_env(
+-                repo,
+-                [Path(cmd[0]).parent],
+-                engine="claude",
+-            ),
+-        )
++        result = None
++        interrupted_stdout = ""
++        try:
++            result = run_with_heartbeat(
++                cmd,
++                Path(tempdir),
++                input_text=prompt,
++                label="claude",
++                max_runtime_seconds=getattr(args, "engine_timeout_seconds", None),
++                stream_output=args.stream_engine_output,
++                stream_display=ClaudeStreamDisplay() if args.stream_engine_output else None,
++                env=safe_engine_env(
++                    repo,
++                    [Path(cmd[0]).parent],
++                    engine="claude",
++                ),
++            )
++        except EngineInterrupted as exc:
++            interrupted_stdout = exc.stdout
++            raise
++        finally:
++            record_claude_usage(args, result.stdout if result is not None else interrupted_stdout,
++                                completed=result is not None and result.returncode == 0)
+     if result.returncode != 0:
+         raise ReviewerUnavailable(f"claude engine failed ({result.returncode})\n{result.stderr or result.stdout}", result=result)
+     return result.stdout
+@@ -6735,6 +6744,39 @@
+     attempts.append({"tokens": latest, "complete": completed and terminal_usage})
+ 
+ 
++def record_claude_usage(args: argparse.Namespace, stdout: str, *, completed: bool = True) -> None:
++    attempts = getattr(args, "review_usage", None)
++    if attempts is None:
++        args.review_usage = attempts = []
++    try:
++        decoded = json.loads(stdout)
++        events = decoded if isinstance(decoded, list) else [decoded]
++    except (ValueError, RecursionError):
++        events = []
++        for line in stdout.splitlines():
++            try:
++                events.append(json.loads(line))
++            except (ValueError, RecursionError):
++                pass
++    latest = None
++    terminal = False
++    for event in events:
++        if not isinstance(event, dict) or event.get("type") != "result":
++            continue
++        usage = event.get("usage")
++        fields = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
++        terminal = False
++        if isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in fields):
++            latest = {key: usage[key] for key in fields}
++            cache = usage.get("cache_creation", {})
++            if isinstance(cache, dict):
++                for key in ("ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens"):
++                    if type(cache.get(key)) is int and cache[key] >= 0:
++                        latest[key] = cache[key]
++            terminal = not event.get("is_error", False)
++    attempts.append({"tokens": latest, "complete": completed and terminal})
++
++
+ def review_usage_summary(args: argparse.Namespace) -> dict[str, Any] | None:
+     attempts = getattr(args, "review_usage", [])
+     if not attempts:
+@@ -6746,9 +6788,8 @@
+         "unknown_attempts": len(attempts) - len(reported),
+         "partial_attempts": sum(attempt["tokens"] is not None and not attempt["complete"] for attempt in attempts),
+         "complete": all(attempt["complete"] for attempt in attempts),
+-        "tokens": {key: sum(usage[key] for usage in reported) for key in (
+-            "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens",
+-        )} if reported else None,
++        "tokens": {key: sum(usage[key] for usage in reported) if all(key in usage for usage in reported) else None
++                   for key in sorted({key for usage in reported for key in usage})} if reported else None,
+     }
+ 
+ 
+@@ -8385,6 +8426,7 @@
+         "status": status,
+         "exit_code": exit_code,
+         "engine": args.engine,
++        "model": getattr(args, "model", None),
+         "report_produced": failure is None,
+         "reason": failure.reason if failure else None,
+         "reviewer_exit_code": failure.returncode if failure else None,

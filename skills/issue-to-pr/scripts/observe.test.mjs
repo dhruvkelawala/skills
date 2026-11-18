@@ -86,3 +86,58 @@ test('a marker outside an agent session records no usage', async () => {
   assert.equal(await currentSession({}), null);
   assert.equal(await currentSession({ CLAUDE_CODE_SESSION_ID: '../escape' }), null);
 });
+
+test('helper coverage becomes complete only after every declared helper has captured counters', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'skill-coverage-'));
+  const posts = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    posts.push(JSON.parse(body)); res.writeHead(200); res.end('{}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const record = join(directory, '.agent/issue-to-pr/shop/1.md');
+    await mkdir(dirname(record), { recursive: true });
+    await writeFile(record, 'repo: example/shop\nissue: 1\nhead: abc123\nstage: done\ntelemetry_workflow: run-1\n');
+    const briefs = {};
+    const brief = async (id, role) => briefs[id] = (await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./helper-brief.mjs', import.meta.url)), record, role, id])).stdout.trim();
+    await brief('review-standards', 'reviewer');
+    const config = { enabled: true, directory: join(directory, 'state/outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z' };
+    const mark = (eventKey) => observe(record, { kind: 'stage', eventKey, childCoverage: 'complete' }, config, {});
+    const coverage = () => {
+      const span = posts.filter((p) => p.resourceSpans).at(-1).resourceSpans[0].scopeSpans[0].spans[0];
+      return span.attributes.find((a) => a.key === 'langfuse.observation.metadata.childCoverage')?.value.stringValue;
+    };
+    await mark('before');
+    assert.equal(coverage(), 'partial');
+    const { watch } = await import('./watch.mjs');
+    const path = join(directory, '.claude/projects/shop/child.jsonl');
+    await mkdir(dirname(path), { recursive: true });
+    const rows = (id, withUsage = true) => [
+      { type: 'user', sessionId: id, message: { content: briefs[id] } },
+      ...(withUsage ? [{ type: 'assistant', sessionId: id, timestamp: '2026-11-18T10:00:00Z', message: { id, usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }] : []),
+    ].map(JSON.stringify).join('\n') + '\n';
+    await writeFile(path, rows('review-standards'));
+    await watch(config, directory);
+    assert.equal(coverage(), 'complete', 'the first watcher marker includes receipts from the same pass');
+    await brief('verify', 'verifier');
+    await writeFile(path + '-verify.jsonl', rows('verify', false));
+    await watch(config, directory);
+    assert.equal(coverage(), 'partial');
+    const partial = posts.filter((p) => p.resourceSpans).at(-1).resourceSpans[0].scopeSpans[0].spans[0];
+    await writeFile(path + '-verify.jsonl', rows('verify'));
+    await watch(config, directory);
+    assert.equal(coverage(), 'complete');
+    const complete = posts.filter((p) => p.resourceSpans).at(-1).resourceSpans[0].scopeSpans[0].spans[0];
+    assert.equal(complete.spanId, partial.spanId, 'receipt changes refresh the existing stage observation');
+    assert.equal((await watch(config, directory)).markers, 0, 'unchanged coverage does not emit another marker');
+    const noInventory = join(directory, 'unknown.md');
+    await writeFile(noInventory, 'repo: example/shop\nissue: 2\nhead: abc123\nstage: building\n');
+    await observe(noInventory, { kind: 'stage', eventKey: 'unknown' }, config, {});
+    assert.equal(coverage(), 'unknown');
+    const malformed = 'repo: example/shop\nissue: 2\ntelemetry_helpers: ["unfinished"\n';
+    await writeFile(noInventory, malformed);
+    await assert.rejects(promisify(execFile)(process.execPath, [fileURLToPath(new URL('./helper-brief.mjs', import.meta.url)), noInventory, 'reviewer', 'next']), /invalid telemetry_helpers/);
+    assert.equal(await readFile(noInventory, 'utf8'), malformed);
+  } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(directory, { recursive: true, force: true }); }
+});
