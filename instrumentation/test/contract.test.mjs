@@ -29,3 +29,9 @@ test('workflow identity survives resume while invocation, load, completion and a
     assert.throws(() => metadataEvent({ ...base, kind: 'invented' }));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('a resumed marker after a context reset keeps its reason, and an invented reason is dropped', () => {
+  const base = { workflow: 'workflow-170', attempt: 'attempt-1', invocation: 'issue-to-pr', skill: 'issue-to-pr', eventKey: 'reset', kind: 'resumed', execution: 'running', time: '2026-11-18T14:00:00Z' };
+  assert.equal(metadataEvent({ ...base, reason: 'context-reset' }).reason, 'context-reset');
+  assert.equal(metadataEvent({ ...base, reason: 'context-wipe' }).reason, null);
+});
