@@ -42,6 +42,36 @@ for (const priority of ["P2", "P3"]) {
   });
 }
 
+for (const priority of ["P0", "P1", "P2", "P3"]) {
+  for (const asked of [false, true]) {
+    if (!asked && ["P2", "P3"].includes(priority)) continue;
+    test(`${priority} ${asked ? "as asked is recorded without spending budget" : "is recorded as one repair"}`, (t) => {
+      const record = runRecord(t);
+      if (asked) writeFileSync(record, readFileSync(record, "utf8").replace("repairs: 0/10", "repairs: 10/10"));
+      const flags = ["--priority", priority, ...(asked ? ["--asked"] : [])];
+      const result = add(record, sha(1), "a review finding", ...flags);
+
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      assert.equal(counter(record), asked ? "10/10" : "1/10");
+      assert.match(readFileSync(record, "utf8"), asked
+        ? /fix 0000001, asked for, not counted: a review finding/
+        : /fix 0000001, repair 1 of 10: a review finding/);
+      assert.match(result.stdout, asked ? /as asked.*10 of 10/ : /Repair 1 of 10/);
+    });
+  }
+}
+
+test("invalid or missing priority values are usage errors and leave the record unchanged", (t) => {
+  const record = runRecord(t);
+  const before = readFileSync(record, "utf8");
+  for (const value of [["P4"], ["p1"], [""], []]) {
+    const result = add(record, sha(1), "a review finding", "--priority", ...value);
+    assert.equal(result.status, 2, result.stdout + result.stderr);
+    assert.match(result.stderr, /--priority P0\|P1\|P2\|P3/);
+    assert.equal(readFileSync(record, "utf8"), before);
+  }
+});
+
 test("the record counts each repair from the build to the merge, leaves out fixes someone asked for, and stops at 10 until \"more\"", (t) => {
   const record = runRecord(t);
   // Three repairs in the build's review passes, then seven from the watch, with the user's own ask
