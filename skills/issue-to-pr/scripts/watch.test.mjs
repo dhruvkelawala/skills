@@ -238,7 +238,7 @@ test('autoreview sidecars capture both engines once under the run', async () => 
       ['codex', { input_tokens: 100, cached_input_tokens: 30, output_tokens: 20, reasoning_output_tokens: 5 }],
       ['claude', { input_tokens: 10, cache_read_input_tokens: 30, cache_creation_input_tokens: 40, output_tokens: 20 }],
     ];
-    const sidecar = (engine, tokens, complete) => JSON.stringify({ schema_version: 1, engine, model: `${engine}-model`, status: 'clean', usage: { tokens, complete, attempts: 1, reported_attempts: 1, unknown_attempts: complete ? 0 : 1, partial_attempts: 0 } });
+    const sidecar = (engine, tokens, complete) => JSON.stringify({ schema_version: 1, engine, model: [`${engine}-model`], status: 'clean', usage: { tokens, complete, attempts: 1, reported_attempts: 1, unknown_attempts: complete ? 0 : 1, partial_attempts: 0 } });
     for (const [engine, tokens] of cases) await write(join(root, `1.autoreview-opinion-${engine}.json`), sidecar(engine, tokens, engine === 'codex'));
     const config = { enabled: true, directory: join(home, 'state/outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z' };
     await watch(config, home);
@@ -246,6 +246,7 @@ test('autoreview sidecars capture both engines once under the run', async () => 
     const metadata = (span, key) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.' + key)?.value.stringValue;
     assert.equal(requests.length, 2);
     assert.ok(requests.every((span) => metadata(span, 'workflow') === 'run-1' && metadata(span, 'helper') === 'autoreview'));
+    assert.deepEqual(requests.map((span) => metadata(span, 'model')).sort(), ['claude-model', 'codex-model']);
     const usages = requests.map((span) => JSON.parse(metadata(span, 'usage')));
     assert.equal(usages.find((u) => u.inputIncludesCache).input, 100);
     assert.equal(usages.find((u) => !u.inputIncludesCache).cacheWrite, 40);

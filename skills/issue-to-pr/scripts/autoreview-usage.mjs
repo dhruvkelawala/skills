@@ -18,7 +18,7 @@ export async function captureAutoreview(config, run, path, id) {
   } : null;
   const request = digest(JSON.stringify(['autoreview', run.workflow, id]));
   const result = await emitBatch(config, [{ ...config.context, ...run, kind: 'request', request, eventKey: request, session: request,
-    helper: 'autoreview', task: id, provider: status.engine, model: status.model,
+    helper: 'autoreview', task: id, provider: status.engine, model: Array.isArray(status.model) ? (status.model.length === 1 ? status.model[0] : null) : status.model,
     time: (await stat(path)).mtime.toISOString(), usage }], { remember: true });
   const measured = usage && Number.isSafeInteger(usage.input) && usage.input >= 0 && Number.isSafeInteger(usage.output) && usage.output >= 0;
   return { ...result, measured: Boolean(measured && status.usage.complete === true), session: request };
