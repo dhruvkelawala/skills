@@ -61,6 +61,42 @@ test("the fourth repair of one problem is refused with its three attempts and no
   assert.equal(counter(record), "4/10");
 });
 
+test("keyed more grants three attempts only to that problem and preserves the overall budget", (t) => {
+  const record = runRecord(t);
+  for (const problem of ["ci/lint", "ci/test"]) {
+    for (let i = 1; i <= 3; i++) {
+      assert.equal(add(record, sha(i), `${problem} attempt ${i}`, "--problem", problem).status, 0);
+    }
+  }
+  const grant = repairs("more", record, "--problem", "ci/lint");
+  assert.equal(grant.status, 0, grant.stdout + grant.stderr);
+  assert.equal(counter(record), "6/10");
+  for (let i = 4; i <= 6; i++) {
+    assert.equal(add(record, sha(i), `lint attempt ${i}`, "--problem", "ci/lint").status, 0);
+  }
+  const before = readFileSync(record, "utf8");
+  const seventh = add(record, sha(7), "lint attempt 7", "--problem", "ci/lint");
+  assert.notEqual(seventh.status, 0);
+  assert.match(seventh.stdout, /lint attempt 4[\s\S]*lint attempt 5[\s\S]*lint attempt 6/);
+  assert.doesNotMatch(seventh.stdout, /ci\/lint attempt [123]/);
+  const other = add(record, sha(8), "test attempt 4", "--problem", "ci/test");
+  assert.notEqual(other.status, 0);
+  assert.match(other.stdout, /three strikes: ci\/test/);
+  assert.equal(readFileSync(record, "utf8"), before);
+
+  assert.equal(repairs("more", record, "--problem", "ci/lint").status, 0);
+  assert.equal(add(record, sha(7), "lint attempt 7", "--problem", "ci/lint").status, 0);
+  const spent = readFileSync(record, "utf8");
+  const eighth = add(record, sha(8), "lint attempt 8", "--problem", "ci/lint");
+  assert.notEqual(eighth.status, 0);
+  assert.match(eighth.stdout, /repair budget is spent/);
+  assert.equal(readFileSync(record, "utf8"), spent);
+  assert.equal(repairs("more", record).status, 0);
+  assert.equal(add(record, sha(8), "lint attempt 8", "--problem", "ci/lint").status, 0);
+  assert.equal(counter(record), "11/20");
+  assert.notEqual(add(record, sha(9), "test attempt 4", "--problem", "ci/test").status, 0);
+});
+
 for (const priority of ["P2", "P3"]) {
   test(`${priority} alone is deferred without recording a repair`, (t) => {
     const record = runRecord(t);
