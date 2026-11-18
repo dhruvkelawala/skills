@@ -30,6 +30,18 @@ const add = (record, commit, fix, ...flags) => repairs("add", record, "--commit"
 const counter = (record) => readFileSync(record, "utf8").match(/^repairs: (.+)$/m)?.[1];
 const sha = (n) => `${String(n).padStart(7, "0")}${"a".repeat(33)}`;
 
+for (const priority of ["P2", "P3"]) {
+  test(`${priority} alone is deferred without recording a repair`, (t) => {
+    const record = runRecord(t);
+    const before = readFileSync(record, "utf8");
+    const result = add(record, sha(1), "a lower-priority finding", "--priority", priority);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout + result.stderr, /follow-ups/i);
+    assert.equal(readFileSync(record, "utf8"), before);
+  });
+}
+
 test("the record counts each repair from the build to the merge, leaves out fixes someone asked for, and stops at 10 until \"more\"", (t) => {
   const record = runRecord(t);
   // Three repairs in the build's review passes, then seven from the watch, with the user's own ask
