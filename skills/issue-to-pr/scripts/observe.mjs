@@ -8,6 +8,7 @@ import { header } from './run-record.mjs';
 import { captureHook, configuration } from '../../../instrumentation/cli.mjs';
 import { digest, skillRevision } from '../../../instrumentation/contract.mjs';
 import { emit, flush } from '../../../instrumentation/delivery.mjs';
+import { helperCoverage } from './helper-coverage.mjs';
 
 export const SKILL = fileURLToPath(new URL('..', import.meta.url));
 const revision = skillRevision(SKILL);
@@ -15,12 +16,13 @@ const revision = skillRevision(SKILL);
 export async function observe(recordPath, input, config, env = process.env) {
   if (!config.enabled) return { status: 'disabled' };
   const run = await runOf(recordPath);
+  run.childCoverage = await helperCoverage(config, run);
   const result = { ...(await emit(config, { ...config.context, ...input, ...run })), delivery: await flush(config) };
   let usage = { status: 'unavailable' };
   try {
     const session = await currentSession(env);
     if (session) {
-      const context = { ...config.context, ...run, session: session.session_id };
+      const context = { ...config.context, ...run, session: session.session_id, helper: 'build' };
       usage = await captureHook({ ...config, skillDirectory: SKILL, context }, session.runtime, session);
     }
   } catch {}
@@ -31,8 +33,14 @@ export async function observe(recordPath, input, config, env = process.env) {
 export async function runOf(recordPath) {
   const record = await readFile(recordPath, 'utf8');
   const workflow = header(record, 'telemetry_workflow') || digest(header(record, 'repo') + ':' + header(record, 'issue'));
+  let expectedHelpers = null;
+  try {
+    const ids = JSON.parse(header(record, 'telemetry_helpers'));
+    if (Array.isArray(ids) && ids.every((id) => typeof id === 'string' && /^[\w.-]{1,100}$/.test(id))) expectedHelpers = ids;
+  } catch {}
   return {
     workflow,
+    expectedHelpers,
     // A record without its own attempt gets one per run, never the machine-wide default.
     attempt: header(record, 'telemetry_attempt') || digest('attempt:' + workflow).slice(0, 32),
     invocation: 'issue-to-pr', skill: 'issue-to-pr',

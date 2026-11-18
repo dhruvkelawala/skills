@@ -16,7 +16,8 @@ export async function sessionOf(runtime, path) {
   }
   const markers = [...(first ?? '').matchAll(/^issue-to-pr-run: ([\w.%:/@+-]{1,200})\s*$/gm)].map((match) => match[1]);
   const roles = [...(first ?? '').matchAll(/^issue-to-pr-helper: (reviewer|verifier|council)\s*$/gm)].map((match) => match[1]);
-  return id ? { version: 2, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build' } : null;
+  const ids = [...(first ?? '').matchAll(/^issue-to-pr-helper-id: ([\w.-]{1,100})\s*$/gm)].map((match) => match[1]);
+  return id ? { version: 3, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build', helperId: new Set(ids).size === 1 ? ids[0] : null } : null;
 }
 
 export function attributeSession(session, runs) {

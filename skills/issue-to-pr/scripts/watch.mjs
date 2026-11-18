@@ -11,6 +11,7 @@ import { captureHook, configuration } from '../../../instrumentation/cli.mjs';
 import { digest } from '../../../instrumentation/contract.mjs';
 import { emit, flush } from '../../../instrumentation/delivery.mjs';
 import { sessionOf, attributeSession } from './attribution.mjs';
+import { helperCoverage, recordHelper } from './helper-coverage.mjs';
 
 const EXECUTION = { 'awaiting-human': 'waiting-human', watching: 'waiting-external', blocked: 'failed', stopped: 'cancelled', merged: 'completed', landed: 'completed', done: 'completed' };
 const FINISHED = new Set(['stopped', 'merged', 'landed', 'done']);
@@ -27,6 +28,7 @@ export async function watch(config, home = homedir()) {
   const records = (await files(join(home, '.agent', 'issue-to-pr'), '.md', since)).filter((r) => r.name.split('/').length === 2);
   for (const record of records) {
     const run = await runOf(record.path);
+    run.childCoverage = await helperCoverage(config, run);
     runs.push(run);
     const progress = `${run.stage}@${run.head}`;
     if (!run.stage || state.records[record.path] === progress) continue;
@@ -45,14 +47,17 @@ export async function watch(config, home = homedir()) {
       // A transcript that matched no run keeps its session, so a record that gains its branch later still finds it without a reread.
       const seen = state.transcripts[transcript.path];
       if (seen === transcript.mtime) continue;
-      const session = seen?.mtime === transcript.mtime && seen.session?.version === 2 ? seen.session : await sessionOf(runtime, transcript.path).catch(() => null);
+      const session = seen?.mtime === transcript.mtime && seen.session?.version === 3 ? seen.session : await sessionOf(runtime, transcript.path).catch(() => null);
       // A session that worked on several runs, such as a stack or a root thread, can't be split between them yet.
       const run = attributeSession(session, runs);
       if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }
       const result = await captureHook({ ...outbox(config, run), skillDirectory: SKILL, context: { ...config.context, ...run, session: session.id, helper: session.helper } }, runtime, { session_id: session.id, transcript_path: transcript.path }).catch(() => ({ status: 'unavailable' }));
       summary.transcripts++;
       // A failed or partial capture leaves the transcript unmarked, so the next run tries it again.
-      if (result.status === 'captured') { summary.requests += result.accepted; state.transcripts[transcript.path] = transcript.mtime; }
+      if (result.status === 'captured') {
+        summary.requests += result.accepted; state.transcripts[transcript.path] = transcript.mtime;
+        if (result.measured) await recordHelper(config, run, session.helperId, session.id);
+      }
       else summary.unavailable++;
     }
   }

@@ -32,6 +32,8 @@ Record `verification: reused | deferred | new` with the reason, published head, 
 
 ## Bound each new brief
 
+When this PR belongs to an issue-to-pr run, follow [helper attribution](../../issue-to-pr/references/observability.md#helper-attribution) before launch, with role `verifier` and a fresh stable helper ID for this attempt. Put the emitted lines in the child's first task message, including for an isolated worktree.
+
 Give the child the PR, published SHA, acceptance criteria, relevant paths, verification recipe, existing captures and the safety assumption to prove. Ask for evidence and findings for the three lanes in `ship verify`, with commands, tested SHA and gaps. Existing captures help orient it; they do not replace running a required lane. Keep its work tied to those criteria and paths, expanding only for a dependency needed to prove them. Report unrelated findings to the parent for scope judgement.
 
 ## Repairs during a run

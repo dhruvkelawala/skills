@@ -154,6 +154,10 @@ Ask no questions in this stage. Report a blocker instead.
 
 **Complete when:** the build report maps every criterion to a commit and a test, or to a blocker, `git status` is clean, and the record shows `implemented` and the lane.
 
+## Helper ownership
+
+Before starting any source reviewer, extra-opinion helper or other child for this run, follow [helper attribution](references/observability.md#helper-attribution). Register its stable ID and place the emitted lines in its first task message. Keep the same workflow when a helper runs on another branch or in another worktree. Only this thread registers helpers; children return their reports.
+
 ## 3. Review, at most two passes
 
 Rate each finding after checking it against the code. P0 breaks normal use, security or data. P1 is a real bug or an unmet criterion, which includes a criterion whose only test matches a `/test-audit` junk pattern. P2 is maintainability or a judgement call, including every `/code-review` baseline smell and every other junk-pattern match. P3 is a nit. Fix accepted P0 and P1 findings as repairs, recording each with `repairs.mjs add --priority <P0|P1> --problem <stable finding key>` for the highest-priority finding the commit fixes, and run the focused tests after each. A repair that adds or rewrites a test passes the `/test-audit` authoring gate and also gets a red line: swap out the code path its criterion names, such as a worker pool for an inline runner, and keep the assertion that fails. Put P2 and P3 findings in the follow-ups list for the PR body. A P2 or P3 fix may ride along in a commit fixing a P0 or P1 finding, using that commit's highest priority. A P2/P3-only repair needs a user or human reviewer's clear request, recorded with `--asked`; otherwise defer it before making a commit. Give each rejected finding its reason. Append every finding to the run record with its priority, source, the head it was reviewed at, and its repair commit or rejection.
