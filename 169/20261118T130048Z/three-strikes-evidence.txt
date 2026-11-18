@@ -1,0 +1,307 @@
+Issue #169 CLI evidence
+Base: c613613213d5b6e9bcf177c3f288e4ff369f915e
+Head: 9eb7c6641720fb68d75fb60dff1ab0ae8c00eaa4
+Tree: b71aecf56c83484ba6cb4f4ee91184ebcc3f2e9e
+Platform: macOS, v26.13.1
+
+
+BEFORE: four repairs of the same failure fit within the lifetime budget.
+$ node <base repairs.mjs> add <record> --commit 0000001 --fix lint attempt 1
+Fixed: lint attempt 1 (0000001). Repair 1 of 10.
+exit: 0
+$ node <base repairs.mjs> add <record> --commit 0000002 --fix lint attempt 2
+Fixed: lint attempt 2 (0000002). Repair 2 of 10.
+exit: 0
+$ node <base repairs.mjs> add <record> --commit 0000003 --fix lint attempt 3
+Fixed: lint attempt 3 (0000003). Repair 3 of 10.
+exit: 0
+$ node <base repairs.mjs> add <record> --commit 0000004 --fix lint attempt 4
+Fixed: lint attempt 4 (0000004). Repair 4 of 10.
+exit: 0
+issue: https://github.com/example/example/issues/7
+stage: implemented
+repairs: 4/10
+pr: none
+
+## Repairs
+- fix 0000001, repair 1 of 10: lint attempt 1
+- fix 0000002, repair 2 of 10: lint attempt 2
+- fix 0000003, repair 3 of 10: lint attempt 3
+- fix 0000004, repair 4 of 10: lint attempt 4
+
+
+AFTER: stable key, fourth-attempt refusal, requested exemption and keyed continuation.
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000001 --fix lint approach 1 --problem ci/lint
+Fixed: lint approach 1 (0000001). Repair 1 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000002 --fix lint approach 2 --problem ci/lint
+Fixed: lint approach 2 (0000002). Repair 2 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000003 --fix lint approach 3 --problem ci/lint
+Fixed: lint approach 3 (0000003). Repair 3 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000004 --fix fourth lint patch --problem ci/lint
+Not recorded: three strikes: ci/lint. The problem failed again after these repairs:
+- fix 0000001, repair 1 of 10, problem ci/lint: lint approach 1
+- fix 0000002, repair 2 of 10, problem ci/lint: lint approach 2
+- fix 0000003, repair 3 of 10, problem ci/lint: lint approach 3
+Stop and ask for a different approach or "more" for this problem.
+exit: 1
+Refusal left the record byte-for-byte unchanged: true
+issue: https://github.com/example/example/issues/7
+stage: implemented
+repairs: 3/10
+pr: none
+
+## Repairs
+- fix 0000001, repair 1 of 10, problem ci/lint: lint approach 1
+- fix 0000002, repair 2 of 10, problem ci/lint: lint approach 2
+- fix 0000003, repair 3 of 10, problem ci/lint: lint approach 3
+
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000014 --fix a test fix --problem ci/test
+Fixed: a test fix (0000014). Repair 4 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000015 --fix requested lint change --problem ci/lint --asked
+Fixed: requested lint change (0000015), as asked, so it doesn't count. Repairs: 4 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs more <record> --problem ci/lint
+"more": 3 more attempts for ci/lint. Repairs: 4 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000004 --fix lint approach 4 --problem ci/lint
+Fixed: lint approach 4 (0000004). Repair 5 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000005 --fix lint approach 5 --problem ci/lint
+Fixed: lint approach 5 (0000005). Repair 6 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000006 --fix lint approach 6 --problem ci/lint
+Fixed: lint approach 6 (0000006). Repair 7 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000007 --fix seventh lint patch --problem ci/lint
+Not recorded: three strikes: ci/lint. The problem failed again after these repairs:
+- fix 0000004, repair 5 of 10, problem ci/lint: lint approach 4
+- fix 0000005, repair 6 of 10, problem ci/lint: lint approach 5
+- fix 0000006, repair 7 of 10, problem ci/lint: lint approach 6
+Stop and ask for a different approach or "more" for this problem.
+exit: 1
+Second refusal left the record byte-for-byte unchanged: true
+issue: https://github.com/example/example/issues/7
+stage: implemented
+repairs: 7/10
+pr: none
+
+## Repairs
+- fix 0000001, repair 1 of 10, problem ci/lint: lint approach 1
+- fix 0000002, repair 2 of 10, problem ci/lint: lint approach 2
+- fix 0000003, repair 3 of 10, problem ci/lint: lint approach 3
+- fix 0000014, repair 4 of 10, problem ci/test: a test fix
+- fix 0000015, asked for, not counted, problem ci/lint: requested lint change
+- more: problem ci/lint allows 3 more repairs
+- fix 0000004, repair 5 of 10, problem ci/lint: lint approach 4
+- fix 0000005, repair 6 of 10, problem ci/lint: lint approach 5
+- fix 0000006, repair 7 of 10, problem ci/lint: lint approach 6
+
+
+KEY ISOLATION: granting lint does not grant test attempts.
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000016 --fix test approach 2 --problem ci/test
+Fixed: test approach 2 (0000016). Repair 8 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000017 --fix test approach 3 --problem ci/test
+Fixed: test approach 3 (0000017). Repair 9 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000018 --fix test approach 4 --problem ci/test
+Not recorded: three strikes: ci/test. The problem failed again after these repairs:
+- fix 0000014, repair 4 of 10, problem ci/test: a test fix
+- fix 0000016, repair 8 of 10, problem ci/test: test approach 2
+- fix 0000017, repair 9 of 10, problem ci/test: test approach 3
+Stop and ask for a different approach or "more" for this problem.
+exit: 1
+
+INDEPENDENT LIMITS: keyed more cannot raise the overall budget.
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000001 --fix lint approach 1 --problem ci/lint
+Fixed: lint approach 1 (0000001). Repair 1 of 3.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000002 --fix lint approach 2 --problem ci/lint
+Fixed: lint approach 2 (0000002). Repair 2 of 3.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000003 --fix lint approach 3 --problem ci/lint
+Fixed: lint approach 3 (0000003). Repair 3 of 3. That spends the budget, so the PR comes back to you, and "more" adds 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs more <record> --problem ci/lint
+"more": 3 more attempts for ci/lint. Repairs: 3 of 3.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000004 --fix fourth lint patch --problem ci/lint
+Not recorded: the repair budget is spent (3 of 3), so 0000004 waits unpushed until "more".
+exit: 1
+$ node skills/issue-to-pr/scripts/repairs.mjs more <record>
+"more": 10 of 13 repairs left.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000004 --fix fourth lint patch --problem ci/lint
+Fixed: fourth lint patch (0000004). Repair 4 of 13.
+exit: 0
+
+LEGACY: omitted problem key keeps allowing four attempts and original record format.
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000001 --fix lint attempt 1
+Fixed: lint attempt 1 (0000001). Repair 1 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000002 --fix lint attempt 2
+Fixed: lint attempt 2 (0000002). Repair 2 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000003 --fix lint attempt 3
+Fixed: lint attempt 3 (0000003). Repair 3 of 10.
+exit: 0
+$ node skills/issue-to-pr/scripts/repairs.mjs add <record> --commit 0000004 --fix lint attempt 4
+Fixed: lint attempt 4 (0000004). Repair 4 of 10.
+exit: 0
+issue: https://github.com/example/example/issues/7
+stage: implemented
+repairs: 4/10
+pr: none
+
+## Repairs
+- fix 0000001, repair 1 of 10: lint attempt 1
+- fix 0000002, repair 2 of 10: lint attempt 2
+- fix 0000003, repair 3 of 10: lint attempt 3
+- fix 0000004, repair 4 of 10: lint attempt 4
+
+Base and head legacy record bytes are identical: true
+
+INVALID KEY MUTATION: removing validation makes the invalid-key CLI test fail.
+✖ invalid or missing problem keys cannot corrupt repair history (79.132417ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 120.853709
+
+✖ failing tests:
+
+test at ../../../../../../private/var/folders/gx/hrgjtdbj6mg775bn0yy842yr0000gn/T/three-strikes-evidence-98ui_udu/mutant/repairs.test.mjs:145:1
+✖ invalid or missing problem keys cannot corrupt repair history (79.132417ms)
+  AssertionError [ERR_ASSERTION]: Fixed: a fix (0000001). Repair 1 of 10.
+  
+  
+  0 !== 2
+  
+      at TestContext.<anonymous> (file:///private/var/folders/gx/hrgjtdbj6mg775bn0yy842yr0000gn/T/three-strikes-evidence-98ui_udu/mutant/repairs.test.mjs:153:14)
+Mutation test exit: 1
+
+WORKFLOW DECLARATIONS: source capture only; no live T3 stop/unwatch evaluation batch.
+
+skills/issue-to-pr/SKILL.md:157
+## 3. Review, at most two passes
+
+Rate each finding after checking it against the code. P0 breaks normal use, security or data. P1 is a real bug or an unmet criterion, which includes a criterion whose only test matches a `/test-audit` junk pattern. P2 is maintainability or a judgement call, including every `/code-review` baseline smell and every other junk-pattern match. P3 is a nit. Fix accepted P0 and P1 findings as repairs, recording each with `repairs.mjs add --priority <P0|P1> --problem <stable finding key>` for the highest-priority finding the commit fixes, and run the focused tests after each. A repair that adds or rewrites a test passes the `/test-audit` authoring gate and also gets a red line: swap out the code path its criterion names, such as a worker pool for an inline runner, and keep the assertion that fails. Put P2 and P3 findings in the follow-ups list for the PR body. A P2 or P3 fix may ride along in a commit fixing a P0 or P1 finding, using that commit's highest priority. A P2/P3-only repair needs a user or human reviewer's clear request, recorded with `--asked`; otherwise defer it before making a commit. Give each rejected finding its reason. Append every finding to the run record with its priority, source, the head it was reviewed at, and its repair commit or rejection.
+
+When a keyed problem fails again after using its allowed attempts, apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch: record the block, unwatch, and show the three failed attempts.
+
+Before each pass, compare `git rev-parse HEAD^{tree}` with the tree the last pass reviewed. When they are the same, as after a pure rebase, skip the pass and record the skip.
+
+1. **Pass 1.** Run `/code-review <base_sha>` with the contract as the spec and `<skills-dir>/test-audit/SKILL.md` added to the standards sources, where `<skills-dir>` is the directory that holds this skill's folder. Start its two reviewers with `delegate_task`, on the `reviewers` job's entry in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`), applying [model-policy](../model-policy/SKILL.md) when the preferred family is unavailable. Keep two fresh reviewer contexts on the available family. Record the tree, the model each reviewer ran on and any fallback reason.
+2. **Autoreview, once.** Keep this decision between pass 1 and pass 2. If a mandatory source-review axis could not complete after model-policy handling, remain blocked. The extra opinion cannot replace it.
+   - In an enrolled run, collect [explicit facts](references/run-record.md#conditional-v1-pilot) from the contract and both reviewers, then run `node <this skill's folder>/scripts/autoreview-plan.mjs stage3 <record> <facts.json>` from the clean checkout. It saves `autoreview_plan` separately from the outcome. `blocked` stops the run. `skip` with `eligible` records `autoreview: skipped: conditional-v1, <reason codes>` and its basis in the stage report, and launches no extra helper. `opinion-already-completed` preserves the completed outcome and discloses later repairs. `run` retains the extra opinion. Post a short review brief naming its concrete reason codes and changed configuration paths. Use its `prompt` below. Missing or unknown eligibility facts retain the opinion; incomplete mandatory source review blocks.
+   - Old records and non-pilot runs retain the opinion. A completed extra opinion is never repeated in this run. Before stage 3 completes, rerun the planner after a tree, contract or facts change. Its saved same-basis decision survives retries. Later repairs remain disclosed as not re-reviewed; stage 5 must not launch another opinion.
+   - When retained, review `<base_sha>...HEAD` with the `second-opinion` job. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`, adding `--prompt "<planner prompt>"` for the pilot. Apply existing availability fallback before reporting the review unavailable. A failed availability attempt and its replacement are one review pass; a same-family result counts when the independent helper completes. Record `autoreview: <engine> <model it ran>, tree <hash>, clean | <n> fixed`, with the actual model from `/apr` step 1, and record the reviewed base/head/tree, elapsed duration, fallback and coverage limit in the stage report. On failure, record `autoreview: incomplete: <reason>` and both availability failures, and remain blocked. This thread runs the script itself rather than through `delegate_task`, because it already isolates the reviewer. Keep scratch files outside the checkout until it exits.
+3. **Pass 2, full lane only.** Run `/code-review <pass 1 head>` with its reviewers started the same way. It covers only the repairs since pass 1. Fix its P0 and P1 findings with focused tests. There is no third pass.
+
+Repairs made after the last pass, here or in a later stage, appear in the PR as not re-reviewed.
+
+**Complete when:** pass 1 ran, autoreview ran or has a recorded skip, pass 2 ran or was skipped by lane or tree, no accepted P0 or P1 finding is open, and the record shows `reviewed` at the current head and tree.
+
+
+skills/issue-to-pr/SKILL.md:176
+## 4. Verify and prove
+
+1. If the head changed since the build's `/verify`, run `/verify` in full mode again. On red, record the repair with `--problem <stable check key>` and run it again. Apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch when that key fails again after using its allowed attempts, including failures found while capturing evidence or at the final gate. On incomplete, list what could not run for the PR body.
+2. Prove each criterion by running the feature. Launch the surface the way `EVIDENCE.md` says, drive the behaviour the criterion names, and capture it at the current head: a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair when existing behaviour changed.
+3. Publish the captures with `<skills-dir>/evidence/scripts/publish-evidence.sh --repo <owner/repo> --label <issue> <files>`. Keep each returned link with the head it was captured at.
+4. A criterion without a capture needs an exemption quoted word for word from `EVIDENCE.md`, and its red and green lines are then its proof. A criterion with neither a link nor a quoted exemption stops the run as `blocked: evidence`, with the reason the capture failed.
+5. Full lane only: run `/review-ready` in final-gate mode over `<base_sha>...HEAD`. Fix a concrete violation as a repair, and record an intentional exception for the PR body.
+
+**Complete when:** `/verify` is green or incomplete at the current head, every criterion has a published link or a quoted exemption, and in the full lane review-ready has no open concrete violation.
+
+
+skills/issue-to-pr/SKILL.md:198
+## 6. Watch
+
+This thread watches its own PR, and T3 wakes it when the PR changes.
+
+1. Load and follow `/pr-watch <PR URL> --max-repairs <budget left> --run-record <record path>` in this thread. Rate each finding as stage 3 does. Hand each repair to `/apr --no-watch --skip-review --body-file <file>`, because autoreview runs once per run, with the body refreshed for the new head, the repair listed as not re-reviewed, and the body [checked](references/pr-body.md#the-check) until it passes. While the record says `draft: yes`, the gate's `PR is a draft` and `PR merge state is DRAFT` wait on the user's review, so they are not a hand-back. Repair the other reasons as pr-watch says.
+2. Record each pr-watch fix before publishing with `repairs.mjs add --problem <stable check or finding key>`, as the [repair budget](references/pr-thread.md#repair-budget) says, its `--fix` naming the source thread or check and the head it was reviewed at, and post the line it prints. For review or bot findings, pass `--priority P0|P1|P2|P3` for the highest-priority finding the commit fixes. P2/P3 fixes may ride along with a P0/P1 fix in that commit; otherwise put them in follow-ups, and let pr-watch reply to and resolve the bot thread. A human reviewer's clear request is `--asked`, at any priority. Failed checks, a red `/verify`, a verifier FAIL and conflict rebases need no `--priority`.
+3. For a layer, run `gh pr view <predecessor> --json state,headRefOid` (REST: `.state`, `.merged` and `.head.sha` from `gh api repos/{owner}/{repo}/pulls/<predecessor>`). When the predecessor moved or merged, follow the predecessor case in [resume](references/resume.md).
+4. Record the stage from where pr-watch leaves the PR:
+   - **Clean.** When the gate exits `0` at the current head, record `ready`.
+   - **The user's review of the draft.** When only draft blockers are visible, run the same gate with `--for-verification`, the same reviewer, request-comment, ignored-check and held-file arguments, and the exact pushed head. Draft blockers can hide pending bot reviews as well as checks. Handle findings and pending results as pr-watch does; request a missing bot review once per head and watch while waiting on checks or reviewers. Record `awaiting-human: review of the draft` only when verification readiness is `ready`. Held replies wait on the user for "post". A bot that cannot review drafts needs the user's decision, not a silent bypass.
+   - **Waiting on someone else**, such as a running check or a reviewer who has not covered the head. pr-watch has called `watch_pull_request`, so record `watching` with the open reasons and end the turn. When T3 wakes this thread, start this stage again at step 1.
+   - **Waiting on the user's word**, such as replies held until "post". Record `awaiting-human` with what is held.
+   - **Three strikes.** When the same key fails again after using its allowed attempts, follow the [repair-budget stop](references/pr-thread.md#repair-budget): record `blocked: three strikes: <key>`, unwatch, and post the attempts and failure evidence. A refused fourth commit stays unpushed; "more" grants 3 more for that key only.
+   - **Budget spent.** Stop as the [repair budget](references/pr-thread.md#repair-budget) says.
+   - **Any other hand-back**, such as a closed PR, a draft the record doesn't expect, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.
+
+**Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`.
+
+
+skills/issue-to-pr/SKILL.md:216
+## 7. Hand off
+
+Run this stage once stage 6 records anything but `watching`.
+
+1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, clean up as [on merge](references/pr-thread.md#on-merge) says.
+2. **Verifier, under rule B.** At `ready` or `awaiting-human`, decide whether rule B covers the PR, including an existing verdict, as [ship's rules](../ship/SKILL.md#rules) define it. When it does, follow `/ship verify <n>` and its [verification preparation](../ship/references/verification.md): check exact-pushed-head readiness and reuse a current passing verdict before launching a new child. Record reused, deferred or newly run, its reason and the proof. A new child still runs the gates, live behaviour and blast-radius lanes. On FAIL or an accepted repair that invalidates a running verifier, follow the preparation's cancellation and batching rules and record repairs with `--problem <stable verifier criterion or finding key>`. Apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch or push when the problem fails again after using its allowed attempts; record the block, unwatch, and show the attempts and failure evidence. Otherwise push and return to stage 6 before stage 7. If verification is unnecessary, record why it was skipped. Append the verdict and rule B reason for the recap's `Verifier:` line.
+3. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
+   1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
+   2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
+   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
+   4. Once it merged, record the merge commit and clean up as [on merge](references/pr-thread.md#on-merge) says. Otherwise record `ready` with the blocker ship reports.
+
+   Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
+4. Write the handoff block into the record:
+
+   ```md
+   handoff
+   - read first: #<n> <title>, because <reason>
+   - review order: #<a>, #<b>, #<c>, bottom up (stacks only)
+   - automation could not check: <exempt criteria, checks that could not run, judgement calls such as visual quality>
+   - human gates left: <approvals and from whom, a one-way door, the merge>
+   ```
+
+5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
+6. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
+7. Write the report into the record, and post the [recap](#recap). Its `Next:` line names the user's next move, such as reviewing the PR in this thread, and saying "done" on a draft.
+
+
+skills/issue-to-pr/references/pr-thread.md:41
+## Repair budget
+
+A PR has 10 repairs for its whole life: the build, its watch and the fixes after, until it merges. `--max-repairs` sets another number at the build's start; bare `repairs.mjs more` adds 10.
+
+A repair is one commit that changes code to fix a review finding, a failed check, a bot finding, a red `/verify`, a review-ready violation or a verifier's FAIL, or one rebase that resolves a conflict. Fixes the user asks for, such as their comments in stage 8, and a human reviewer's clear requests don't count. A restack after the predecessor moved is a repair only when it resolved a conflict.
+
+For a review or bot finding, pass `--priority P0|P1|P2|P3` for the highest-priority finding the commit fixes. A P2 or P3 fix may ride along in the same commit as a P0 or P1 fix, using the higher priority. Defer P2/P3-only findings to the PR's follow-ups list before making a commit, unless the user or a human reviewer clearly requested the fix. Failed checks, a red `/verify`, a verifier FAIL and conflict rebases keep working without `--priority`.
+
+Pass `--problem <key>` for every autonomous repair with an identifiable failure: a check name, verifier criterion, review thread or finding id. Use one stable key across retries and stages, such as `ci/lint` or `verifier/secret-scan`; keep it when the approach changes. Keys start with a letter or digit and contain only letters, digits, `.`, `_`, `:`, `/` or `-`. Legacy calls without a key keep their existing behavior. Requested fixes with `--asked` never count toward strikes, even with a key.
+
+Record each fix right after its commit and before publishing it, counted or not, with `--asked` for one the user or a human reviewer asked for, at any priority:
+
+```bash
+node <issue-to-pr>/scripts/repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--problem <key>] [--priority <P0|P1|P2|P3>] [--asked]
+node <issue-to-pr>/scripts/repairs.mjs more <record> [--problem <key>]
+```
+
+`add` refuses a P2/P3-only fix without `--asked`, records nothing and says to add the finding to follow-ups instead. This refusal spends no budget and does not call for "more".
+
+Each problem has 3 attempts, separate from the overall budget. When that problem fails again after using its allowed attempts, stop before another patch. `add` refuses a fourth keyed repair unless the user has granted more attempts, writes nothing, and prints the last three fix lines for that key. Record `stage: blocked: three strikes: <key>`, call `unwatch_pull_request` when a PR exists, and post what each of those attempts tried and the evidence of why each failed. Wait for the user to choose another approach or say "more"; leave any refused commit unpushed.
+
+At this stop, "more" runs `repairs.mjs more <record> --problem <key>` for the blocked key only. It grants 3 more attempts for that key, preserves its history and leaves other keys and the overall budget unchanged. Ask which key only if the stopped key is ambiguous. At an overall-budget stop, "more" runs the bare command and adds 10. If both limits are spent, explain both and get the user's word for each grant before continuing. A different approach or "go on" alone does not grant attempts; keep the key and obtain "more" before another repair.
+
+For an accepted fix, `add` appends it to the record, keeps the header's `repairs: <used>/<budget>`, and prints the line to post. pr-watch gets the repairs left as `--max-repairs`. When `add` says the budget is spent, or refuses a fix because it already was, stop: record `blocked: repair budget`, call `unwatch_pull_request` so the thread moves to the user's inbox, and post what is still open. A refused fix stays unpushed until "more".
+
+
+VERIFICATION: 9eb7c6641720fb68d75fb60dff1ab0ae8c00eaa4
+node --test: 366 passed, 0 failed
+python3 skills/cleanup/scripts/test-worktree-audit.py: passed
+python3 skills/cleanup/scripts/test-artifact-audit.py: passed
+git diff --check: passed
+No separate build, typecheck, lint or CI configured. No live evaluation batches run.
