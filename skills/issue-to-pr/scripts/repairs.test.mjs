@@ -74,17 +74,18 @@ test("invalid or missing priority values are usage errors and leave the record u
 
 test("the record counts each repair from the build to the merge, leaves out fixes someone asked for, and stops at 10 until \"more\"", (t) => {
   const record = runRecord(t);
-  // Three repairs in the build's review passes, then seven from the watch, with the user's own ask
-  // in between.
+  const fixes = ["a failed check", "a red /verify", "a verifier FAIL", "a conflict rebase"];
   for (let i = 1; i <= 10; i++) {
     if (i === 4) {
       const asked = add(record, sha(40), "the flag renamed, as the user asked", "--asked");
       assert.equal(asked.status, 0, asked.stderr);
       assert.equal(counter(record), "3/10", "a fix the user asked for doesn't count");
     }
-    const repair = add(record, sha(i), `review finding ${i}`);
+    const fix = fixes[(i - 1) % fixes.length];
+    const repair = add(record, sha(i), fix);
     assert.equal(repair.status, 0, repair.stderr);
     assert.equal(counter(record), `${i}/10`);
+    assert.ok(readFileSync(record, "utf8").includes(`repair ${i} of 10: ${fix}`));
     if (i === 1) assert.match(repair.stdout, /0000001.*1 of 10/, "the line to post names the commit and the count");
   }
 
