@@ -196,8 +196,13 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 5. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
 6. Start the PR's review guide with `write_pull_request_guides` now, because T3 takes a few minutes to write it. Stage 7 checks it before the recap.
 7. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
+8. Append the [decisions block](references/run-record.md#decisions) to the record.
+9. Reset this thread's context, so the watch and every repair after it start from the record rather than the build's context. A thread on a GPT model, as `models.json` words it, skips this step, records `reset skipped: thread on a GPT model` in the stage report, and goes on to stage 6. Otherwise, in this order:
+   1. Call `watch_pull_request` on the PR, so no PR event falls in the gap. Stage 6 keeps the watch it finds.
+   2. Run `node <this skill's folder>/scripts/reset.mjs before <record path>`. It saves the stage, `repairs:`, `draft:`, `guide:` and `land:` in the record's `reset:` line. When it refuses a run that was already reset, skip the self-send and go on to stage 6.
+   3. As the last call of the turn, call `t3_thread_send` to this thread's own id, with `freshContext: true`, mode `queue`, and the message `/issue-to-pr <n> resume <record path>: fresh context after the stage 5 reset`. The fresh context continues as [resume](references/resume.md#after-a-context-reset) says. It reads state only from the record and the PR. A PR wake that reaches this context after it queued the self-send changes nothing: end the turn, because the fresh context reads the same PR when it resumes.
 
-**Complete when:** an open PR exists at the current head on the contracted base, a draft when the record says `draft: yes` and otherwise ready for review, and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion.
+**Complete when:** an open PR exists at the current head on the contracted base, a draft when the record says `draft: yes` and otherwise ready for review, and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion. The record holds the decisions block. On a thread not on a GPT model, it also holds the `reset:` snapshot, the PR is watched, and the self-send is queued; otherwise the record says why the reset was skipped.
 
 ## 6. Watch
 
@@ -215,7 +220,7 @@ This thread watches its own PR, and T3 wakes it when the PR changes.
    - **Budget spent.** Stop as the [repair budget](references/pr-thread.md#repair-budget) says.
    - **Any other hand-back**, such as a closed PR, a draft the record doesn't expect, a head mismatch, or a reason that needs the user's decision. Record `blocked` with the reason and ask the user.
 
-**Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`.
+**Complete when:** the record shows `ready`, `watching`, `awaiting-human` or `blocked` with its reasons, and T3 watches the PR only while the record shows `watching`, or `published` between the stage 5 reset and the fresh context's first stage 6 pass.
 
 ## 7. Hand off
 
@@ -248,7 +253,7 @@ Run this stage once stage 6 records anything but `watching`.
 
 After the recap, the user reviews the PR in this thread, the way `/pr-review` reviews a teammate's PR, with the recap as its intro and the guide as its tour. Their comments become fixes, and no review or comment goes on GitHub, because the PR is their own.
 
-1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Make each request one fix commit, with its focused tests, and record it with `repairs.mjs add --asked`, the comment as its `--fix`.
+1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Answer "why X?" from the record: every `## Decisions` section, the contract and the findings with their reasons. Quote the line you used, and when the record has none, say so instead of reconstructing a reason. Make each request one fix commit, with its focused tests, and record it with `repairs.mjs add --asked`, the comment as its `--fix`.
 2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head, the fixes listed as not re-reviewed, and the body [checked](references/pr-body.md#the-check) until it passes. Start the guide for the new head with `write_pull_request_guides` right after the push.
 3. Run stages 6 and 7 again. The recap they end with covers only what changed since the last one: its `Built:` line gives each comment's fix.
 4. Only the user's "done" marks a draft ready. When they say it and the record says `draft: yes`, run `gh pr ready <n>`. It has no REST call, so when the GraphQL quota is spent, wait for it to reset. Record `draft: no`, then run stage 6 again, where the approval GitHub requires comes from someone else.

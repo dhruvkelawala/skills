@@ -41,7 +41,7 @@ export function metadataEvent(input) {
   event.revision = /^[a-f0-9]{64}$/.test(input.revision ?? '') ? input.revision : null;
   event.execution = choice(input.execution, ['running', 'waiting-human', 'waiting-external', 'completed', 'failed', 'cancelled', 'interrupted']);
   event.outcome = choice(input.outcome, ['verified', 'failed', 'unknown']) ?? 'unknown';
-  event.reason = choice(input.reason, ['expected-red', 'recovered', 'unrecovered', 'autonomous', 'user-requested', 'unavailable', 'exhausted', 'ambiguous', 'missing-child']);
+  event.reason = choice(input.reason, ['expected-red', 'recovered', 'unrecovered', 'autonomous', 'user-requested', 'unavailable', 'exhausted', 'ambiguous', 'missing-child', 'context-reset']);
   event.evidence = evidence(input.evidence);
   event.artifact = evidence(input.artifact ? [input.artifact] : [])[0] ?? null;
   if (event.outcome !== 'unknown' && !validEvidence(event.evidence, event.head, time)) event.outcome = 'unknown';

@@ -65,7 +65,7 @@ For an accepted fix, `add` appends it to the record, keeps the header's `repairs
 
 ## Watching
 
-The thread watches its PR with `watch_pull_request` only while the PR waits on someone else, such as a running check, a bot or a person. When it's the user's move, as at a clean PR, a held reply, a spent budget or a question, it calls `unwatch_pull_request`, and the thread sits in the user's inbox.
+The thread watches its PR with `watch_pull_request` only while the PR waits on someone else, such as a running check, a bot or a person. When it's the user's move, as at a clean PR, a held reply, a spent budget or a question, it calls `unwatch_pull_request`, and the thread sits in the user's inbox. A build's thread also watches across its stage 5 context reset, so the fresh context finds the watch already set.
 
 ## On merge
 
