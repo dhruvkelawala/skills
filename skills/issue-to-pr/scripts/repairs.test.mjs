@@ -30,6 +30,15 @@ const add = (record, commit, fix, ...flags) => repairs("add", record, "--commit"
 const counter = (record) => readFileSync(record, "utf8").match(/^repairs: (.+)$/m)?.[1];
 const sha = (n) => `${String(n).padStart(7, "0")}${"a".repeat(33)}`;
 
+test("a repair records its stable problem key beside the fix", (t) => {
+  const record = runRecord(t);
+  const result = add(record, sha(1), "retry the lint setup", "--problem", "ci/lint");
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(readFileSync(record, "utf8"), /fix 0000001, repair 1 of 10, problem ci\/lint: retry the lint setup/);
+  assert.equal(counter(record), "1/10");
+});
+
 for (const priority of ["P2", "P3"]) {
   test(`${priority} alone is deferred without recording a repair`, (t) => {
     const record = runRecord(t);
