@@ -196,13 +196,13 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 5. Call `link_pull_request` with the PR URL, so T3 shows the PR beside this thread and settles the thread when it merges.
 6. Start the PR's review guide with `write_pull_request_guides` now, because T3 takes a few minutes to write it. Stage 7 checks it before the recap.
 7. Record the PR URL, head, tree and `published`. A ticket of a spec then wakes the spec thread, as [spec](references/spec.md#a-tickets-build) says.
-8. Reset this thread's context, so the watch and every repair after it start from the record rather than the build's context. A thread on a GPT model, as `models.json` words it, skips this step and records `reset skipped: thread on a GPT model` in the stage report. Otherwise, in this order:
-   1. Append the [decisions block](references/run-record.md#decisions) to the record.
-   2. Call `watch_pull_request` on the PR, so no PR event falls in the gap. Stage 6 keeps the watch it finds.
-   3. Run `node <this skill's folder>/scripts/reset.mjs before <record path>`. It saves the stage, `repairs:`, `draft:`, `guide:` and `land:` in the record's `reset:` line, and refuses a run that was already reset, so skip the self-send when it does.
-   4. As the last call of the turn, call `t3_thread_send` to this thread's own id, with `freshContext: true`, mode `queue`, and the message `/issue-to-pr <n> resume <record path>: fresh context after the stage 5 reset`. The fresh context continues as [resume](references/resume.md#after-a-context-reset) says. It reads state only from the record and the PR.
+8. Append the [decisions block](references/run-record.md#decisions) to the record.
+9. Reset this thread's context, so the watch and every repair after it start from the record rather than the build's context. A thread on a GPT model, as `models.json` words it, skips this step, records `reset skipped: thread on a GPT model` in the stage report, and goes on to stage 6. Otherwise, in this order:
+   1. Call `watch_pull_request` on the PR, so no PR event falls in the gap. Stage 6 keeps the watch it finds.
+   2. Run `node <this skill's folder>/scripts/reset.mjs before <record path>`. It saves the stage, `repairs:`, `draft:`, `guide:` and `land:` in the record's `reset:` line. When it refuses a run that was already reset, skip the self-send and go on to stage 6.
+   3. As the last call of the turn, call `t3_thread_send` to this thread's own id, with `freshContext: true`, mode `queue`, and the message `/issue-to-pr <n> resume <record path>: fresh context after the stage 5 reset`. The fresh context continues as [resume](references/resume.md#after-a-context-reset) says. It reads state only from the record and the PR. A PR wake that reaches this context while the record has a `reset:` line and still says `published` changes nothing: end the turn, because the fresh context's stage 6 reads the same PR.
 
-**Complete when:** an open PR exists at the current head on the contracted base, a draft when the record says `draft: yes` and otherwise ready for review, and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion. On a thread not on a GPT model, the record holds the decisions block and the `reset:` snapshot, the PR is watched, and the self-send is queued; otherwise the record says why the reset was skipped.
+**Complete when:** an open PR exists at the current head on the contracted base, a draft when the record says `draft: yes` and otherwise ready for review, and is linked to this thread, its file count matches, and its body has a `**Door:**` line and a link or quoted exemption for each criterion. The record holds the decisions block. On a thread not on a GPT model, it also holds the `reset:` snapshot, the PR is watched, and the self-send is queued; otherwise the record says why the reset was skipped.
 
 ## 6. Watch
 

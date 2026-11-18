@@ -69,7 +69,7 @@ Stage 5 appends a `## Decisions, <UTC time>` section before the thread resets it
 - <decision, as the PR shows it>: <why>. Source: contract | finding <key> | build | user
 ```
 
-Cover the contract's decisions, each rejected finding with its reason, each P2 or P3 deferred to follow-ups, each judgement call made while building, such as a test seam or a dropped approach, and each thing the user asked for. Later stages append their decisions to the same section's list as they make them.
+Cover the contract's decisions, each rejected finding with its reason, each P2 or P3 deferred to follow-ups, each judgement call made while building, such as a test seam or a dropped approach, and each thing the user asked for. A later stage that makes such a choice appends a new `## Decisions, <UTC time>` section with the same lines, so the record stays append-only.
 
 ## When a record already exists
 
