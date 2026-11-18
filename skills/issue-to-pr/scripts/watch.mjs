@@ -30,7 +30,6 @@ export async function watch(config, home = homedir()) {
   const records = (await files(join(home, '.agent', 'issue-to-pr'), '.md', since)).filter((r) => r.name.split('/').length === 2);
   for (const record of records) {
     const run = await runOf(record.path);
-    run.childCoverage = await helperCoverage(config, run);
     runs.push(run);
     for (const id of run.expectedHelpers ?? []) {
       const path = record.path.replace(/\.md$/, `.autoreview-${id}.json`);
@@ -43,6 +42,7 @@ export async function watch(config, home = homedir()) {
         if (result.measured) await recordHelper(config, run, id, result.session);
       } else summary.unavailable++;
     }
+    run.childCoverage = await helperCoverage(config, run);
     const progress = `${run.stage}@${run.head}`;
     if (!run.stage || state.records[record.path] === progress) continue;
     const kind = FINISHED.has(run.stage) ? 'skill.finished' : 'stage';
@@ -60,7 +60,7 @@ export async function watch(config, home = homedir()) {
       // A transcript that matched no run keeps its session, so a record that gains its branch later still finds it without a reread.
       const seen = state.transcripts[transcript.path];
       if (seen === transcript.mtime) continue;
-      const session = seen?.mtime === transcript.mtime && seen.session?.version === 4 ? seen.session : await sessionOf(runtime, transcript.path).catch(() => null);
+      const session = seen?.mtime === transcript.mtime && seen.session?.version === 5 ? seen.session : await sessionOf(runtime, transcript.path).catch(() => null);
       // A session that worked on several runs, such as a stack or a root thread, can't be split between them yet.
       const run = attributeSession(session, runs);
       if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }

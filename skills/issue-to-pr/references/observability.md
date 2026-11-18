@@ -2,7 +2,7 @@
 
 Use the shared [pilot setup](../../../instrumentation/README.md) only when the user opted in. The run record remains authoritative for orchestration. Only its owning thread writes it.
 
-`scripts/watch.mjs` captures runs without the agent's help. A scheduled job on the machine runs it every few minutes. It reads only records at `<repo>/<issue>.md`, and gives a record without `telemetry_attempt` an attempt of its own. It sends a marker when a record's `stage` or `head` changes, and the token usage of every Claude or Codex session whose branch and working directory match the record's `branch` and `repo`. When no branch matches, a helper can instead name exactly one known run with `issue-to-pr-run: <telemetry_workflow>` in its first user message. Later mentions and ambiguous markers are ignored. A session matching several runs' branches remains ambiguous. Each pass retries undelivered events and reports `pending` and `exhausted` counts in its output. The steps below add markers the watcher cannot see, such as gates, repairs and waits.
+`scripts/watch.mjs` captures runs without the agent's help. A scheduled job on the machine runs it every few minutes. It reads only records at `<repo>/<issue>.md`, and gives a record without `telemetry_attempt` an attempt of its own. It sends a marker when a record's `stage` or `head` changes, and the token usage of every Claude or Codex session whose branch and working directory match the record's `branch` and `repo`. A helper takes ownership explicitly by naming exactly one known run with `issue-to-pr-run: <telemetry_workflow>` in its first user message. This first-task marker takes priority over branch matches. Ambiguous or unknown first-task markers exclude the session. Without a marker, a session matching several runs' branches remains ambiguous; later mentions establish no ownership. Each pass retries undelivered events and reports `pending` and `exhausted` counts in its output. The steps below add markers the watcher cannot see, such as gates, repairs and waits.
 
 The owning thread records `telemetry_workflow` and `telemetry_attempt` in the header after opt-in. Keep the workflow on resume; generate a fresh attempt with `node -e 'console.log(crypto.randomUUID())'`. Configure runtime capture with those same identities and invocation `issue-to-pr`. Hash the actual skill directory, including its scripts and references; the emitter computes that revision.
 
@@ -22,7 +22,6 @@ Keep each helper's actual provider/model/effort on its request events. Register 
 
 Check `cli.mjs status` after capture. Pending, exhausted, rejected, unavailable and missing-hook states are rollout gaps. Retry delivery with `cli.mjs flush`; collection failures never block the user's workflow. Workflow gates retain their own failure behavior.
 
-
 ## Helper attribution
 
 The owning thread registers each helper before launch:
@@ -39,10 +38,9 @@ issue-to-pr-helper: <reviewer|verifier|council|autoreview>
 issue-to-pr-helper-id: <helper-id>
 ```
 
-Put these lines in the first task message, before the brief. Codex transcripts can start with the host's `# AGENTS.md instructions` message containing `<environment_context>`; that setup message is excluded, and markers inside it are ignored. The first task message after it owns attribution. Each helper message names one run. The command uses the record's workflow, or the same stable fallback as the watcher for older records. It works without an enabled upload configuration. Source reviewers use `reviewer`, ship's independent child uses `verifier`, and council members use `council` in every round. Native agent-tool children also receive these lines when launched explicitly. Register a replacement with a fresh ID; missing usage from a cancelled attempt remains a capture gap.
+Put these lines in the first task message, before the brief. Codex transcripts can start with the host's `# AGENTS.md instructions` message containing `<environment_context>`; the parser skips that setup message and any markers inside it. The first task message after it owns attribution. Each helper message names one run. The command uses the record's workflow, or the same stable fallback as the watcher for older records. It works without an enabled upload configuration. Source reviewers use `reviewer`, ship's independent child uses `verifier`, and council members use `council` in every round. Native agent-tool children also receive these lines when launched explicitly. Register a replacement with a fresh ID; missing usage from a cancelled attempt remains a capture gap.
 
 Only the owning thread changes the inventory. An explicitly empty `telemetry_helpers: []` means no helpers are expected. The watcher records a helper receipt only after its requests and counters were accepted by the outbox. `observe.mjs` uses those receipts for markers and owner usage, so callers cannot declare coverage complete themselves. Delivery failures remain visible in outbox status.
-
 
 ## Ephemeral autoreview usage
 

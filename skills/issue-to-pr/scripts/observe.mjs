@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { header } from './run-record.mjs';
 import { captureHook, configuration } from '../../../instrumentation/cli.mjs';
-import { digest, skillRevision } from '../../../instrumentation/contract.mjs';
+import { digest, helperId, skillRevision } from '../../../instrumentation/contract.mjs';
 import { emit, flush } from '../../../instrumentation/delivery.mjs';
 import { helperCoverage } from './helper-coverage.mjs';
 
@@ -36,7 +36,7 @@ export async function runOf(recordPath) {
   let expectedHelpers = null;
   try {
     const ids = JSON.parse(header(record, 'telemetry_helpers'));
-    if (Array.isArray(ids) && ids.every((id) => typeof id === 'string' && /^[\w.-]{1,100}$/.test(id))) expectedHelpers = ids;
+    if (Array.isArray(ids) && ids.every((id) => helperId(id))) expectedHelpers = ids;
   } catch {}
   return {
     workflow,

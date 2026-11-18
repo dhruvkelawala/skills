@@ -30,7 +30,6 @@ with tempfile.TemporaryDirectory() as root:
             status = json.loads((root / "status.json").read_text())
             assert status.get('usage', {}).get('tokens') == event['usage'], status
             assert status['usage']['complete'] is True, status
-            # Failed and unknown attempts retain measured usage without declaring full coverage.
             api[recorder](args, "", completed=False)
             api['write_review_status'](args, "unavailable", 1)
             status = json.loads((root / "status.json").read_text())

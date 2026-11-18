@@ -129,5 +129,9 @@ test('helper coverage becomes complete only after every declared helper has capt
     await writeFile(noInventory, 'repo: example/shop\nissue: 2\nhead: abc123\nstage: building\n');
     await observe(noInventory, { kind: 'stage', eventKey: 'unknown' }, config, {});
     assert.equal(coverage(), 'unknown');
+    const malformed = 'repo: example/shop\nissue: 2\ntelemetry_helpers: ["unfinished"\n';
+    await writeFile(noInventory, malformed);
+    await assert.rejects(promisify(execFile)(process.execPath, [fileURLToPath(new URL('./helper-brief.mjs', import.meta.url)), noInventory, 'reviewer', 'next']), /invalid telemetry_helpers/);
+    assert.equal(await readFile(noInventory, 'utf8'), malformed);
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(directory, { recursive: true, force: true }); }
 });

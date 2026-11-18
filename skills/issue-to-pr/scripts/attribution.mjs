@@ -1,4 +1,5 @@
 import { transcriptRows } from '../../../instrumentation/transcript.mjs';
+import { HELPER_ROLES, helperId } from '../../../instrumentation/contract.mjs';
 
 export async function sessionOf(runtime, path) {
   let id, first, worked = new Set();
@@ -15,18 +16,20 @@ export async function sessionOf(runtime, path) {
     first ??= userText(runtime, row);
   }
   const markers = [...(first ?? '').matchAll(/^issue-to-pr-run: ([\w.%:/@+-]{1,200})\s*$/gm)].map((match) => match[1]);
-  const roles = [...(first ?? '').matchAll(/^issue-to-pr-helper: (reviewer|verifier|council)\s*$/gm)].map((match) => match[1]);
-  const ids = [...(first ?? '').matchAll(/^issue-to-pr-helper-id: ([\w.-]{1,100})\s*$/gm)].map((match) => match[1]);
-  return id ? { version: 4, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build', helperId: new Set(ids).size === 1 ? ids[0] : null } : null;
+  const roles = [...(first ?? '').matchAll(/^issue-to-pr-helper: (\S+)\s*$/gm)].map((match) => match[1]).filter((role) => HELPER_ROLES.includes(role));
+  const ids = [...(first ?? '').matchAll(/^issue-to-pr-helper-id: (\S+)\s*$/gm)].map((match) => helperId(match[1])).filter(Boolean);
+  return id ? { version: 5, id, worked: [...worked].map(JSON.parse), markers: [...new Set(markers)], helper: new Set(roles).size === 1 ? roles[0] : 'build', helperId: new Set(ids).size === 1 ? ids[0] : null } : null;
 }
 
 export function attributeSession(session, runs) {
   if (!session) return null;
+  if (session.markers?.length) {
+    if (session.markers.length !== 1) return null;
+    const named = runs.filter((run) => run.workflow === session.markers[0]);
+    return named.length === 1 ? named[0] : null;
+  }
   const matches = runs.filter((run) => run.branch && run.branch !== 'none' && session.worked.some(([place, branch]) => branch === run.branch && inRepository(place, run.repository)));
-  if (matches.length) return matches.length === 1 ? matches[0] : null;
-  if (session.markers?.length !== 1) return null;
-  const named = runs.filter((run) => run.workflow === session.markers[0]);
-  return named.length === 1 ? named[0] : null;
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function userText(runtime, row) {
