@@ -44,14 +44,18 @@ A PR has 10 repairs for its whole life: the build, its watch and the fixes after
 
 A repair is one commit that changes code to fix a review finding, a failed check, a bot finding, a red `/verify`, a review-ready violation or a verifier's FAIL, or one rebase that resolves a conflict. Fixes the user asks for, such as their comments in stage 8, and a human reviewer's clear requests don't count. A restack after the predecessor moved is a repair only when it resolved a conflict.
 
-Record each fix right after its commit, counted or not, with `--asked` for one the user or a human reviewer asked for. On "more", add 10 to the budget:
+For a review or bot finding, pass `--priority P0|P1|P2|P3` for the highest-priority finding the commit fixes. A P2 or P3 fix may ride along in the same commit as a P0 or P1 fix, using the higher priority. Defer P2/P3-only findings to the PR's follow-ups list before making a commit, unless the user or a human reviewer clearly requested the fix. Failed checks, a red `/verify`, a verifier FAIL and conflict rebases keep working without `--priority`.
+
+Record each fix right after its commit, counted or not, with `--asked` for one the user or a human reviewer asked for, at any priority. On "more", add 10 to the budget:
 
 ```bash
-node <issue-to-pr>/scripts/repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--asked]
+node <issue-to-pr>/scripts/repairs.mjs add <record> --commit <sha> --fix "<what it fixed>" [--priority <P0|P1|P2|P3>] [--asked]
 node <issue-to-pr>/scripts/repairs.mjs more <record>
 ```
 
-`add` appends the fix to the record, keeps the header's `repairs: <used>/<budget>`, and prints the line to post. pr-watch gets the repairs left as `--max-repairs`. When `add` says the budget is spent, or refuses a fix because it already was, stop: record `blocked: repair budget`, call `unwatch_pull_request` so the thread moves to the user's inbox, and post what is still open. A refused fix stays unpushed until "more".
+`add` refuses a P2/P3-only fix without `--asked`, records nothing and says to add the finding to follow-ups instead. This refusal spends no budget and does not call for "more".
+
+For an accepted fix, `add` appends it to the record, keeps the header's `repairs: <used>/<budget>`, and prints the line to post. pr-watch gets the repairs left as `--max-repairs`. When `add` says the budget is spent, or refuses a fix because it already was, stop: record `blocked: repair budget`, call `unwatch_pull_request` so the thread moves to the user's inbox, and post what is still open. A refused fix stays unpushed until "more".
 
 ## Watching
 
