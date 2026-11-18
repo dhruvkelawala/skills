@@ -36,7 +36,8 @@ if (args[0] === "search" && args[1] === "prs") {
   const hits = Object.entries(repos)
     .flatMap(([repo, r]) => r.prs.map((p) => [repo, p]))
     .filter(([, p]) => (flag("--review-requested") === "@me" && p.requested) || (flag("--reviewed-by") === "@me" && (p.reviews ?? []).some((v) => v.user === me)) ||
-      (flag("--author") === "@me" && p.author === me));
+      (flag("--author") && p.author.toLowerCase() === (flag("--author") === "@me" ? me : flag("--author")).toLowerCase()) ||
+      (flag("--updated") && p.updated >= flag("--updated").slice(2)));
   answer(hits.map(([repo, p]) => ({
     number: p.number, title: p.title, url: "https://github.com/" + repo + "/pull/" + p.number, author: { login: p.author },
     isDraft: p.draft ?? false, repository: { name: repo.split("/")[1], nameWithOwner: repo },
@@ -45,6 +46,10 @@ if (args[0] === "search" && args[1] === "prs") {
 const endpoint = (args.find((a) => a.startsWith("repos/")) ?? "").split("?")[0];
 const [, owner, name, kind, number, sub] = endpoint.split("/");
 const repo = owner + "/" + name;
+if (args[0] === "api" && repos[repo] && kind === "issues" && sub === "timeline") {
+  const p = repos[repo].prs.find((x) => x.number === Number(number));
+  if (p) answer(pages(p.events ?? []));
+}
 if (args[0] === "api" && repos[repo] && kind === "pulls") {
   const p = repos[repo].prs.find((x) => x.number === Number(number));
   if (!number) answer(pages(repos[repo].prs.map((x) => rest(repo, x))));
@@ -132,4 +137,55 @@ test("with --mine, lists the user's own open PRs instead, even one they reviewed
   });
   assert.deepEqual(queue("--mine").map((p) => `${p.repo}#${p.number}`), ["acme/app#43", "acme/app#41", "acme/lib#45", "acme/app#42"]);
   assert.deepEqual(queue("--mine", "--repo", "acme/lib").map((p) => `${p.repo}#${p.number}`), ["acme/lib#45"]);
+});
+
+test("with --author, finds that author's ready PRs without requiring a review request", (t) => {
+  const queue = fixtureGitHub(t, {
+    "acme/app": { archived: false, prs: [
+      pr(50, { author: "Teammate", reviews: [reviewed("h50")] }),
+      pr(51, { author: "teammate", draft: true }),
+      pr(52, { author: "other", requested: true }),
+      pr(53, { author: "reviewer" }),
+    ] },
+    "acme/lib": { archived: false, prs: [pr(54, {})] },
+    "acme/old": { archived: true, prs: [pr(55, {})] },
+  });
+  assert.deepEqual(queue("--author", "teammate").map((p) => `${p.repo}#${p.number}`), ["acme/app#50", "acme/lib#54"]);
+  assert.deepEqual(queue("--author", "TEAMMATE", "--repo", "acme/app").map((p) => p.number), [50]);
+  assert.deepEqual(queue("--author", "reviewer", "--repo", "acme/app").map((p) => p.number), [53]);
+});
+
+test("with --ready-since, finds newly ready PRs and ignores unrelated updates and current drafts", (t) => {
+  const before = "2026-11-18T08:59:59Z";
+  const start = "2026-11-18T09:00:00Z";
+  const after = "2026-11-18T09:01:00Z";
+  const ready = (created_at) => ({ event: "ready_for_review", created_at });
+  const queue = fixtureGitHub(t, {
+    "acme/app": { archived: false, prs: [
+      pr(60, { updated: after, events: [ready(after)] }),
+      pr(61, { updated: after, events: [ready(before), { event: "commented", created_at: after }] }),
+      pr(62, { updated: after, draft: true, events: [ready(after)] }),
+      pr(63, { updated: after, author: "reviewer", events: [ready(after)] }),
+      pr(64, { updated: after, author: "other", events: [ready(start)] }),
+      pr(65, { events: [ready(before), ready(after)], reviews: [reviewed("h65")] }),
+    ] },
+    "acme/lib": { archived: false, prs: [pr(66, { updated: after, events: [ready(after)] })] },
+    "acme/old": { archived: true, prs: [pr(67, { updated: after, events: [ready(after)] })] },
+  });
+  const recent = queue("--repo", "acme/app", "--ready-since", start);
+  assert.deepEqual(recent.map((p) => p.number), [65, 60, 64]);
+  assert.equal(recent.find((p) => p.number === 60).readyAt, after);
+  assert.deepEqual(queue("--ready-since", start).map((p) => p.number), [60, 64, 66]);
+  assert.deepEqual(queue("--repo", "acme/app", "--author", "teammate", "--ready-since", start).map((p) => p.number), [65, 60]);
+  assert.deepEqual(queue("--repo", "acme/app", "--mine", "--ready-since", start).map((p) => p.number), [63]);
+});
+
+test("rejects conflicting selectors and an invalid readiness timestamp before contacting GitHub", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pr-review-args-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const args of [["--mine", "--author", "teammate"], ["--ready-since", "yesterday"], ["--ready-since", "2026-11-18"]]) {
+    const run = spawnSync(process.execPath, [queuePath, ...args], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: dir } });
+    assert.equal(run.status, 2, run.stderr);
+    assert.match(run.stderr, /usage:/);
+  }
 });

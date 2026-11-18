@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-// The PRs waiting on your review, in the order a review sitting walks them, printed as JSON so any
-// skill can ask for the queue. With --repo, only that repository's PRs; without it, every repository's.
-// With --mine, the user's own open PRs instead, which the review queue never holds:
-//
-//   queue.mjs [--repo owner/name] [--mine]
-//
-// It reads GitHub through gh's search and REST calls only, so it never spends the GraphQL quota that
-// every agent on the account shares.
-
 import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 
@@ -15,8 +6,12 @@ const gh = (...args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ig
 const json = (...args) => JSON.parse(gh(...args));
 const pages = (endpoint) => json("api", "--paginate", "--slurp", endpoint).flat();
 const same = (a, b) => (a ?? "").toLowerCase() === (b ?? "").toLowerCase();
-// 1000 is the most a search returns.
-const search = (filter) => json("search", "prs", filter, "--state", "open", "--json", "number,repository,isDraft,author", "--limit", "1000");
+const search = (...filters) => json("search", "prs", ...filters, "--state", "open", "--json", "number,repository,isDraft,author", "--limit", "1000");
+const openByRepo = new Map();
+function openIn(repo) {
+  if (!openByRepo.has(repo)) openByRepo.set(repo, pages(`repos/${repo}/pulls?state=open&per_page=100`));
+  return openByRepo.get(repo);
+}
 
 // Open PRs that ask for the user's review or that the user reviewed before.
 function candidates(me, only) {
@@ -30,10 +25,12 @@ function candidates(me, only) {
   return [...found.values()];
 }
 
-// The user's open PRs. Each one waits on the user however they reviewed it, so it counts as requested.
-function own(only) {
-  return search("--author=@me")
-    .filter((p) => !p.isDraft && (!only || same(p.repository.nameWithOwner, only)))
+function selected(only, me, author, since) {
+  const pulls = only
+    ? openIn(only).map((p) => ({ number: p.number, isDraft: p.draft, author: p.user, repository: { nameWithOwner: only } }))
+    : search(...(author ? [`--author=${author}`] : []), ...(since !== undefined ? [`--updated=>=${new Date(since).toISOString().slice(0, 10)}`] : []));
+  return pulls
+    .filter((p) => !p.isDraft && (author ? same(p.author?.login, author) : !same(p.author?.login, me)))
     .map((p) => ({ repo: p.repository.nameWithOwner, number: p.number, requested: true }));
 }
 
@@ -53,9 +50,16 @@ function stacks(open) {
 }
 
 // A PR the user reviewed at its current head, with no new request, is waiting on its author.
-function queueEntry(c, open, shape, me) {
+function queueEntry(c, open, shape, me, since) {
   const pull = open.find((p) => p.number === c.number);
-  if (!pull) return null;
+  if (!pull || pull.draft) return null;
+  let readyAt;
+  if (since !== undefined) {
+    const events = pages(`repos/${c.repo}/issues/${c.number}/timeline?per_page=100`);
+    readyAt = events.filter((e) => e.event === "ready_for_review" && Date.parse(e.created_at) >= since)
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]?.created_at;
+    if (!readyAt) return null;
+  }
   const mine = pages(`repos/${c.repo}/pulls/${c.number}/reviews?per_page=100`)
     .filter((r) => same(r.user?.login, me) && r.state !== "PENDING")
     .sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""));
@@ -66,6 +70,7 @@ function queueEntry(c, open, shape, me) {
     repo: c.repo, number: c.number, url: pull.html_url, title: pull.title, author: pull.user?.login,
     base: pull.base.ref, head: pull.head.sha, size: additions + deletions, files: changed_files,
     returnVisit: mine.length > 0, stackBottom: shape.stackBottom(pull), unblocks: shape.unblocks(pull),
+    ...(readyAt ? { readyAt } : {}),
   };
 }
 
@@ -73,22 +78,28 @@ const walkOrder = (a, b) =>
   b.returnVisit - a.returnVisit || b.stackBottom - a.stackBottom || b.unblocks - a.unblocks || a.size - b.size ||
   a.repo.localeCompare(b.repo) || a.number - b.number;
 
-let args;
+let args, since;
 try {
-  args = parseArgs({ options: { repo: { type: "string" }, mine: { type: "boolean" } } }).values;
+  args = parseArgs({ options: { repo: { type: "string" }, mine: { type: "boolean" }, author: { type: "string" }, "ready-since": { type: "string" } } }).values;
+  if (args.mine && args.author) throw new Error("choose --mine or --author");
+  if (args["ready-since"] !== undefined) {
+    since = Date.parse(args["ready-since"]);
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(args["ready-since"]) || !Number.isFinite(since)) throw new Error("expected an ISO timestamp with timezone");
+  }
 } catch {
-  process.stderr.write("usage: queue.mjs [--repo owner/name] [--mine]\n");
+  process.stderr.write("usage: queue.mjs [--repo owner/name] [--mine | --author login] [--ready-since ISO-timestamp]\n");
   process.exit(2);
 }
 const only = args.repo;
 const me = gh("api", "user", "--jq", ".login");
 const queue = [];
-const wanted = args.mine ? own(only) : candidates(me, only);
+const author = args.author === "@me" || args.mine ? me : args.author;
+const wanted = author || since !== undefined ? selected(only, me, author, since) : candidates(me, only);
 for (const repo of new Set(wanted.map((c) => c.repo))) {
-  const open = pages(`repos/${repo}/pulls?state=open&per_page=100`);
+  const open = openIn(repo);
   // An archived repository is a dropped project, so none of its PRs wait on anyone.
   if (open.some((p) => p.base.repo?.archived)) continue;
   const shape = stacks(open);
-  for (const c of wanted.filter((w) => w.repo === repo)) queue.push(queueEntry(c, open, shape, me));
+  for (const c of wanted.filter((w) => w.repo === repo)) queue.push(queueEntry(c, open, shape, me, since));
 }
 process.stdout.write(`${JSON.stringify(queue.filter(Boolean).sort(walkOrder), null, 2)}\n`);

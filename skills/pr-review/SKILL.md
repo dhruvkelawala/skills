@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a PR or a stack, or the current project's review queue in one sitting, one PR at a time. It owns the review queue, and /pr-review queue starts at its top. /code-review and an independent second opinion find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, asks what to review next or for the review queue, or asks to walk their own open PRs.
+description: Review a PR or a stack, or the current project's review queue in one sitting, one PR at a time. It owns the review queue, and /pr-review queue starts at its top. /code-review and an independent second opinion find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, asks what to review next or for the review queue, or asks to review their own open PRs or PRs by an author.
 compatibility: Requires git and gh.
 ---
 
@@ -8,7 +8,7 @@ compatibility: Requires git and gh.
 
 The reviewers find the problems, and you explain them. On every PR, `/code-review` and an independent second opinion read the change before you write about it. Prefer the other model family for that opinion, with [model-policy](../model-policy/SKILL.md) keeping reviews on the available family during an outage or rate limit. You read everything too, implementation included, and sort what they found. T3 writes the tour as the PR's review guide, which the user reads in the PR panel's Guide tab with each stop's lines in place, and your message in chat is the intro and the wrap-up. The user decides, and nothing reaches GitHub until they say so.
 
-Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue [--mine]]`.
+Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue [--mine | --author <login>]]`. "Review PRs by <author>" starts `queue --author <login>` directly.
 
 For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). Keep using the queue script for its ordering and selection rules.
 
@@ -20,6 +20,7 @@ For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch
 | `<base>..<head>` | The changes in that range |
 | `queue` | A sitting over the current project's queue, from its top |
 | `queue --mine` | A sitting over the user's own open PRs in the current project |
+| `queue --author <login>` | A sitting over that author's ready PRs, including PRs without a review request |
 
 ## The queue
 
@@ -27,13 +28,15 @@ The queue is every open PR waiting on the user's review. `node <this skill's fol
 
 - **In the queue:** PRs that ask for the user's review, and PRs the user reviewed before that have moved since. Drafts, the user's own PRs and archived repositories stay out.
 - **With `--mine`:** the user's own open PRs instead, every one of them, in the same order and with the same entries. Drafts and archived repositories still stay out.
+- **With `--author <login>`:** that author's open, ready PRs instead, regardless of review requests or earlier reviews. It can name the user too. Drafts and archived repositories stay out; use either `--mine` or `--author`.
+- **With `--ready-since <ISO timestamp>`:** only PRs with a GitHub `ready_for_review` event at or after that timestamp that are still open and ready. This finds newly ready PRs without a review request. It accepts the same repository and author selectors, excludes the user's PRs by default, and adds `readyAt` to each entry. Use a timestamp with a timezone, such as `2026-11-18T09:00:00Z`. With `--repo`, it reads the current open PRs directly; without it, GitHub search first narrows candidates by update date.
 - **The order:** return visits first, then stack bottoms (PRs that don't sit on another open PR), then the PR that unblocks the most (the open PRs stacked on it), then the smallest.
 
 Each entry has `repo`, `number`, `url`, `title`, `author`, `base`, `head`, `size`, `files`, `returnVisit`, `stackBottom` and `unblocks`.
 
-A **sitting** is `/pr-review queue`, over the current project's queue, or `/pr-review queue --mine`, over the user's own open PRs there. It runs in one thread, with no time cap.
+A **sitting** walks the selected queue in one thread, with no time cap. At the start of every review session, record its UTC start timestamp and the repository and author selectors. Keep the PRs and heads reviewed during the session for the closing refresh in Report.
 
-1. Read the queue with `--repo` set to the current checkout's repository, from `gh api repos/{owner}/{repo} --jq .full_name`, and with `--mine` for `queue --mine`. When it is empty, say so in one line and stop.
+1. Read the queue with `--repo` set to the current checkout's repository, from `gh api repos/{owner}/{repo} --jq .full_name`, and with the requested `--mine` or `--author` selector. When it is empty, run Report's closing refresh before saying the session is done.
 2. Walk it from the top, one PR at a time, until the user says `stop` or the queue runs out.
 3. The user doesn't see the script's output, so the first PR's review opens with the queue: one table in the queue's order, with a row per PR giving the PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
 
@@ -80,7 +83,7 @@ Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) 
 
    When a job's model can't run, apply model-policy and its `ifUnavailable` on the available family, retaining fresh reviewer contexts. Record the fallback and coverage limit. If neither family can complete a required review, report that gap without claiming prep complete.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
-4. Once Standards, Spec and the second opinion have all reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
+4. Once Standards, Spec and the second opinion have all reported, check each finding against the code at the head, then sort it: a correctness bug, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. For a confirmed P2 correctness bug, check the production path and any feature flag's current state to establish whether it goes live at merge. Record the evidence in the prep record. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
 6. Check the guide with `read_pull_request_guide`, unless item 1 already established there is no guide. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
 7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported with their actual models and any fallback reason, and each finding with its reviewer, priority, `file:line` and how you sorted it. For local reviewers, record `local Agent`, each axis's model, and why T3 delegation was unavailable. A return visit reads it.
@@ -133,13 +136,15 @@ Each stop is one numbered item: the file and lines, the name the lines define (a
 
 **Wrap-up.**
 
-1. **Findings.** The reviewers' P0 and P1 findings and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer, and its file and line. A finding you think is wrong stays here with your reason.
+1. **Findings.** The reviewers' P0 and P1 findings, confirmed P2 correctness bugs that go live at merge, and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer, and its file and line. A finding you think is wrong stays here with your reason.
 2. **Questions for the author.** What neither the reviewers nor the code could settle.
 3. **Verifier.** Its result, when it ran.
 4. **Suggested verdict.** Only after the prep completion gate in step 2 passes, one line with the reason. Choose one of:
    - approve
    - approve with "please fix before <flag> is enabled", for features shipped behind a switch
-   - request changes, only for a P0 or P1, or a change to production authority
+   - request changes, for a P0 or P1, a change to production authority, or a confirmed P2 correctness bug that goes live at merge because no feature flag guards it or its flag is already enabled. State that go-live reason in the verdict line, for example "request changes: P2 loses the saved selection on refresh; this path has no feature flag and ships at merge."
+
+   A P2 style note or missing test alone does not qualify. For a P2 behind a flag confirmed off, use "please fix before <flag> is enabled". When its state is unknown, name that uncertainty and ask the author rather than assume the bug is live.
 5. One line that counts the style and smell notes, such as "4 style and smell notes; say `what else` to see them".
 
 Keep the intro and the wrap-up under about 300 words together, not counting the queue table.
@@ -152,8 +157,10 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 | Word | What you do |
 | --- | --- |
-| `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR from its background prep. Nothing is posted. |
-| "post", "approve and post" or "request changes and post" | Post the review as in step 5, then do the same as `next` |
+| `next` | Record progress, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR from its background prep. |
+| `approve` or `request changes`, with or without "and post" | Record the verdict and follow step 5's confirmation and posting flow. After posting, do the same as `next`. |
+| `post` | Follow step 5 to confirm and post a COMMENT review, then do the same as `next`. |
+| `draft it` or `don't post` | Keep the review unposted, even when the message also names a verdict. Show the draft and wait. |
 | `what else` | List the style and smell notes that were only counted |
 | `verify` | Run the verifier on this PR and add its result to the wrap-up |
 | `how` | Explain one part in full with `/how`, or the whole change with `/explain-diff` |
@@ -195,11 +202,14 @@ What happens next depends on whose PR it is:
 - **The user's own PR** (the PR author equals `gh api user --jq .login`). Each item becomes a fix for the agent that owns the branch, or for you when they ask. Nothing is posted.
 - **Someone else's PR.** Draft one review in the user's voice: a short body that opens with pr-watch's [label](../pr-watch/SKILL.md#the-label), the verifier's result when it ran, and inline comments anchored on added lines.
   - Write like the user: short and direct, with "Nit:", "Non-blocking:" and "Please fix before X is enabled" where they fit.
-  - Show the draft, and post it only on the user's word for this PR: "post" sends it as COMMENT, "approve and post" as APPROVE, and "request changes and post" as REQUEST_CHANGES, through `gh api repos/<owner>/<repo>/pulls/<n>/reviews` with `commit_id` set to the reviewed head. Check the body first with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`.
+  - In Dhruv's sessions, `approve` means record and post APPROVE, and `request changes` means record and post REQUEST_CHANGES. "And post" is optional; `post` alone sends COMMENT. `draft it` or `don't post` overrides posting intent. Other sessions follow their user's posting convention.
+  - Check the draft with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`. Show the exact review, inline comments, PR and verdict in the host's usual confirmation card. In OpenBot use `openbot.ask_ui` with Send, Edit and Keep draft buttons. After Send, post that review once through `gh api repos/<owner>/<repo>/pulls/<n>/reviews`, with `commit_id` set to the reviewed head. Edit revises the draft and presents it again; Keep draft, cancellation or a declined confirmation leaves it unposted. A recorded verdict alone does not mean a review was posted. Report the posted review URL only after GitHub confirms it.
 
 **Complete when** every ledger item is fixed, posted, or dropped by the user.
 
 ## Report
+
+Before ending any session, including an initially empty queue, an exhausted queue or `stop`, re-run the queue with its original repository and author selectors. Then run it again with those selectors and `--ready-since <session-start>`. Combine and deduplicate by repository and PR number; leave out heads already reviewed in this session. Offer the remaining PR links, naming any that became ready during the session. Keep the refreshed queue in its normal order. A user who said `stop` gets the offer only; start no new prep or review. If a refresh fails, report that the closing queue could not be checked.
 
 First remove the review checkouts of PRs that were approved, merged or closed: `git worktree remove "$HOME/.agent/pr-review/<repo>/<n>"`. Keep the checkout of a PR still waiting on changes, for the return visit.
 

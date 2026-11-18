@@ -1,6 +1,6 @@
 // Runs the pr-review skill in headless Claude Code on a teammate's PR, with gh, T3's t3-code MCP server and the
 // autoreview helper faked at the outer boundary. Two chains run side by side. Each one reviews PR #7, says
-// "approve", and then the author either pushes a fix or rebases onto a newer main before the review comes back.
+// "next", and then the author either pushes a fix or rebases onto a newer main before the review comes back.
 // From the repo root: node --test skills/pr-review/evals/pr-review.eval.mjs
 // Needs git, jq, the claude CLI signed in through environment variables (each chain gets its own config dir and
 // HOME), and the outside code-review skill that scripts/sync-skills.mjs installs. Each turn is a live agent run,
@@ -179,9 +179,9 @@ function chain(kind) {
       first,
       back: () =>
         (back ??= first.then(async (visit) => {
-          await turn(c, "approve", "approve", visit.sessionId);
+          await turn(c, "next", "next", visit.sessionId);
           const seen = git(c.work, "rev-parse", "--verify", "-q", `refs/pr-review/${PR}-seen`);
-          if (seen !== visit.head) throw new Error(`${kind}: "approve" left refs/pr-review/${PR}-seen at "${seen}", not ${visit.head}`);
+          if (seen !== visit.head) throw new Error(`${kind}: "next" left refs/pr-review/${PR}-seen at "${seen}", not ${visit.head}`);
           authorMoves(c);
           return turn(c, "return-visit", `/pr-review ${PR}`);
         })),
