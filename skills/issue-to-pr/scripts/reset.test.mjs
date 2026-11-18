@@ -30,8 +30,8 @@ function run(t, header = HEADER, { firstRequest } = {}) {
     mkdirSync(join(dir, "claude", "projects", "worktree"), { recursive: true });
     const lines = [
       { type: "user", message: { content: "resume" } },
-      { type: "assistant", message: { usage: firstRequest } },
-      { type: "assistant", message: { usage: { input_tokens: 9, cache_read_input_tokens: 900000, cache_creation_input_tokens: 9 } } },
+      { type: "assistant", timestamp: "2026-11-18T14:00:00Z", message: { id: "msg_1", usage: firstRequest } },
+      { type: "assistant", timestamp: "2026-11-18T14:00:05Z", message: { id: "msg_2", usage: { input_tokens: 9, cache_read_input_tokens: 900000, cache_creation_input_tokens: 9 } } },
     ];
     writeFileSync(join(dir, "claude", "projects", "worktree", "fresh-session.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
   }

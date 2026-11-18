@@ -14,6 +14,7 @@
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { captureRequests } from "../../../instrumentation/accounting.mjs";
 import { currentSession } from "./observe.mjs";
 import { header, setHeader } from "./run-record.mjs";
 
@@ -56,20 +57,17 @@ async function after(path) {
   return moved.length ? 1 : 0;
 }
 
-// The first request's input in the fresh session's own transcript: uncached input plus cache reads
-// and writes. Any failure reports unavailable.
+// The fresh session's first request, read from its own transcript by the instrumentation's usage
+// adapter. Any failure reports unavailable.
 async function firstRequest() {
   try {
     const session = await currentSession();
-    if (session?.runtime !== "claude") return "unavailable";
-    for (const line of (await readFile(session.transcript_path, "utf8")).split("\n")) {
-      if (!line.includes('"assistant"')) continue;
-      const entry = JSON.parse(line);
-      const usage = entry.type === "assistant" && entry.message?.usage;
-      if (!usage) continue;
-      const total = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].reduce((sum, key) => sum + (usage[key] ?? 0), 0);
-      return `${total} input tokens, ${total <= LIMIT ? "within" : "over"} the ${LIMIT} limit`;
-    }
+    if (!session) return "unavailable";
+    const rows = (await readFile(session.transcript_path, "utf8")).split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const usage = captureRequests(session.runtime, rows, { session: session.session_id, workflow: "reset", attempt: "reset", invocation: "reset", skill: "issue-to-pr" }).find((request) => request.usage)?.usage;
+    if (!usage) return "unavailable";
+    const total = usage.input + (usage.inputIncludesCache ? 0 : (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0));
+    return `${total} input tokens, ${total <= LIMIT ? "within" : "over"} the ${LIMIT} limit`;
   } catch {}
   return "unavailable";
 }
