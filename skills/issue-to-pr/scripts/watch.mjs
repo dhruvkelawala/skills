@@ -10,6 +10,7 @@ import { runOf, SKILL } from './observe.mjs';
 import { captureHook, configuration } from '../../../instrumentation/cli.mjs';
 import { digest } from '../../../instrumentation/contract.mjs';
 import { emit, flush } from '../../../instrumentation/delivery.mjs';
+import { sessionOf, attributeSession } from './attribution.mjs';
 
 const EXECUTION = { 'awaiting-human': 'waiting-human', watching: 'waiting-external', blocked: 'failed', stopped: 'cancelled', merged: 'completed', landed: 'completed', done: 'completed' };
 const FINISHED = new Set(['stopped', 'merged', 'landed', 'done']);
@@ -44,10 +45,9 @@ export async function watch(config, home = homedir()) {
       // A transcript that matched no run keeps its session, so a record that gains its branch later still finds it without a reread.
       const seen = state.transcripts[transcript.path];
       if (seen === transcript.mtime) continue;
-      const session = seen?.mtime === transcript.mtime ? seen.session : await sessionOf(runtime, transcript.path);
+      const session = seen?.mtime === transcript.mtime && seen.session?.version === 1 ? seen.session : await sessionOf(runtime, transcript.path);
       // A session that worked on several runs, such as a stack or a root thread, can't be split between them yet.
-      const matches = session ? runs.filter((r) => r.branch && session.worked.some(([place, branch]) => branch === r.branch && inRepository(place, r.repository))) : [];
-      const run = matches.length === 1 ? matches[0] : null;
+      const run = attributeSession(session, runs);
       if (!run) { state.transcripts[transcript.path] = { mtime: transcript.mtime, session }; continue; }
       const result = await captureHook({ ...outbox(config, run), skillDirectory: SKILL, context: { ...config.context, ...run, session: session.id } }, runtime, { session_id: session.id, transcript_path: transcript.path }).catch(() => ({ status: 'unavailable' }));
       summary.transcripts++;
@@ -70,26 +70,6 @@ export async function watch(config, home = homedir()) {
 // Each run gets its own outbox: delivered requests stay in an outbox so later reads skip them, and they count against its size.
 function outbox(config, run) {
   return { ...config, directory: join(dirname(config.directory), 'runs', digest(run.workflow).slice(0, 16)), maxEvents: 100000, maxBytes: 256 * 1024 * 1024 };
-}
-
-// Which session a transcript belongs to, and each place and branch it worked on together.
-async function sessionOf(runtime, path) {
-  if ((await stat(path)).size > 64 * 1024 * 1024) return null;
-  const rows = (await readFile(path, 'utf8')).split('\n').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
-  if (runtime === 'claude') {
-    const id = rows.find((row) => row.sessionId)?.sessionId;
-    const worked = new Set(rows.filter((row) => row.cwd && row.gitBranch).map((row) => JSON.stringify([row.cwd, row.gitBranch])));
-    return id ? { id, worked: [...worked].map((pair) => JSON.parse(pair)) } : null;
-  }
-  const meta = rows.find((row) => row.type === 'session_meta')?.payload;
-  const place = meta?.git?.repository_url ?? meta?.cwd;
-  return meta?.id ? { id: meta.id, worked: place && meta.git?.branch ? [[place, meta.git.branch]] : [] } : null;
-}
-
-// A repository URL must name the record's repository exactly; a working directory needs the repository's name in its path.
-function inRepository(place, repository) {
-  if (place.includes('://') || place.includes('@')) return place.replace(/\.git$/, '').endsWith('/' + repository) || place.replace(/\.git$/, '').endsWith(':' + repository);
-  return place.split('/').includes(repository.split('/').pop());
 }
 
 async function files(root, extension, since) {

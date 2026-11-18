@@ -144,3 +144,43 @@ test('each run gets its own attempt, and only records directly in a repository f
     assert.ok(!attempts.includes('machine-attempt'));
   } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
 });
+
+test('only an unambiguous run marker in the first user message attributes an off-branch helper', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'skill-watch-'));
+  const spans = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    spans.push(...(JSON.parse(body).resourceSpans?.[0].scopeSpans[0].spans ?? []));
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    for (const n of [1, 2]) await write(join(home, '.agent', 'issue-to-pr', 'shop', `${n}.md`), `issue: ${n}\nrepo: example/shop\nbranch: none\nstage: building\nhead: abc123\ntelemetry_workflow: run-${n}\n`);
+    const cases = [
+      ['verifier', 'issue-to-pr-run: run-1', null],
+      ['two-runs', 'issue-to-pr-run: run-1\nissue-to-pr-run: run-2', null],
+      ['late', 'Review this patch.', 'issue-to-pr-run: run-1'],
+      ['unknown', 'issue-to-pr-run: unknown', null],
+      ['known-and-unknown', 'issue-to-pr-run: run-1\nissue-to-pr-run: unknown', null],
+    ];
+    for (const runtime of ['claude', 'codex']) for (const [name, first, later] of cases) {
+      const id = `${runtime}-${name}`;
+      const user = (text) => runtime === 'claude' ? { type: 'user', message: { role: 'user', content: text } } : { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } };
+      const rows = runtime === 'claude' ? [
+        { type: 'assistant', sessionId: id, cwd: join(home, 'elsewhere'), gitBranch: 't3/isolated', timestamp: '2026-11-18T10:00:00Z', message: { id, usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } },
+      ] : [
+        { type: 'session_meta', payload: { id, cwd: join(home, 'elsewhere'), git: { branch: 't3/isolated' } } },
+        { type: 'event_msg', timestamp: '2026-11-18T10:00:00Z', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 10, output_tokens: 2 } } } },
+      ];
+      rows.splice(1, 0, user(first));
+      if (later) rows.push(user(later));
+      await write(join(home, `.${runtime}`, runtime === 'claude' ? 'projects/shop' : 'sessions', `${id}.jsonl`), jsonl(rows));
+    }
+    const config = { enabled: true, directory: join(home, 'state', 'outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z' };
+    await watch(config, home);
+    const requests = spans.filter((span) => span.name === 'provider.request');
+    const metadata = (span, key) => span.attributes.find((a) => a.key === 'langfuse.observation.metadata.' + key)?.value.stringValue;
+    assert.deepEqual(requests.map((span) => metadata(span, 'session')).sort(), ['claude-verifier', 'codex-verifier']);
+    assert.ok(requests.every((span) => metadata(span, 'workflow') === 'run-1'));
+  } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); }
+});
