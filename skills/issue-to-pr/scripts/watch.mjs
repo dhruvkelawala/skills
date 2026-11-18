@@ -30,7 +30,6 @@ export async function watch(config, home = homedir()) {
   const records = (await files(join(home, '.agent', 'issue-to-pr'), '.md', since)).filter((r) => r.name.split('/').length === 2);
   for (const record of records) {
     const run = await runOf(record.path);
-    runs.push(run);
     for (const id of run.expectedHelpers ?? []) {
       const path = record.path.replace(/\.md$/, `.autoreview-${id}.json`);
       const modified = await stat(path).then((s) => s.mtimeMs, () => null);
@@ -43,14 +42,7 @@ export async function watch(config, home = homedir()) {
       } else summary.unavailable++;
     }
     run.childCoverage = await helperCoverage(config, run);
-    const progress = `${run.stage}@${run.head}`;
-    if (!run.stage || state.records[record.path] === progress) continue;
-    const kind = FINISHED.has(run.stage) ? 'skill.finished' : 'stage';
-    // The record's change time tells a return to an earlier stage apart from a retry of the same transition.
-    const marker = { ...config.context, ...run, kind, eventKey: `${progress}@${Math.floor(record.mtime)}`, execution: EXECUTION[run.stage] ?? 'running', time: new Date(record.mtime).toISOString() };
-    if ((await emit(outbox(config, run), marker)).status !== 'accepted') continue;
-    state.records[record.path] = progress;
-    summary.markers++;
+    runs.push({ ...run, record });
   }
 
   for (const name of await readdir(home)) {
@@ -75,8 +67,18 @@ export async function watch(config, home = homedir()) {
     }
   }
 
-  // Each pass retries every run's outbox; what is still undelivered shows in the summary, which the scheduled job logs.
-  for (const run of runs) {
+  for (const { record, ...run } of runs) {
+    run.childCoverage = await helperCoverage(config, run);
+    const stage = `${run.stage}@${run.head}`;
+    const progress = `${stage}@${run.childCoverage}`;
+    if (run.stage && state.records[record.path] !== progress) {
+      const kind = FINISHED.has(run.stage) ? 'skill.finished' : 'stage';
+      const marker = { ...config.context, ...run, kind, eventKey: `${stage}@${Math.floor(record.mtime)}`, execution: EXECUTION[run.stage] ?? 'running', time: new Date(record.mtime).toISOString() };
+      if ((await emit(outbox(config, run), marker)).status === 'accepted') {
+        state.records[record.path] = progress;
+        summary.markers++;
+      }
+    }
     const delivery = await flush(outbox(config, run));
     summary.pending += delivery.pending ?? 0;
     summary.exhausted += delivery.exhausted ?? 0;

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
@@ -253,7 +253,6 @@ test('autoreview sidecars capture both engines once under the run', async () => 
     const coverage = () => metadata(spans.findLast((span) => span.name === 'stage'), 'childCoverage');
     assert.equal(coverage(), 'partial');
     await write(join(root, '1.autoreview-opinion-claude.json'), sidecar(...cases[1], true));
-    await write(join(root, '1.md'), (await readFile(join(root, '1.md'), 'utf8')).replace('stage: reviewed', 'stage: verified'));
     await watch(config, home);
     assert.equal(coverage(), 'complete');
     spans.length = 0;

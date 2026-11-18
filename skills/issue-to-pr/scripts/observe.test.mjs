@@ -98,9 +98,10 @@ test('helper coverage becomes complete only after every declared helper has capt
   try {
     const record = join(directory, '.agent/issue-to-pr/shop/1.md');
     await mkdir(dirname(record), { recursive: true });
-    await writeFile(record, 'repo: example/shop\nissue: 1\nhead: abc123\nstage: building\ntelemetry_workflow: run-1\n');
+    await writeFile(record, 'repo: example/shop\nissue: 1\nhead: abc123\nstage: done\ntelemetry_workflow: run-1\n');
     const briefs = {};
-    for (const id of ['review-standards', 'verify']) briefs[id] = (await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./helper-brief.mjs', import.meta.url)), record, id === 'verify' ? 'verifier' : 'reviewer', id])).stdout.trim();
+    const brief = async (id, role) => briefs[id] = (await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./helper-brief.mjs', import.meta.url)), record, role, id])).stdout.trim();
+    await brief('review-standards', 'reviewer');
     const config = { enabled: true, directory: join(directory, 'state/outbox'), endpoint: `http://127.0.0.1:${server.address().port}`, publicKey: 'test', secretKey: 'test', since: '2000-01-01T00:00:00Z' };
     const mark = (eventKey) => observe(record, { kind: 'stage', eventKey, childCoverage: 'complete' }, config, {});
     const coverage = () => {
@@ -117,14 +118,19 @@ test('helper coverage becomes complete only after every declared helper has capt
       ...(withUsage ? [{ type: 'assistant', sessionId: id, timestamp: '2026-11-18T10:00:00Z', message: { id, usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }] : []),
     ].map(JSON.stringify).join('\n') + '\n';
     await writeFile(path, rows('review-standards'));
+    await watch(config, directory);
+    assert.equal(coverage(), 'complete', 'the first watcher marker includes receipts from the same pass');
+    await brief('verify', 'verifier');
     await writeFile(path + '-verify.jsonl', rows('verify', false));
     await watch(config, directory);
-    await mark('one-missing');
     assert.equal(coverage(), 'partial');
+    const partial = posts.filter((p) => p.resourceSpans).at(-1).resourceSpans[0].scopeSpans[0].spans[0];
     await writeFile(path + '-verify.jsonl', rows('verify'));
     await watch(config, directory);
-    await mark('all-captured');
     assert.equal(coverage(), 'complete');
+    const complete = posts.filter((p) => p.resourceSpans).at(-1).resourceSpans[0].scopeSpans[0].spans[0];
+    assert.equal(complete.spanId, partial.spanId, 'receipt changes refresh the existing stage observation');
+    assert.equal((await watch(config, directory)).markers, 0, 'unchanged coverage does not emit another marker');
     const noInventory = join(directory, 'unknown.md');
     await writeFile(noInventory, 'repo: example/shop\nissue: 2\nhead: abc123\nstage: building\n');
     await observe(noInventory, { kind: 'stage', eventKey: 'unknown' }, config, {});
