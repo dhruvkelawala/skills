@@ -8,6 +8,7 @@ const USAGE = [
   "       repairs.mjs more <record>",
 ].join("\n");
 const MORE = 10;
+const STRIKES = 3;
 
 function add(path, { commit, fix, priority, asked, problem }) {
   const record = readFileSync(path, "utf8");
@@ -22,6 +23,16 @@ function add(path, { commit, fix, priority, asked, problem }) {
     writeFileSync(path, withLine(record, `- fix ${sha}, asked for, not counted${problemLabel}: ${fix}`));
     console.log(`Fixed: ${fix} (${sha}), as asked, so it doesn't count. Repairs: ${used} of ${budget}.`);
     return 0;
+  }
+  if (problem !== undefined) {
+    const attempts = record.split("\n").filter((line) => {
+      const match = line.match(/^- fix [0-9a-f]{7}, repair \d+ of \d+, problem (\S+): /i);
+      return match?.[1] === problem;
+    });
+    if (attempts.length >= STRIKES) {
+      console.log(`Not recorded: three strikes: ${problem}. The problem failed again after these repairs:\n${attempts.slice(-STRIKES).join("\n")}\nStop and ask for a different approach or "more" for this problem.`);
+      return 1;
+    }
   }
   if (used >= budget) {
     console.log(`Not recorded: the repair budget is spent (${used} of ${budget}), so ${sha} waits unpushed until "more".`);

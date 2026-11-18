@@ -39,6 +39,28 @@ test("a repair records its stable problem key beside the fix", (t) => {
   assert.equal(counter(record), "1/10");
 });
 
+test("the fourth repair of one problem is refused with its three attempts and no write", (t) => {
+  const record = runRecord(t);
+  const flags = ["--problem", "ci/lint"];
+  assert.equal(add(record, sha(20), "a different problem", "--problem", "ci/test").status, 0);
+  assert.equal(add(record, sha(21), "a requested fix", ...flags, "--asked").status, 0);
+  for (let i = 1; i <= 3; i++) {
+    const result = add(record, sha(i), `lint attempt ${i}`, ...flags);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  }
+  const before = readFileSync(record, "utf8");
+  const result = add(record, sha(4), "a fourth lint patch", ...flags);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /three strikes: ci\/lint/);
+  for (let i = 1; i <= 3; i++) {
+    assert.ok(result.stdout.includes(`- fix 000000${i}, repair ${i + 1} of 10, problem ci/lint: lint attempt ${i}`));
+  }
+  assert.doesNotMatch(result.stdout, /a different problem|a requested fix/);
+  assert.equal(readFileSync(record, "utf8"), before);
+  assert.equal(counter(record), "4/10");
+});
+
 for (const priority of ["P2", "P3"]) {
   test(`${priority} alone is deferred without recording a repair`, (t) => {
     const record = runRecord(t);
