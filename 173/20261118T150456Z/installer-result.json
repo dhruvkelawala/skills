@@ -1,0 +1,21 @@
+{
+  "head": "4532efcd28c04ad7e2cbc65cd168da183cf2b4bc",
+  "tree": "7b48bd1f4d05b0894ad4ff792b397797d29d2791",
+  "kind": "Real sync-skills CLI in an isolated HOME, invoked from a Git checkout subdirectory against a local pinned upstream",
+  "command": "cd <fixture-checkout>/skills && node ../scripts/sync-skills.mjs",
+  "before": {
+    "head": "e1eacc9",
+    "exit": 1,
+    "stderr": "sync-skills: grilling: patches may change only pinned regular files",
+    "agentFoldersUntouched": true
+  },
+  "after": {
+    "exit": 0,
+    "summary": "made 8 changes",
+    "installedExecutable": "#!/bin/sh\necho measured\n"
+  },
+  "repeat": {
+    "exit": 0,
+    "stdout": "nothing to change"
+  }
+}

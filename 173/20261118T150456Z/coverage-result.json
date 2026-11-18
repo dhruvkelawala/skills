@@ -1,0 +1,53 @@
+{
+  "head": "4532efcd28c04ad7e2cbc65cd168da183cf2b4bc",
+  "tree": "7b48bd1f4d05b0894ad4ff792b397797d29d2791",
+  "kind": "Synthetic Claude transcripts through the real watcher and live Langfuse API readback",
+  "automaticFreshT3Hook": false,
+  "before": {
+    "status": "watched",
+    "markers": 1,
+    "transcripts": 1,
+    "requests": 0,
+    "unavailable": 0,
+    "pending": 0,
+    "exhausted": 0,
+    "storedCoverage": "partial",
+    "storedRequests": 0
+  },
+  "after": {
+    "status": "watched",
+    "markers": 1,
+    "transcripts": 1,
+    "requests": 1,
+    "unavailable": 0,
+    "pending": 0,
+    "exhausted": 0,
+    "storedCoverage": "complete",
+    "storedRequests": 1,
+    "sourceTokens": 12,
+    "storedTokens": 12,
+    "sameObservationUpdated": true,
+    "storedFinishedObservations": 1
+  },
+  "samePass": {
+    "status": "watched",
+    "markers": 1,
+    "transcripts": 1,
+    "requests": 1,
+    "unavailable": 0,
+    "pending": 0,
+    "exhausted": 0,
+    "storedCoverage": "complete"
+  },
+  "repeated": {
+    "status": "watched",
+    "markers": 0,
+    "transcripts": 0,
+    "requests": 0,
+    "unavailable": 0,
+    "pending": 0,
+    "exhausted": 0
+  },
+  "canaryAbsent": true,
+  "inputOutputAbsent": true
+}
