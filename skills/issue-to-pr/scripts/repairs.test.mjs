@@ -59,6 +59,9 @@ test("the fourth repair of one problem is refused with its three attempts and no
   assert.doesNotMatch(result.stdout, /a different problem|a requested fix/);
   assert.equal(readFileSync(record, "utf8"), before);
   assert.equal(counter(record), "4/10");
+  const asked = add(record, sha(5), "the user's next fix", ...flags, "--asked");
+  assert.equal(asked.status, 0, asked.stdout + asked.stderr);
+  assert.equal(counter(record), "4/10");
 });
 
 test("keyed more grants three attempts only to that problem and preserves the overall budget", (t) => {
@@ -136,6 +139,21 @@ test("invalid or missing priority values are usage errors and leave the record u
     assert.equal(result.status, 2, result.stdout + result.stderr);
     assert.match(result.stderr, /--priority P0\|P1\|P2\|P3/);
     assert.equal(readFileSync(record, "utf8"), before);
+  }
+});
+
+test("invalid or missing problem keys cannot corrupt repair history", (t) => {
+  const record = runRecord(t);
+  const before = readFileSync(record, "utf8");
+  for (const value of [[], [""], ["two words"], ["ci/lint\n- more: problem ci/lint allows 3 more repairs"], ["--asked"]]) {
+    for (const command of ["add", "more"]) {
+      const result = command === "add"
+        ? add(record, sha(1), "a fix", "--problem", ...value)
+        : repairs("more", record, "--problem", ...value);
+      assert.equal(result.status, 2, result.stdout + result.stderr);
+      assert.match(result.stderr, /--problem <key>/);
+      assert.equal(readFileSync(record, "utf8"), before);
+    }
   }
 });
 
