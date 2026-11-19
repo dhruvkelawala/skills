@@ -15,7 +15,7 @@ export async function fixture() {
     CREATE TABLE orchestration_v2_projection_provider_threads (provider_thread_id TEXT PRIMARY KEY, thread_id TEXT, payload_json TEXT NOT NULL);
     CREATE TABLE orchestration_v2_projection_runs (run_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, ordinal INTEGER NOT NULL, completed_at TEXT, payload_json TEXT NOT NULL);
     CREATE TABLE orchestration_v2_projection_subagents (subagent_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, child_thread_id TEXT, origin TEXT NOT NULL);
-    CREATE TABLE orchestration_v2_projection_turn_items (turn_item_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT NOT NULL);
+    CREATE TABLE orchestration_v2_projection_turn_items (turn_item_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT NOT NULL, updated_at TEXT NOT NULL);
   `);
   const spans = [];
   let reject = false;
@@ -48,8 +48,9 @@ export async function fixture() {
     delegate(parent, child) { db.prepare('INSERT INTO orchestration_v2_projection_subagents VALUES (?, ?, ?, ?)').run(`sub:${child}`, parent, child, 'app_owned'); },
     launch(parent, child, toolName = 'mcp__t3-code__t3_thread_launch', status = 'completed') {
       const output = status === 'completed' ? { structuredContent: { threadId: child } } : null;
-      db.prepare('INSERT INTO orchestration_v2_projection_turn_items VALUES (?, ?, ?, ?)').run(`item:${parent}:${child}`, parent, 'dynamic_tool', JSON.stringify({ toolName, status, input: { message: 'SECRET' }, output }));
+      db.prepare('INSERT INTO orchestration_v2_projection_turn_items VALUES (?, ?, ?, ?, ?)').run(`item:${parent}:${child}`, parent, 'dynamic_tool', JSON.stringify({ toolName, status, input: { message: 'SECRET' }, output }), new Date().toISOString());
     },
+    complete(parent, child) { db.prepare("UPDATE orchestration_v2_projection_turn_items SET payload_json = json_set(payload_json, '$.status', 'completed', '$.output', json(?)) WHERE turn_item_id = ?").run(JSON.stringify({ structuredContent: { threadId: child } }), `item:${parent}:${child}`); },
     async write(path, rows) { const full = join(home, path); await mkdir(dirname(full), { recursive: true }); await writeFile(full, rows.map((row) => JSON.stringify(row) + '\n').join('')); return full; },
     async append(path, rows) { await appendFile(join(home, path), rows.map((row) => JSON.stringify(row) + '\n').join('')); },
     async close() { db.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await rm(home, { recursive: true, force: true }); },

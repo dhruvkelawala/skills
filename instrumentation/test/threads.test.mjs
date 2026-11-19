@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { utimes } from 'node:fs/promises';
+import { utimes, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pass } from '../threads/capture.mjs';
 import { claude, codex, fixture, sessionTotals } from './threads-fixture.mjs';
 
@@ -82,5 +83,49 @@ test('each request appears once across reruns, resumed sessions and transcripts 
     assert.equal(generations(f.spans).size, 6);
     assert.equal(sessionTotals(f.spans)[`claude:${original}`]?.requests, 2, 'a later pass does not move copied requests');
     assert.ok(f.spans.length > ownersBefore);
+  } finally { await f.close(); }
+});
+
+test('traces carry the T3 thread, project, branch, lineage, launcher and issue-to-pr workflow', async () => {
+  const f = await fixture();
+  const native = (n) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
+  try {
+    f.project('p1', 'Synthetic project', '/work/synthetic');
+    f.thread({ id: 'root', nativeId: native(0), title: 'Build synthetic issue', branch: 'feat/9-synthetic', worktreePath: '/work/.t3/worktrees/synthetic/feat-9', runs: [['2026-11-19T09:00:00Z', null]] });
+    f.thread({ id: 'launched', nativeId: native(1), title: 'Launched build', createdBy: 'agent', creationSource: 'mcp', runs: [['2026-11-19T09:30:00Z', null]] });
+    f.thread({ id: 'delegated', nativeId: native(2), title: 'Delegated reviewer', createdBy: 'agent', creationSource: 'mcp', lineage: { parentThreadId: 'root', relationshipToParent: 'subagent', rootThreadId: 'root' } });
+    f.thread({ id: 'late', nativeId: native(3), title: 'Late launch' });
+    f.launch('root', 'launched');
+    f.delegate('root', 'delegated');
+    f.launch('root', 'late', 'mcp__t3-code__t3_thread_launch', 'running');
+    await f.write('.agent/issue-to-pr/synthetic/9.md', []);
+    await writeFile(join(f.home, '.agent/issue-to-pr/synthetic/9.md'), 'issue: https://example.invalid/9\nrepo: owner/synthetic\nbranch: feat/9-synthetic\ntelemetry_workflow: wf-9\n\n## Contract\n');
+    for (const n of [0, 1, 2, 3]) await f.write(`.claude-test/projects/-w/${native(n)}.jsonl`, [claude.prompt('2026-11-19T10:00:00Z', `p${n}`), claude.request('2026-11-19T10:00:01Z', `m${n}`)]);
+
+    await pass(f.config(), { home: f.home });
+    const traceOf = (session) => f.spans.findLast((span) => span.attributes['session.id'] === session && span.attributes['langfuse.observation.type'] === 'generation').attributes;
+    const root = traceOf('root');
+    assert.equal(root['langfuse.trace.name'], 'Build synthetic issue');
+    assert.equal(root['langfuse.trace.metadata.title'], 'Build synthetic issue');
+    assert.equal(root['langfuse.trace.metadata.project'], 'Synthetic project');
+    assert.equal(root['langfuse.trace.metadata.branch'], 'feat/9-synthetic');
+    assert.equal(root['langfuse.trace.metadata.worktree'], '/work/.t3/worktrees/synthetic/feat-9');
+    assert.equal(root['langfuse.trace.metadata.lineageRoot'], 'root');
+    assert.equal(root['langfuse.trace.metadata.run'], 'run:root:0');
+    assert.equal(root['langfuse.trace.metadata.workflow'], 'wf-9');
+    const launched = traceOf('launched');
+    assert.equal(launched['langfuse.trace.metadata.launcher'], 'root');
+    assert.equal(launched['langfuse.trace.metadata.creationSource'], 'mcp');
+    assert.equal(launched['langfuse.trace.metadata.workflow'], 'wf-9', 'a launched thread joins its launcher workflow');
+    const delegated = traceOf('delegated');
+    assert.equal(delegated['langfuse.trace.metadata.launcher'], 'root');
+    assert.equal(delegated['langfuse.trace.metadata.lineageParent'], 'root');
+    assert.equal(delegated['langfuse.trace.metadata.lineageRelationship'], 'subagent');
+    assert.equal(traceOf('late')['langfuse.trace.metadata.launcher'], undefined);
+
+    f.complete('root', 'late');
+    await f.append(`.claude-test/projects/-w/${native(3)}.jsonl`, [claude.request('2026-11-19T10:05:00Z', 'm3b')]);
+    await pass(f.config(), { home: f.home });
+    assert.equal(traceOf('late')['langfuse.trace.metadata.launcher'], 'root', 'a launch that finishes after a pass is still found');
   } finally { await f.close(); }
 });

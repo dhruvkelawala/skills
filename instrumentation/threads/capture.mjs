@@ -7,7 +7,8 @@ import { digest } from '../contract.mjs';
 import { durable, locked } from '../delivery.mjs';
 import { toSpan } from './contract.mjs';
 import { Outbox } from './outbox.mjs';
-import { readT3, runAt } from './t3.mjs';
+import { readT3, runAt, threadFacts } from './t3.mjs';
+import { issueToPrRuns } from './workflows.mjs';
 import { adapter, appended, identify, transcripts } from './transcripts.mjs';
 
 export async function pass(config, { home = homedir() } = {}) {
@@ -20,12 +21,14 @@ export async function pass(config, { home = homedir() } = {}) {
     const state = await readFile(statePath, 'utf8').then(JSON.parse, () => ({}));
     state.owners = prune(state.owners ?? {}, since);
     let t3;
-    try { t3 = readT3(config.t3Database); } catch { t3 = readT3(null); summary.t3 = 'unavailable'; }
+    try { t3 = readT3(config.t3Database, state.t3); } catch { t3 = readT3(null, state.t3); summary.t3 = 'unavailable'; }
+    state.t3 = t3.scan;
+    const workflows = await issueToPrRuns(home);
     const outbox = new Outbox(config);
 
     for (const file of await transcripts(home, since)) {
       try {
-        const result = await capture(file, { t3, outbox, since, owners: state.owners });
+        const result = await capture(file, { t3, workflows, outbox, since, owners: state.owners });
         summary.events += result.sent;
         summary.copied += result.copied;
         summary.transcripts++;
@@ -38,9 +41,9 @@ export async function pass(config, { home = homedir() } = {}) {
   });
 }
 
-async function capture(file, { t3, outbox, since, owners }) {
+async function capture(file, { t3, workflows, outbox, since, owners }) {
   const who = await identify(file);
-  const session = sessionOf(file.runtime, who.parentNative ?? who.native, t3);
+  const session = sessionOf(file.runtime, who.parentNative ?? who.native, t3, workflows);
   const read = adapter(file.runtime, {});
   const mine = digest(session.session).slice(0, 12);
   let sent = 0, copied = 0;
@@ -72,8 +75,8 @@ function prune(owners, since) {
 }
 
 // A transcript's session: its T3 thread when T3 knows the native session, otherwise the runtime's own session.
-function sessionOf(runtime, native, t3) {
+function sessionOf(runtime, native, t3, workflows) {
   const thread = t3.native.get(native);
   if (!thread) return { session: `${runtime}:${native}`, t3: false, runtime, nativeSession: native };
-  return { session: thread, t3: true, runtime, nativeSession: native };
+  return { ...threadFacts(t3, thread, workflows), session: thread, t3: true, runtime, nativeSession: native };
 }
