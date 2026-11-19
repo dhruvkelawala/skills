@@ -28,7 +28,7 @@ export async function recount({ home, t3Database, from, to }) {
   }
   files.sort((a, b) => a.born - b.born || a.path.localeCompare(b.path));
 
-  const owner = new Map();   // request -> session that first holds it
+  const owner = new Map();   // request -> [transcript that first holds it, its session]
   const usage = new Map();   // request -> tokens
   for (const file of files) {
     let native = basename(file.path, '.jsonl');
@@ -62,14 +62,14 @@ export async function recount({ home, t3Database, from, to }) {
     const session = threads.get(native) ?? `${file.runtime}:${native}`;
     for (const [id, counts] of requests) {
       const key = `${file.runtime}|${id}`;
-      if (owner.has(key) && owner.get(key) !== session) continue;
-      owner.set(key, session);
+      if (owner.has(key) && owner.get(key)[0] !== file.path) continue;
+      owner.set(key, [file.path, session]);
       usage.set(key, counts.reduce((sum, n) => sum + n, 0));
     }
   }
 
   const totals = {};
-  for (const [key, session] of owner) {
+  for (const [key, [, session]] of owner) {
     totals[session] ??= { requests: 0, tokens: 0 };
     totals[session].requests++;
     totals[session].tokens += usage.get(key);

@@ -73,7 +73,7 @@ async function capture(file, cursor, { t3, workflows, outbox, since, owners, spa
   const progress = fresh ? {} : cursor.progress;
   const session = sessionOf(file.runtime, who.parentNative ?? who.native, t3, workflows);
   const read = adapter(file.runtime, progress, spawns);
-  const mine = digest(session.session).slice(0, 12);
+  const mine = digest(file.path).slice(0, 12);
   let sent = 0, copied = 0;
 
   // A native subagent's transcript joins its parent's session, under the span that started it and in that span's turn.
@@ -86,7 +86,8 @@ async function capture(file, cursor, { t3, workflows, outbox, since, owners, spa
     const run = session.t3 ? runAt(t3, session.session, event.start) : null;
     const span = toSpan(event, { ...session, run, turn: run ? null : event.turn });
     if (!span) return;
-    // The first session to send an observation owns it; a later transcript holding the same request is a copy.
+    // The first transcript to send an observation owns it; a later one holding the same request is a copy,
+    // whether it is a resumed session or a forked subagent in the same session.
     const owner = owners[span.spanId];
     if (owner && owner[0] !== mine) { copied++; return; }
     owners[span.spanId] = [mine, day(event.start)];

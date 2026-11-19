@@ -405,3 +405,23 @@ test('a Claude request keeps its largest counts when its streamed rows interleav
     assert.deepEqual(sessionTotals(f.spans), totals);
   } finally { await f.close(); }
 });
+
+test('a request copied into sibling subagent transcripts of one session is sent once, from the first transcript', async () => {
+  const f = await fixture();
+  const parent = 'f0f0f0f0-0000-4000-8000-000000000001';
+  const pause = () => new Promise((resolve) => setTimeout(resolve, 20));
+  try {
+    await f.write(`.claude-test/projects/-w/${parent}.jsonl`, [claude.request('2026-11-19T10:00:00Z', 'msg-parent')]);
+    await f.write(`.claude-test/projects/-w/${parent}/subagents/agent-first.jsonl`, [claude.request('2026-11-19T10:00:01Z', 'msg-shared', { output_tokens: 500 })]);
+    await pause();
+    // A forked subagent starts with a copy of the shared prefix, here with a lower streamed count.
+    await f.write(`.claude-test/projects/-w/${parent}/subagents/agent-fork.jsonl`, [claude.request('2026-11-19T10:00:01Z', 'msg-shared', { output_tokens: 7 }), claude.request('2026-11-19T10:00:05Z', 'msg-fork')]);
+    const result = await pass(f.config(), { home: f.home });
+    const shared = f.spans.filter((span) => span.spanId === observationId('generation', 'claude', 'msg-shared'));
+    assert.equal(shared.length, 1, 'sent once');
+    assert.equal(JSON.parse(shared[0].attributes['langfuse.observation.usage_details']).output, 500, 'from the transcript created first');
+    assert.equal(result.copied, 1);
+    const totals = await recount({ home: f.home, t3Database: f.database, from: '2026-11-01T00:00:00Z', to: '2026-11-20T00:00:00Z' });
+    assert.deepEqual(totals, sessionTotals(f.spans));
+  } finally { await f.close(); }
+});
