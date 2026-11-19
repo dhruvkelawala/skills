@@ -54,7 +54,23 @@ Stage reports go below the header, appended in order:
 
 Keep earlier passes, so that `/promote` can see a finding that recurs.
 
-The contract lists its criteria under a line that reads `Acceptance criteria:`, one numbered line per criterion, with details such as its surface and capture on indented lines below it. The brief's plan is checked against that list.
+The contract lists its criteria under a line that reads `Acceptance criteria:`, one numbered line per criterion, with details such as its surface and capture on indented lines below it. Then it lists at most six risks under `Risks:`, each on one numbered line with exactly one indented proof line:
+
+```md
+Acceptance criteria:
+1. The saved answer appears after a restart.
+   surface: CLI. capture: a restart transcript.
+
+Risks:
+1. A correction after the first answer overwrites the wrong entry.
+   test: the answer store's public save/read interface.
+2. The Release build loses the saved answer on restart.
+   drive: Save an answer on a phone in Release, restart the app and read it back.
+3. The third-party service rejects the new request format.
+   accepted: Its sandbox cannot exercise this format before merge.
+```
+
+Use `test:` for a risk built red then green in stage 2, `drive:` for exact steps captured in stage 4, or `accepted:` for why it cannot be proven before merge. When none of the five questions in stage 1 applies, write `Risks: none: <reason>`. The brief's plan lists the criteria first, then the risk lines, word for word. A proof belongs to its risk in the build or evidence report; an accepted risk and its reason belong on the recap's `Couldn't check:` line.
 
 A spec's contract lists its tickets instead, under a line that reads `Tickets:`, as `scripts/spec.mjs tickets` prints them: one numbered `#<n> <title>` line per ticket, with its open blockers on an indented `blocked by:` line. The spec's brief plans those tickets, and its recap gives each one a line. `spec.mjs started` adds a `started: #<n> in thread <id>, <UTC time>` line for each build the spec thread starts, and `spec.mjs next` reads those lines and each ticket's record beside this one.
 
