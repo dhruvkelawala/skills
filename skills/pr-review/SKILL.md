@@ -70,7 +70,7 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 ## 2. Prep
 
-Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) is complete only when it contains completed Standards, Spec and second-opinion reports for the current head. If complete, start no reviewer, check its guide as item 6 does, then go to step 3. Otherwise run prep below, retaining completed reports for this head and starting the missing reviews.
+Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) is complete only when it contains completed Standards, Spec and second-opinion reports for the current head. If complete, start no reviewer, check its guide as item 6 does, and complete item 3's presentation check if it is missing for this head, then go to step 3. Otherwise run prep below, retaining completed reports for this head and starting the missing reviews.
 
 1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it. When the guide tools are unavailable or require a T3 thread credential, mark the PR as having no guide and use the chat tour.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
@@ -83,6 +83,9 @@ Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) 
 
    When a job's model can't run, apply model-policy and its `ifUnavailable` on the available family, retaining fresh reviewer contexts. Record the fallback and coverage limit. If neither family can complete a required review, report that gap without claiming prep complete.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
+
+   **Presentation.** When a PR changes what people see, including Slack messages, cards, buttons or app UI, open and inspect the PR's evidence screenshots for the changed states. Judge the presentation yourself: hierarchy, wording, spacing, density and action clarity. Standards, Spec and the second opinion cover code and requirements; their reports do not establish that the result looks good. Record the images opened, which changed states they cover, any known capture revision and your visual findings in the prep record. Identify missing, unreadable or stale evidence and request current screenshots or suggest `try`; keep approval conditional until the changed presentation has been inspected.
+
 4. Once Standards, Spec and the second opinion have all reported, check each finding against the code at the head, then sort it: a correctness bug, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. For a confirmed P2 correctness bug, check the production path and any feature flag's current state to establish whether it goes live at merge. Record the evidence in the prep record. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
 6. Check the guide with `read_pull_request_guide`, unless item 1 already established there is no guide. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
@@ -90,7 +93,7 @@ Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) 
 
 For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
-**Complete when** Standards, Spec and the second opinion have all reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide. Until then, report the pending reviews without a suggested verdict. A single-pass review by this thread never substitutes for either axis.
+**Complete when** Standards, Spec and the second opinion have all reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide. For user-facing changes, record the presentation assessment or its evidence gap too. Until then, report the pending prep without a suggested verdict. A single-pass review by this thread never substitutes for either axis.
 
 ## 3. Walk one PR at a time
 
@@ -109,7 +112,7 @@ Send each PR's review as one message: the intro, then the wrap-up. In a sitting,
 2. What the PR is and why, in a short paragraph of plain English, with one real example that uses real names and values.
 3. One extra line only when something changes how you review: red CI, a claim backed by tests only, a one-way door or no `**Door:**` line, or review churn on an agent-written PR.
    When local reviewers ran, include one line naming their route, actual model and the T3 failure reason.
-4. When the PR changes something a user sees or does and shows no recording of it, only tests, one line suggesting `try`.
+4. For user-facing changes, give your presentation judgment from the opened screenshots in one or two sentences, naming the evidence and the concrete strengths or problems. Put it here in the intro, before any suggested verdict. When presentation evidence is missing, unreadable or stale, say what remains unassessed and suggest current screenshots or `try`.
 
 When the change can't be followed from the intro and the diff, such as a new subsystem, a flow across several parts or a PR over about 2,000 changed lines, follow the message with an `/eli25` page.
 
@@ -137,15 +140,17 @@ Each stop is one numbered item: the file and lines, the name the lines define (a
 **Wrap-up.**
 
 1. **Findings.** The reviewers' P0 and P1 findings, confirmed P2 correctness bugs that go live at merge, and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer, and its file and line. A finding you think is wrong stays here with your reason.
-2. **Questions for the author.** What neither the reviewers nor the code could settle.
+2. **Questions.** Ask the author about facts neither the reviewers nor the code could settle. For an ADR, contract or product decision only Dhruv can make, ask Dhruv and give the suggested verdict for each possible answer in this same message, with its reason. Write one conditional verdict per line beside the question, once prep's reviewer completion gate passes. Keep the decision open until Dhruv answers.
 3. **Verifier.** Its result, when it ran.
-4. **Suggested verdict.** Only after the prep completion gate in step 2 passes, one line with the reason. Choose one of:
+4. **Suggested verdict.** Only after the prep completion gate in step 2 passes, one line with the reason, or refer to the conditional verdict lines beside an unresolved Dhruv-only question. Choose one of:
    - approve
    - approve with "please fix before <flag> is enabled", for features shipped behind a switch
    - request changes, for a P0 or P1, a change to production authority, or a confirmed P2 correctness bug that goes live at merge because no feature flag guards it or its flag is already enabled. State that go-live reason in the verdict line, for example "request changes: P2 loses the saved selection on refresh; this path has no feature flag and ships at merge."
 
    A P2 style note or missing test alone does not qualify. For a P2 behind a flag confirmed off, use "please fix before <flag> is enabled". When its state is unknown, name that uncertainty and ask the author rather than assume the bug is live.
 5. One line that counts the style and smell notes, such as "4 style and smell notes; say `what else` to see them".
+
+**Verdict options.** Before offering alternatives, separate "Fixable in this PR" from "Needs a separate issue" and name what belongs in each. Give each option on its own line, with its action, scope, verdict and reason. Keep conditional verdicts beside their decision question. Filing a separate issue does not clear a merge-blocking finding.
 
 Keep the intro and the wrap-up under about 300 words together, not counting the queue table.
 
@@ -180,7 +185,7 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 ## 4. Return visits
 
-When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Then start and check its guide as prep's items 1 and 6 do. A pure rebase needs a new guide too.
+When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Then start and check its guide as prep's items 1 and 6 do. A pure rebase needs a new guide too. Carry forward a presentation assessment only when its screenshots still cover the changed UI; otherwise repeat prep's item 3 check, including after a pure rebase.
 
 1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
 2. **A pure rebase.** Compute the patch ID as prep does. When it matches a completed prep record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour. Complete any missing reviews in a partial record as step 2 requires before giving a verdict.
