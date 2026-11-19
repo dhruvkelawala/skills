@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdir, readFile, utimes, writeFile } from 'node:fs/promises';
+import { chmod, readdir, readFile, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { backfill, pass } from '../threads/capture.mjs';
 import { recount } from '../threads/recount.mjs';
@@ -366,5 +366,16 @@ test('a pass that cannot read T3 sends nothing and waits, so T3 sessions are nev
     assert.equal(f.spans.length, 0, 'nothing is sent without T3');
     await pass(f.config(), { home: f.home });
     assert.deepEqual(Object.keys(sessionTotals(f.spans)), ['thread-known'], 'the next pass files the request under its thread');
+  } finally { await f.close(); }
+});
+
+test('a recount skips a transcript it can no longer read instead of failing', async () => {
+  const f = await fixture();
+  try {
+    await f.write('.claude-test/projects/-w/dededede-0000-4000-8000-000000000001.jsonl', [claude.request('2026-11-19T10:00:01Z', 'msg-kept')]);
+    const gone = await f.write('.claude-test/projects/-w/dededede-0000-4000-8000-000000000002.jsonl', [claude.request('2026-11-19T10:00:02Z', 'msg-gone')]);
+    await chmod(gone, 0o000);
+    const totals = await recount({ home: f.home, t3Database: f.database, from: '2026-11-01T00:00:00Z', to: '2026-11-20T00:00:00Z' });
+    assert.deepEqual(Object.keys(totals), ['claude:dededede-0000-4000-8000-000000000001']);
   } finally { await f.close(); }
 });

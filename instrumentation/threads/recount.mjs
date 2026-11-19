@@ -35,22 +35,30 @@ export async function recount({ home, t3Database, from, to }) {
     let native = basename(file.path, '.jsonl');
     if (file.runtime === 'claude' && basename(dirname(file.path)) === 'subagents') native = basename(dirname(dirname(file.path)));
     const requests = new Map();
-    for await (const line of createInterface({ input: createReadStream(file.path), crlfDelay: Infinity })) {
-      let row;
-      try { row = JSON.parse(line); } catch { continue; }
-      if (file.runtime === 'codex' && row.type === 'session_meta') native = row.payload?.source?.subagent && row.payload.parent_thread_id ? row.payload.parent_thread_id : row.payload?.id ?? native.slice(-36);
-      const time = Date.parse(row.timestamp);
-      if (!(time >= start && time < end)) continue;
-      if (file.runtime === 'claude' && row.type === 'assistant' && row.message?.id && row.message.usage) {
-        const u = row.message.usage;
-        const seen = requests.get(row.message.id) ?? [0, 0, 0, 0];
-        requests.set(row.message.id, [u.input_tokens, u.output_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map((n, i) => Math.max(seen[i], Number.isSafeInteger(n) ? n : 0)));
+    let named = false;
+    // A transcript that vanished or became unreadable since the scan is left out, as the capture leaves it unread.
+    try {
+      for await (const line of createInterface({ input: createReadStream(file.path), crlfDelay: Infinity })) {
+        let row;
+        try { row = JSON.parse(line); } catch { continue; }
+        // A Codex transcript names its own session in its first session_meta; a fork copies its parent's later on.
+        if (file.runtime === 'codex' && row.type === 'session_meta' && !named) {
+          named = true;
+          native = row.payload?.source?.subagent && row.payload.parent_thread_id ? row.payload.parent_thread_id : row.payload?.id ?? native.slice(-36);
+        }
+        const time = Date.parse(row.timestamp);
+        if (!(time >= start && time < end)) continue;
+        if (file.runtime === 'claude' && row.type === 'assistant' && row.message?.id && row.message.usage) {
+          const u = row.message.usage;
+          const seen = requests.get(row.message.id) ?? [0, 0, 0, 0];
+          requests.set(row.message.id, [u.input_tokens, u.output_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map((n, i) => Math.max(seen[i], Number.isSafeInteger(n) ? n : 0)));
+        }
+        if (file.runtime === 'codex' && row.type === 'token_usage_record' && row.payload?.response_id) {
+          const u = row.payload.usage ?? {};
+          requests.set(row.payload.response_id, [u.input_tokens, u.output_tokens].map((n) => Number.isSafeInteger(n) ? n : 0));
+        }
       }
-      if (file.runtime === 'codex' && row.type === 'token_usage_record' && row.payload?.response_id) {
-        const u = row.payload.usage ?? {};
-        requests.set(row.payload.response_id, [u.input_tokens, u.output_tokens].map((n) => Number.isSafeInteger(n) ? n : 0));
-      }
-    }
+    } catch { continue; }
     if (file.runtime === 'codex' && !native) continue;
     const session = threads.get(native) ?? `${file.runtime}:${native}`;
     for (const [id, counts] of requests) {
