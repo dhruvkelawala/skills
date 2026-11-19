@@ -319,3 +319,20 @@ test('the thread CLI reads only its own configuration, never the pilot one', asy
     assert.equal((await main(['status'], { T3_THREADS_CONFIG: own })).status, 'available');
   } finally { await f.close(); }
 });
+
+test('generations carry the context window: Codex from its own log, Claude from the model', async () => {
+  const f = await fixture();
+  const session = '01a1abab-0000-7000-8000-000000000001';
+  try {
+    await f.write(`.codex-test/sessions/2026/11/19/rollout-w-${session}.jsonl`, [
+      codex.meta('2026-11-19T10:00:00Z', session),
+      { type: 'event_msg', timestamp: '2026-11-19T10:00:00Z', payload: { type: 'task_started', turn_id: 't1', model_context_window: 258400 } },
+      codex.request('2026-11-19T10:00:01Z', 'resp-w'),
+    ]);
+    await f.write('.claude-test/projects/-w/abababab-0000-4000-8000-000000000001.jsonl', [claude.request('2026-11-19T10:00:01Z', 'msg-w')]);
+    await pass(f.config(), { home: f.home });
+    const window = (runtime, source) => f.spans.find((span) => span.spanId === observationId('generation', runtime, source)).attributes['langfuse.observation.metadata.contextWindow'];
+    assert.equal(window('codex', 'resp-w'), '258400');
+    assert.equal(window('claude', 'msg-w'), '1000000');
+  } finally { await f.close(); }
+});

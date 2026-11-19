@@ -120,7 +120,7 @@ function claudeRow(state, spawns) {
         const usage = claudeUsage(message.usage);
         if (state.message?.id === message.id) for (const key of Object.keys(usage)) if (typeof usage[key] === 'number') usage[key] = Math.max(usage[key], state.message.usage[key] ?? 0);
         state.message = { id: message.id, usage };
-        events.push({ kind: 'generation', source: message.id, start: at, end: at, model: state.model, usage, turn: state.turn });
+        events.push({ kind: 'generation', source: message.id, start: at, end: at, model: state.model, contextWindow: claudeWindow(state.model), usage, turn: state.turn });
       }
     }
     if (row.type === 'system' && row.subtype === 'compact_boundary' && row.uuid) {
@@ -129,6 +129,13 @@ function claudeRow(state, spawns) {
     }
     return events;
   };
+}
+
+// Claude transcripts don't log the window, so it comes from the model (claude-api skill, models table cached 2026-11-03).
+function claudeWindow(model = '') {
+  if (/^claude-haiku-4-5/.test(model)) return 200000;
+  if (/^claude-(fable|mythos|opus|sonnet|haiku)-5|^claude-(opus-4-[678]|sonnet-4-6)/.test(model)) return 1000000;
+  return null;
 }
 
 const hasToolResult = (content) => Array.isArray(content) && content.some((block) => block?.type === 'tool_result');
@@ -169,10 +176,12 @@ function codexRow(state, spawns) {
       state.model = p.model ?? state.model;
       state.effort = p.effort ?? p.collaboration_mode?.settings?.reasoning_effort ?? state.effort;
     }
+    if (row.type === 'event_msg' && p.type === 'task_started') state.window = p.model_context_window ?? state.window;
+    if (row.type === 'event_msg' && p.type === 'token_count') state.window = p.info?.model_context_window ?? state.window;
     if (row.type === 'token_usage_record' && p.response_id) {
       const u = p.usage ?? {};
       const usage = { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cached_input_tokens), cacheWrite: null, cacheWrite5m: null, cacheWrite1h: null, reasoning: counter(u.reasoning_output_tokens), inputIncludesCache: true, outputIncludesReasoning: true };
-      events.push({ kind: 'generation', source: p.response_id, start: at, end: at, model: state.model, effort: state.effort, provider: state.provider, usage, turn: p.turn_id ?? state.turn });
+      events.push({ kind: 'generation', source: p.response_id, start: at, end: at, model: state.model, effort: state.effort, provider: state.provider, contextWindow: state.window, usage, turn: p.turn_id ?? state.turn });
       state.requested = true;
       // A compaction's size afterwards is the first request's input after it; it is sent again once known.
       if (state.compaction) {

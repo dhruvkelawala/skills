@@ -61,7 +61,7 @@ Evidence references require `uri`, `sha256`, `head`, `result: pass|fail|unknown`
 
 Provider requests have stable source identities across retries and resume. Claude streaming rows merge by message ID; Codex cumulative counters become deltas and repeated snapshots are ignored. Cache reads and reasoning remain subsets where the runtime defines them that way. Inclusive totals use unique descendant requests. Exclusive ownership remains null for ambiguous allocation; child coverage remains explicit. Measured totals are known subtotals when failed requests expose no usage; `unknownUsage` and child coverage qualify them. Usage keys use Langfuse's price names (`input_cache_read`, `input_cache_creation_5m`, `input_cache_creation_1h`, `output_reasoning`), so its built-in model prices cover cache and reasoning tokens. Token counters are measured; backend calculated costs are estimates at list price, not subscription charges.
 
-The source allowlist exports only contract identity, enums, hashes, counters, artifact/source references and gate metadata. Prompts, source text, command arguments, tool results and error bodies never enter the persistent outbox or network payload. There is no content-capture option in this pilot. References are intentional metadata and must be safe to share; credentials, query strings and URL fragments are rejected. Keep raw transcripts private.
+The source allowlist exports only contract identity, enums, hashes, counters, artifact/source references and gate metadata. Prompts, source text, command arguments, tool results and error bodies never enter the persistent outbox or network payload. The general thread capture below has its own, wider allowlist, which names every field it may send. There is no content-capture option in this pilot. References are intentional metadata and must be safe to share; credentials, query strings and URL fragments are rejected. Keep raw transcripts private.
 
 Hook capture submits one acceptance batch under one outbox lock. Delivery reads the retained records once and tracks pending count and bytes as the batch advances. Repeating an acknowledged transcript therefore avoids a filesystem scan for every request. The single-event emitter uses the same acceptance rules.
 
@@ -79,6 +79,46 @@ For an execution-time report, pass an array of contract events to `summarize` fr
 ```sh
 node --input-type=module -e 'import {readFileSync} from "node:fs"; import {summarize} from "./instrumentation/workflow.mjs"; console.log(JSON.stringify(summarize(JSON.parse(readFileSync(process.argv[1])), {head:process.argv[2]})))' <metadata-events.json> <current-head>
 ```
+
+## General thread capture
+
+`threads/` sends every Claude and Codex session on the machine, joined to T3's thread data, to a Langfuse project of its own under the schema `t3-thread/v1`. The pilot above keeps its project, traces and queries. Join the two by the issue-to-pr `workflow` field on thread traces.
+
+In Langfuse a session is one T3 thread, or `claude:<id>` / `codex:<id>` with `t3: false` for a session T3 doesn't know. A trace is one T3 run, or one user prompt for sessions outside T3. Each provider request is a generation, each tool call a span, and each compaction, provider handoff or API error an event. A native subagent's requests sit under the span that started it, in its parent's session.
+
+Configure it with a private mode-0600 file named by `T3_THREADS_CONFIG`, separate from the pilot's:
+
+```json
+{
+  "enabled": true,
+  "directory": "/absolute/private/threads-outbox",
+  "endpoint": "http://127.0.0.1:3307",
+  "publicKey": "<thread project public key>",
+  "secretKey": "<thread project secret key>",
+  "since": "<ISO 8601 start of capture>",
+  "t3Database": "/absolute/path/to/statev2.sqlite"
+}
+```
+
+```sh
+T3_THREADS_CONFIG=<private-config.json> node instrumentation/threads/cli.mjs pass
+T3_THREADS_CONFIG=<private-config.json> node instrumentation/threads/cli.mjs backfill 2026-10-20T00:00:00Z
+T3_THREADS_CONFIG=<private-config.json> node instrumentation/threads/cli.mjs recount <from> <to>
+T3_THREADS_CONFIG=<private-config.json> node instrumentation/threads/cli.mjs report <from> <to>
+T3_THREADS_CONFIG=<private-config.json> node instrumentation/threads/cli.mjs models
+T3_THREADS_CONFIG=<private-config.json> node instrumentation/threads/cli.mjs status
+```
+
+A pass reads the transcripts under every `~/.claude*/projects` and `~/.codex*/sessions` folder changed since `since`, and T3's database read-only. Each transcript has a cursor, the byte offset of its last complete line plus the adapter state later lines need, so a pass reads only what was appended. A pass stops opening transcripts after `budgetMs` (default 4 minutes) and leaves the rest, counted as `deferred`, for the next. It reports `pending`, `exhausted` and `unavailable` as the pilot does, plus `copied` for requests skipped because an earlier session owns them. `backfill` is one pass from a date with no time budget. It posts batches as it reads, so the outbox stays small. Rows older than `retentionDays` (default 45) are never sent.
+
+A request's identity is its provider request ID, never the session, so a resumed or forked session that copies earlier history sends nothing twice: the session whose transcript was created first owns the request. Delivery writes up to `batchSpans` (default 500) spans per atomic, fsynced batch file and posts each batch as one OTLP request. It retries with the pilot's backoff and marks a batch exhausted after eight failures. `recount` counts tokens per session from the same transcripts with separate code, to check a backfill. `models` adds the Fable 5.2 price, which Langfuse 4.72 lacks.
+
+The thread capture sends these fields and drops any other:
+
+- Session and trace fields: `session`, `t3`, `runtime`, `nativeSession`, `title`, `project`, `projectId`, `branch`, `worktree`, `providerInstance`, `interactionMode`, `runtimeMode`, `createdBy`, `creationSource`, `lineageParent`, `lineageRoot`, `lineageRelationship`, `launcher`, `workflow`, `run`, `turn`
+- Observation fields: `kind`, `name`, `model`, `effort`, `provider`, `contextWindow`, `error`, `trigger`, `preTokens`, `postTokens`, `childSession`, `childThread`
+
+It also sends token usage under Langfuse's price keys, and each observation's start and end time. Thread titles, project names, branch names, worktree paths and tool names leave the machine; that goes beyond the pilot's rule. Prompts, replies, tool input and output, command arguments, file contents and error bodies never do, and the adapters never read those fields. Roles such as orchestrator are left to queries, from these raw facts.
 
 ## Disable and clean up
 
