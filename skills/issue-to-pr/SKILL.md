@@ -189,12 +189,12 @@ Repairs made after the last pass, here or in a later stage, appear in the PR as 
 ## 4. Verify and prove
 
 1. If the head changed since the build's `/verify`, run `/verify` in full mode again. On red, record the repair with `--problem <stable check key>` and run it again. Apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch when that key fails again after using its allowed attempts, including failures found while capturing evidence or at the final gate. On incomplete, list what could not run for the PR body.
-2. Prove each criterion by running the feature. Launch the surface the way `EVIDENCE.md` says, drive the behaviour the criterion names, and capture it at the current head: a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair when existing behaviour changed.
+2. Prove each criterion by running the feature. Launch the surface the way `EVIDENCE.md` says, drive the behaviour the criterion names, and capture it at the current head: a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair when existing behaviour changed. Run each `drive:` risk's exact steps and capture it the same way.
 3. Publish the captures with `<skills-dir>/evidence/scripts/publish-evidence.sh --repo <owner/repo> --label <issue> <files>`. Keep each returned link with the head it was captured at.
-4. A criterion without a capture needs an exemption quoted word for word from `EVIDENCE.md`, and its red and green lines are then its proof. A criterion with neither a link nor a quoted exemption stops the run as `blocked: evidence`, with the reason the capture failed.
+4. A criterion without a capture needs an exemption quoted word for word from `EVIDENCE.md`, and its red and green lines are then its proof. A criterion with neither a link nor a quoted exemption stops the run as `blocked: evidence`, with the reason the capture failed. Account for every risk too: the build report's red and green lines for `test:`, a published capture for `drive:`, or the contract's `accepted:` reason. A risk without proof or an `accepted:` reason also stops the run as `blocked: evidence`.
 5. Full lane only: run `/review-ready` in final-gate mode over `<base_sha>...HEAD`. Fix a concrete violation as a repair, and record an intentional exception for the PR body.
 
-**Complete when:** `/verify` is green or incomplete at the current head, every criterion has a published link or a quoted exemption, and in the full lane review-ready has no open concrete violation.
+**Complete when:** `/verify` is green or incomplete at the current head, every criterion has a published link or a quoted exemption, every risk has proof or an `accepted:` reason, and in the full lane review-ready has no open concrete violation.
 
 ## 5. Publish
 
