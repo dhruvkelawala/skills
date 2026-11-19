@@ -13,6 +13,9 @@ import { abandoned, adapter, appended, identify, transcripts } from './transcrip
 
 const DAY = 86400000;
 
+// A backfill is one pass from `from` without a time budget. Its spans stream through the outbox as it reads.
+export const backfill = (config, { home = homedir(), from }) => pass({ ...config, since: from, budgetMs: Infinity }, { home });
+
 // A pass stops opening transcripts once `budgetMs` has passed, so it fits the 5-minute schedule; the rest wait for the next.
 // Each transcript has a cursor, so a pass reads only what was appended since the last one.
 export async function pass(config, { home = homedir() } = {}) {
@@ -47,6 +50,7 @@ export async function pass(config, { home = homedir() } = {}) {
         summary.copied += result.copied;
         summary.transcripts++;
       } catch { summary.unavailable++; }
+      if ((await outbox.batches()).length >= (config.flushAt ?? 20)) await outbox.deliver();
     }
     state.cursors = cursors;
     await outbox.seal();

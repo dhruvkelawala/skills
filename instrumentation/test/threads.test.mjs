@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pass } from '../threads/capture.mjs';
+import { backfill, pass } from '../threads/capture.mjs';
+import { recount } from '../threads/recount.mjs';
 import { observationId } from '../threads/contract.mjs';
 import { claude, codex, fixture, sessionTotals } from './threads-fixture.mjs';
 
@@ -273,5 +274,32 @@ test('a steady-state pass reads only what was appended, carries turn state acros
     assert.ok(hurried.deferred >= 1, 'transcripts past the budget wait for the next pass');
     await pass(f.config(), { home: f.home });
     assert.ok(f.spans.some((span) => span.spanId === observationId('generation', 'claude', 'msg-late')));
+  } finally { await f.close(); }
+});
+
+test('a backfill streams through a small outbox, and its per-thread totals equal an independent recount', async () => {
+  const f = await fixture();
+  const from = '2026-10-20T00:00:00Z', to = '2026-11-19T12:00:00Z';
+  const ids = { t3: '12121212-1212-4212-8212-121212121212', resumed: '13131313-1313-4313-8313-131313131313', codex: '01a1ffff-0000-7000-8000-000000000001', codexChild: '01a1ffff-0000-7000-8000-000000000002' };
+  try {
+    f.thread({ id: 'thread-t3', nativeId: ids.t3, runs: [['2026-10-25T00:00:00Z', null]] });
+    const history = [claude.prompt('2026-10-19T23:00:00Z', 'p0'), claude.request('2026-10-19T23:00:01Z', 'before-window', { output_tokens: 999 }), claude.prompt('2026-10-25T10:00:00Z', 'p1')];
+    for (let n = 0; n < 6; n++) history.push(claude.request(`2026-10-25T10:00:0${n}Z`, `msg-${n}`, { output_tokens: 5 + n }), claude.request(`2026-10-25T10:00:0${n}Z`, `msg-${n}`, { output_tokens: 50 + n }));
+    await f.write(`.claude-test/projects/-w/${ids.t3}.jsonl`, history);
+    await f.write(`.claude-test/projects/-w/${ids.t3}/subagents/agent-b1.jsonl`, [claude.request('2026-10-25T10:01:00Z', 'msg-sub', { input_tokens: 7 })]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await f.write(`.claude-test/projects/-w/${ids.resumed}.jsonl`, [...history, claude.request('2026-11-02T10:00:00Z', 'msg-new')]);
+    await f.write(`.codex-test/sessions/2026/11/10/rollout-g-${ids.codex}.jsonl`, [codex.meta('2026-11-10T10:00:00Z', ids.codex), codex.request('2026-11-10T10:00:01Z', 'resp-1', 't1', { input_tokens: 4321 }), codex.request('2026-11-10T10:00:02Z', 'resp-2')]);
+    await f.write(`.codex-test/sessions/2026/11/10/rollout-h-${ids.codexChild}.jsonl`, [codex.meta('2026-11-10T10:00:03Z', ids.codexChild, { source: { subagent: { other: 'guardian' } }, parent_thread_id: ids.codex }), codex.request('2026-11-10T10:00:04Z', 'resp-child', 't9', { output_tokens: 77 })]);
+
+    const result = await backfill(f.config({ since: '2026-11-15T00:00:00Z', batchSpans: 2, maxBatches: 3, flushAt: 1 }), { home: f.home, from });
+    assert.equal(result.deferred, 0, 'a backfill delivers as it goes instead of filling the outbox');
+    assert.deepEqual([result.pending, result.exhausted, result.unavailable], [0, 0, 0]);
+
+    const expected = await recount({ home: f.home, t3Database: f.database, from, to });
+    assert.deepEqual(sessionTotals(f.spans), expected);
+    assert.equal(expected['thread-t3'].requests, 7, 'six requests streamed in two rows each, plus the subagent request');
+    assert.equal(expected[`claude:${ids.resumed}`].requests, 1, 'copied history counts once');
+    assert.equal(expected[`codex:${ids.codex}`].requests, 3, 'a Codex subagent counts in its parent');
   } finally { await f.close(); }
 });
