@@ -34,9 +34,10 @@ Reviewed: <source-review passes and their result; extra opinion completed, inten
 
 ### Criteria
 
-| Criterion | Commit | Test | Evidence |
+| Criterion or risk | Commit | Test | Evidence |
 | --- | --- | --- | --- |
 | <criterion> | `<short sha>` | `<test name>` | [capture](<link>), or exempt |
+| <risk> | `<short sha, for test:>` | `<test name, for test:>` | [drive capture](<link>), red/green proof, or accepted: <reason> |
 
 ```text
 <per criterion: the red line before the change and the green line at head>
@@ -93,6 +94,7 @@ node <issue-to-pr>/scripts/pr-body.mjs < <body file>
 ## Rules
 
 - Each criterion has a link to a capture of the feature running, in Evidence or in the Criteria table, or a quoted exemption. Test output alone is the proof only for an exempt criterion.
+- Each risk has a row too: red and green proof for `test:`, a published capture for `drive:`, or its `accepted:` reason. Include drive-risk links in the recap's `Evidence:` line.
 - The top tier names no commit. SHAs, the base and the head, earlier builds and review rounds, red and green lines, log links and verifier output go in `<details>`.
 - Alt text says what the reader sees in the capture, such as "The polaroid fading in with the shared photo already in it".
 - The verification table lists every command `/verify` found, including the ones that could not run.

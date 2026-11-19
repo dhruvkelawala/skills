@@ -60,7 +60,7 @@ When the run stops, post the recap: the result first, then one line each for wha
     - Built: <what changed, as a user sees it>
     - Review: <the passes that ran and what they found; extra opinion completed, skipped with reason, or incomplete, and later repairs not re-reviewed>
     - Verifier: <its verdict and the rule B reason it ran, or skipped and why>
-    - Evidence: <a link for each criterion, or its exemption>
+    - Evidence: <criterion captures or exemptions, and each drive: risk's capture>
     - Couldn't check: <each accepted: risk and its reason, other checks automation could not run, or nothing>
     - Next: <the one thing to do next>
 
@@ -242,7 +242,7 @@ This thread watches its own PR, and T3 wakes it when the PR changes.
 Run this stage once stage 6 records anything but `watching`.
 
 1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, clean up as [on merge](references/pr-thread.md#on-merge) says.
-2. **One look at later product changes.** Before this handoff, compare `last_reviewed_tree` with `HEAD^{tree}`. For an older record, recover the actual reviewed basis from its review reports. Inspect the delta and record a skip when the trees match or it changes only tests, docs or config.
+2. **One look at later product changes.** At `ready` or `awaiting-human`, compare `last_reviewed_tree` with `HEAD^{tree}` before this handoff. For an older record, recover the actual reviewed basis from its review reports. Inspect the delta and record a skip when the trees match or it changes only tests, docs or config. At `blocked`, retain the blocker and its budget limits.
 
    When product code changed, run one `/code-review` over `git diff <last_reviewed_tree> HEAD^{tree}`, with a single fresh reviewer covering both standards and spec, including the risk list. Use the existing `reviewers` job, helper attribution and model-policy routing. Review all the later changes together, at most once per handoff. Record the reviewed head/tree and findings as `handoff_review`, and advance the reviewed basis only to that reviewed head/tree. Apply stage 3's finding priorities, repair budget and three-strikes rule. An incomplete review blocks the handoff.
 
@@ -251,7 +251,7 @@ Run this stage once stage 6 records anything but `watching`.
 4. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
    1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
    2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
-   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
+   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 3 when rule B covers the PR, and confirms the merge.
    4. Once it merged, record the merge commit and clean up as [on merge](references/pr-thread.md#on-merge) says. Otherwise record `ready` with the blocker ship reports.
 
    Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
