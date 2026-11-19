@@ -36,7 +36,9 @@ export class Outbox {
     return (await this.batches()).length >= this.c.maxBatches;
   }
 
-  // Posts due batches until the deadline. A batch leaves the outbox only when the backend accepts every span.
+  // Posts batches oldest first until the deadline, and stops at the first one that waits or fails: Langfuse keeps the
+  // version of a span it receives last, so a newer batch must never land before an older one still to be retried.
+  // A batch leaves the outbox only when the backend accepts every span.
   async deliver(deadline = Date.now() + this.c.timeoutMs) {
     const c = this.c;
     const endpoint = new URL('/api/public/otel/v1/traces', c.endpoint);
@@ -47,7 +49,8 @@ export class Outbox {
       if (Date.now() >= deadline) break;
       const path = join(c.directory, name);
       const batch = JSON.parse(await readFile(path, 'utf8'));
-      if (batch.exhausted || batch.next > Date.now()) continue;
+      if (batch.exhausted) continue;
+      if (batch.next > Date.now()) break;
       let ok = false;
       try {
         const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Basic ' + Buffer.from(c.publicKey + ':' + c.secretKey).toString('base64') }, body: JSON.stringify(otlp(batch.spans)), redirect: 'error', signal: AbortSignal.timeout(Math.max(1, Math.min(c.timeoutMs, deadline - Date.now()))) });
@@ -57,6 +60,7 @@ export class Outbox {
       if (ok) { await unlink(path); delivered += batch.spans.length; continue; }
       const attempts = batch.attempts + 1;
       await durable(path, { ...batch, attempts, next: Date.now() + Math.min(60000, c.retryMs * 2 ** attempts), exhausted: attempts >= c.maxAttempts });
+      break;
     }
     return delivered;
   }

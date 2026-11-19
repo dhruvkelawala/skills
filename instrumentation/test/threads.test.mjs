@@ -451,3 +451,19 @@ test('a Codex session moved to archived_sessions is still captured and recounted
     assert.deepEqual(totals, sessionTotals(f.spans));
   } finally { await f.close(); }
 });
+
+test('a retried batch never lands after a newer version of the same request', async () => {
+  const f = await fixture();
+  try {
+    const path = '.claude-test/projects/-w/f2f2f2f2-0000-4000-8000-000000000002.jsonl';
+    await f.write(path, [claude.request('2026-11-19T10:00:01Z', 'msg-streamed', { output_tokens: 35 })]);
+    f.reject = true;
+    await pass(f.config(), { home: f.home });
+    await f.append(path, [claude.request('2026-11-19T10:00:02Z', 'msg-streamed', { output_tokens: 319 })]);
+    f.reject = 1;
+    await pass(f.config(), { home: f.home });
+    await pass(f.config(), { home: f.home });
+    const sent = f.spans.filter((span) => span.spanId === observationId('generation', 'claude', 'msg-streamed'));
+    assert.equal(JSON.parse(sent.at(-1).attributes['langfuse.observation.usage_details']).output, 319, 'Langfuse keeps the version it received last, so that must be the newest');
+  } finally { await f.close(); }
+});

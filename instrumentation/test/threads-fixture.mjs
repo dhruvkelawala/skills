@@ -24,7 +24,8 @@ export async function fixture() {
     let raw = '';
     for await (const chunk of req) raw += chunk;
     bodies.push(raw);
-    if (reject) { res.writeHead(503, { 'content-type': 'application/json' }); res.end('{}'); return; }
+    // `reject` is true to fail every post, or a number of posts to fail before the collector recovers.
+    if (reject) { if (typeof reject === 'number') reject--; res.writeHead(503, { 'content-type': 'application/json' }); res.end('{}'); return; }
     for (const resource of JSON.parse(raw).resourceSpans ?? []) {
       for (const scope of resource.scopeSpans) for (const span of scope.spans) {
         spans.push({ ...span, raw: JSON.stringify(span), attributes: Object.fromEntries(span.attributes.map(({ key, value }) => [key, value.stringValue])) });
