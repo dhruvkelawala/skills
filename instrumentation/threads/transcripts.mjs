@@ -68,18 +68,54 @@ export async function* appended(path, offset) {
 }
 
 // An adapter turns rows into events and keeps what later rows need in `state`, which the cursor saves.
-export function adapter(runtime, state) {
-  return runtime === 'claude' ? claudeRow(state) : codexRow(state);
+// `spawns` is shared across transcripts: the turn each native subagent was started in, keyed by what its own transcript names.
+export function adapter(runtime, state, spawns = {}) {
+  const read = runtime === 'claude' ? claudeRow(state, spawns) : codexRow(state, spawns);
+  state.tools ??= {};
+  return (row) => {
+    if (Number.isFinite(Date.parse(row.timestamp))) { state.first ??= row.timestamp; state.last = row.timestamp; }
+    return read(row);
+  };
 }
 
-function claudeRow(state) {
+// Tool calls still open a day after the transcript last moved were interrupted; they close where they started.
+export function abandoned(state) {
+  const events = [];
+  for (const [source, open] of Object.entries(state.tools ?? {})) {
+    if (Date.parse(state.last) - Date.parse(open.start) < 86400000) continue;
+    events.push({ kind: 'tool', source, name: open.name, start: open.start, end: open.start, turn: open.turn });
+    delete state.tools[source];
+  }
+  return events;
+}
+
+const SPAWNING_TOOLS = new Set(['Agent', 'Task']);
+
+function claudeRow(state, spawns) {
   return (row) => {
     const events = [];
     const at = row.timestamp;
-    if (row.type === 'user' && !hasToolResult(row.message?.content)) state.turn = row.promptId ?? row.uuid ?? state.turn;
+    const content = row.message?.content;
+    if (row.type === 'user' && !hasToolResult(content)) state.turn = row.promptId ?? row.uuid ?? state.turn;
+    if (row.type === 'user' && Array.isArray(content)) {
+      for (const block of content) {
+        const open = block?.type === 'tool_result' && state.tools[block.tool_use_id];
+        if (!open) continue;
+        delete state.tools[block.tool_use_id];
+        events.push({ kind: 'tool', source: block.tool_use_id, name: open.name, start: open.start, end: at, error: block.is_error === true, turn: open.turn });
+      }
+    }
+    if (row.type === 'assistant' && row.isApiErrorMessage && row.uuid) events.push({ kind: 'api-error', source: row.uuid, start: at, end: at, turn: state.turn });
     if (row.type === 'assistant') {
       const message = row.message ?? {};
       if (message.model && message.model !== '<synthetic>') state.model = message.model;
+      // Streaming writes one row per content block, so a tool call can repeat; only its first sighting opens it.
+      for (const block of Array.isArray(message.content) ? message.content : []) {
+        if (block?.type !== 'tool_use' || !block.id || state.tools[block.id] || state.seen?.includes(block.id)) continue;
+        state.tools[block.id] = { name: block.name, start: at, turn: state.turn };
+        state.seen = [...(state.seen ?? []).slice(-99), block.id];
+        if (SPAWNING_TOOLS.has(block.name)) spawns[block.id] = { turn: state.turn, day: Math.floor(Date.parse(at) / 86400000) };
+      }
       if (message.id && message.usage) {
         const usage = claudeUsage(message.usage);
         if (state.last?.id === message.id) for (const key of Object.keys(usage)) if (typeof usage[key] === 'number') usage[key] = Math.max(usage[key], state.last.usage[key] ?? 0);
@@ -108,11 +144,25 @@ function claudeUsage(u) {
   };
 }
 
-function codexRow(state) {
+// Codex logs each finished tool call as an item with its own start and end.
+const CODEX_TOOLS = {
+  CommandExecution: () => 'exec', McpToolCall: (item) => `${item.server}.${item.tool}`, FileChange: () => 'apply_patch',
+  CollabAgentToolCall: (item) => item.tool, WebSearch: () => 'web_search', ImageView: () => 'view_image', Extension: (item) => item.kind,
+};
+
+function codexRow(state, spawns) {
   return (row) => {
     const events = [];
     const at = row.timestamp;
     const p = row.payload ?? {};
+    if (row.type === 'event_msg' && p.type === 'item_completed' && p.item?.id) {
+      const item = p.item;
+      const name = CODEX_TOOLS[item.type]?.(item);
+      const time = (ms) => Number.isFinite(ms) ? new Date(ms).toISOString() : at;
+      if (name) events.push({ kind: 'tool', source: item.id, name, start: time(p.started_at_ms), end: time(p.completed_at_ms), error: item.status === 'failed', turn: p.turn_id ?? state.turn });
+      if (item.type === 'SubAgentActivity' && item.agent_thread_id) spawns[item.agent_thread_id] = { turn: p.turn_id ?? state.turn, day: Math.floor(Date.parse(at) / 86400000) };
+    }
+    if (row.type === 'event_msg' && ['error', 'stream_error'].includes(p.type)) events.push({ kind: 'api-error', source: `${state.turn}:${at}`, start: at, end: at, turn: state.turn });
     if (row.type === 'session_meta') state.provider = p.model_provider ?? state.provider;
     if (row.type === 'turn_context') {
       state.turn = p.turn_id ?? state.turn;

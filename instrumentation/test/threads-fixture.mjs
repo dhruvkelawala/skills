@@ -17,11 +17,12 @@ export async function fixture() {
     CREATE TABLE orchestration_v2_projection_subagents (subagent_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, child_thread_id TEXT, origin TEXT NOT NULL);
     CREATE TABLE orchestration_v2_projection_turn_items (turn_item_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT NOT NULL, updated_at TEXT NOT NULL);
   `);
-  const spans = [];
+  const spans = [], bodies = [];
   let reject = false;
   const server = createServer(async (req, res) => {
     let raw = '';
     for await (const chunk of req) raw += chunk;
+    bodies.push(raw);
     if (reject) { res.writeHead(503, { 'content-type': 'application/json' }); res.end('{}'); return; }
     for (const resource of JSON.parse(raw).resourceSpans ?? []) {
       for (const scope of resource.scopeSpans) for (const span of scope.spans) {
@@ -35,7 +36,7 @@ export async function fixture() {
   const endpoint = `http://127.0.0.1:${server.address().port}`;
 
   return {
-    home, database, spans, endpoint,
+    home, database, spans, bodies, endpoint,
     set reject(value) { reject = value; },
     config: (extra = {}) => ({ enabled: true, directory: join(home, 'outbox'), endpoint, publicKey: 'test', secretKey: 'test', since: '2026-11-01T00:00:00Z', t3Database: database, retryMs: 0, ...extra }),
     project(id, title, root) { db.prepare('INSERT INTO projection_projects VALUES (?, ?, ?)').run(id, title, root); },

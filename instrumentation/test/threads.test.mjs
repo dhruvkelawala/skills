@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { utimes, writeFile } from 'node:fs/promises';
+import { readdir, readFile, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pass } from '../threads/capture.mjs';
+import { observationId } from '../threads/contract.mjs';
 import { claude, codex, fixture, sessionTotals } from './threads-fixture.mjs';
 
 const CLAUDE_SESSION = '11111111-1111-4111-8111-111111111111';
@@ -162,5 +163,80 @@ test('compactions arrive as events with trigger and token sizes, and handoffs st
     const handoffs = events('handoff');
     assert.equal(handoffs.length, 1, 'a compacted row before the first model call is a handoff');
     assert.equal(handoffs[0]['session.id'], `codex:${codexSession}`);
+  } finally { await f.close(); }
+});
+
+test('tool calls and native subagents arrive as spans, and no content reaches the outbox or the network', async () => {
+  const f = await fixture();
+  const C = 'PRIVATE_CANARY_176';
+  const parent = '88888888-8888-4888-8888-888888888888';
+  const codexParent = '01a1dddd-0000-7000-8000-000000000001';
+  const codexChild = '01a1dddd-0000-7000-8000-000000000002';
+  const item = (time, started, completed, item) => ({ type: 'event_msg', timestamp: time, payload: { type: 'item_completed', turn_id: 't1', started_at_ms: Date.parse(started), completed_at_ms: Date.parse(completed), item } });
+  try {
+    await f.write(`.claude-test/projects/-w/${parent}.jsonl`, [
+      claude.prompt('2026-11-19T10:00:00Z', 'p1', C),
+      { ...claude.request('2026-11-19T10:00:01Z', 'msg-1', {}, [{ type: 'text', text: C }, { type: 'tool_use', id: 'toolu_bash', name: 'Bash', input: { command: C } }]), wireToolInputs: { toolu_bash: { command: C } } },
+      { type: 'user', timestamp: '2026-11-19T10:00:06Z', promptId: 'p1', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_bash', is_error: true, content: C }] }, toolUseResult: { stdout: C, stderr: C } },
+      { type: 'api-request-blob', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_blob', name: 'Bash', input: { command: C } }] } },
+      claude.request('2026-11-19T10:00:07Z', 'msg-2', {}, [{ type: 'tool_use', id: 'toolu_agent', name: 'Agent', input: { prompt: C } }]),
+      { type: 'user', timestamp: '2026-11-19T10:01:07Z', promptId: 'p1', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_agent', content: [{ type: 'text', text: C }] }] } },
+      { type: 'assistant', timestamp: '2026-11-19T10:01:08Z', uuid: 'api-error-1', isApiErrorMessage: true, message: { model: '<synthetic>', content: [{ type: 'text', text: C }] }, error: C },
+      { type: 'system', subtype: 'compact_boundary', uuid: 'compact-1', timestamp: '2026-11-19T10:02:00Z', content: C, compactMetadata: { trigger: 'manual', preTokens: 10, postTokens: 5 } },
+    ]);
+    await f.write(`.claude-test/projects/-w/${parent}/subagents/agent-a1.jsonl`, [claude.prompt('2026-11-19T10:00:08Z', 'child', C), claude.request('2026-11-19T10:00:09Z', 'msg-child')]);
+    await writeFile(join(f.home, `.claude-test/projects/-w/${parent}/subagents/agent-a1.meta.json`), JSON.stringify({ agentType: 'general-purpose', description: C, toolUseId: 'toolu_agent' }));
+    await f.write(`.codex-test/sessions/2026/11/19/rollout-d-${codexParent}.jsonl`, [
+      codex.meta('2026-11-19T10:00:00Z', codexParent, { base_instructions: { text: C }, cwd: C }),
+      codex.turn('2026-11-19T10:00:00Z', 't1'),
+      { type: 'response_item', timestamp: '2026-11-19T10:00:01Z', payload: { type: 'function_call', name: 'exec', arguments: C, call_id: 'call-1' } },
+      { type: 'response_item', timestamp: '2026-11-19T10:00:02Z', payload: { type: 'function_call_output', call_id: 'call-1', output: [{ type: 'input_text', text: C }] } },
+      item('2026-11-19T10:00:03Z', '2026-11-19T10:00:01Z', '2026-11-19T10:00:03Z', { type: 'CommandExecution', id: 'item-exec', status: 'failed', command: C, aggregated_output: C, exit_code: 1, cwd: C }),
+      item('2026-11-19T10:00:04Z', '2026-11-19T10:00:03Z', '2026-11-19T10:00:04Z', { type: 'McpToolCall', id: 'item-mcp', status: 'completed', server: 't3-code', tool: 'send_to_user', arguments: C, result: C }),
+      item('2026-11-19T10:00:05Z', '2026-11-19T10:00:05Z', '2026-11-19T10:00:05Z', { type: 'AgentMessage', id: 'item-msg', content: C }),
+      codex.request('2026-11-19T10:00:06Z', 'resp-1'),
+      { type: 'event_msg', timestamp: '2026-11-19T10:00:07Z', payload: { type: 'task_complete', turn_id: 't1', last_agent_message: C } },
+    ]);
+    await f.write(`.codex-test/sessions/2026/11/19/rollout-e-${codexChild}.jsonl`, [
+      codex.meta('2026-11-19T10:00:10Z', codexChild, { source: { subagent: { other: 'guardian' } }, parent_thread_id: codexParent }),
+      codex.request('2026-11-19T10:00:11Z', 'resp-child'),
+      codex.request('2026-11-19T10:00:20Z', 'resp-child-2'),
+    ]);
+
+    f.reject = true;
+    await pass(f.config(), { home: f.home });
+    const outbox = await readdir(join(f.home, 'outbox'));
+    const stored = (await Promise.all(outbox.filter((name) => name.endsWith('.json')).map((name) => readFile(join(f.home, 'outbox', name), 'utf8')))).join('');
+    assert.ok(stored.includes('provider.request'), 'the outbox holds the batch');
+    assert.ok(!stored.includes(C), 'no content in the outbox');
+    f.reject = false;
+    await pass(f.config(), { home: f.home });
+    assert.ok(f.bodies.length > 1);
+    assert.ok(!f.bodies.join('').includes(C), 'no content in the network payload');
+
+    const spans = [...new Map(f.spans.map((span) => [span.spanId, span])).values()];
+    const tools = spans.filter((span) => span.attributes['langfuse.observation.metadata.kind'] === 'tool');
+    const named = (name) => tools.find((span) => span.name === name);
+    assert.deepEqual(tools.map((span) => span.name).sort(), ['Agent', 'Bash', 'exec', 't3-code.send_to_user'], 'one span per tool call, none from request blobs');
+    const seconds = (span) => Number(BigInt(span.endTimeUnixNano) - BigInt(span.startTimeUnixNano)) / 1e9;
+    assert.equal(seconds(named('Bash')), 5);
+    assert.equal(named('Bash').attributes['langfuse.observation.metadata.error'], 'true');
+    assert.equal(named('Bash').attributes['langfuse.observation.level'], 'ERROR');
+    assert.equal(named('Agent').attributes['langfuse.observation.metadata.error'], 'false');
+    assert.equal(seconds(named('exec')), 2);
+    assert.equal(named('exec').attributes['langfuse.observation.metadata.error'], 'true');
+    assert.equal(named('t3-code.send_to_user').attributes['langfuse.observation.metadata.error'], 'false');
+
+    const generation = (id) => spans.find((span) => span.attributes['langfuse.observation.type'] === 'generation' && span.spanId === observationId('generation', id[0], id[1]));
+    const claudeChild = generation(['claude', 'msg-child']);
+    assert.equal(claudeChild.parentSpanId, named('Agent').spanId, 'a Claude subagent request sits under its Agent span');
+    assert.equal(claudeChild.attributes['session.id'], `claude:${parent}`);
+    assert.equal(claudeChild.traceId, named('Agent').traceId);
+    const subagent = spans.find((span) => span.attributes['langfuse.observation.metadata.kind'] === 'subagent');
+    assert.equal(subagent.attributes['session.id'], `codex:${codexParent}`);
+    assert.equal(subagent.attributes['langfuse.observation.metadata.childSession'], codexChild);
+    assert.equal(seconds(subagent), 10);
+    assert.equal(generation(['codex', 'resp-child']).parentSpanId, subagent.spanId, 'a Codex subagent request sits under its subagent span');
+    assert.equal(spans.filter((span) => span.attributes['langfuse.observation.metadata.kind'] === 'api-error').length, 1);
   } finally { await f.close(); }
 });
