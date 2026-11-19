@@ -4,6 +4,7 @@ import { readdir, readFile, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { backfill, pass } from '../threads/capture.mjs';
 import { recount } from '../threads/recount.mjs';
+import { main } from '../threads/cli.mjs';
 import { observationId } from '../threads/contract.mjs';
 import { claude, codex, fixture, sessionTotals } from './threads-fixture.mjs';
 
@@ -301,5 +302,20 @@ test('a backfill streams through a small outbox, and its per-thread totals equal
     assert.equal(expected['thread-t3'].requests, 7, 'six requests streamed in two rows each, plus the subagent request');
     assert.equal(expected[`claude:${ids.resumed}`].requests, 1, 'copied history counts once');
     assert.equal(expected[`codex:${ids.codex}`].requests, 3, 'a Codex subagent counts in its parent');
+  } finally { await f.close(); }
+});
+
+test('the thread CLI reads only its own configuration, never the pilot one', async () => {
+  const f = await fixture();
+  try {
+    const pilot = join(f.home, 'pilot.json');
+    await writeFile(pilot, JSON.stringify(f.config()), { mode: 0o600 });
+    const saved = process.env.SKILL_OBSERVABILITY_CONFIG;
+    process.env.SKILL_OBSERVABILITY_CONFIG = pilot;
+    try { assert.deepEqual(await main(['status'], { SKILL_OBSERVABILITY_CONFIG: pilot }), { status: 'disabled' }); }
+    finally { if (saved === undefined) delete process.env.SKILL_OBSERVABILITY_CONFIG; else process.env.SKILL_OBSERVABILITY_CONFIG = saved; }
+    const own = join(f.home, 'threads.json');
+    await writeFile(own, JSON.stringify(f.config()), { mode: 0o600 });
+    assert.equal((await main(['status'], { T3_THREADS_CONFIG: own })).status, 'available');
   } finally { await f.close(); }
 });

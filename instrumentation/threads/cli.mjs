@@ -10,7 +10,8 @@ import { flush, status } from './outbox.mjs';
 
 export async function main(args, env = process.env) {
   try {
-    const config = await configuration(env.T3_THREADS_CONFIG);
+    // An empty path keeps configuration() from falling back to the pilot's SKILL_OBSERVABILITY_CONFIG.
+    const config = await configuration(env.T3_THREADS_CONFIG ?? '');
     if (!config.enabled) return { status: 'disabled' };
     if (args[0] === 'pass') return await pass(config);
     if (args[0] === 'backfill' && Number.isFinite(Date.parse(args[1]))) return await backfill(config, { from: args[1] });
