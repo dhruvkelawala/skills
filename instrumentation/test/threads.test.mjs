@@ -129,3 +129,38 @@ test('traces carry the T3 thread, project, branch, lineage, launcher and issue-t
     assert.equal(traceOf('late')['langfuse.trace.metadata.launcher'], 'root', 'a launch that finishes after a pass is still found');
   } finally { await f.close(); }
 });
+
+test('compactions arrive as events with trigger and token sizes, and handoffs stay apart from them', async () => {
+  const f = await fixture();
+  const codexSession = '01a1cccc-0000-7000-8000-000000000001';
+  try {
+    await f.write('.claude-test/projects/-w/77777777-7777-4777-8777-777777777777.jsonl', [
+      claude.prompt('2026-11-19T10:00:00Z', 'p1'),
+      claude.request('2026-11-19T10:00:01Z', 'msg-1'),
+      { type: 'system', subtype: 'compact_boundary', uuid: 'compact-1', timestamp: '2026-11-19T10:10:00Z', content: 'SUMMARY_TEXT', compactMetadata: { trigger: 'auto', preTokens: 334397, postTokens: 20255, durationMs: 42242 } },
+    ]);
+    await f.write(`.codex-test/sessions/2026/11/19/rollout-c-${codexSession}.jsonl`, [
+      codex.meta('2026-11-19T10:00:00Z', codexSession),
+      { type: 'compacted', timestamp: '2026-11-19T10:00:01Z', payload: { message: '', window_number: 0, window_id: 'window-0', replacement_history: [{ text: 'HANDOFF_TEXT' }] } },
+      codex.request('2026-11-19T10:00:02Z', 'resp-1', 't1', { input_tokens: 240037 }),
+      { type: 'compacted', timestamp: '2026-11-19T10:30:00Z', payload: { message: 'SUMMARY_TEXT', window_number: 1, window_id: 'window-1', latest_token_usage_record: { usage: { input_tokens: 240037 } } } },
+      codex.request('2026-11-19T10:30:05Z', 'resp-2', 't1', { input_tokens: 18000 }),
+    ]);
+    await pass(f.config(), { home: f.home });
+    const events = (kind) => [...new Map(f.spans.filter((span) => span.attributes['langfuse.observation.metadata.kind'] === kind).map((span) => [span.spanId, span.attributes])).values()];
+    const compactions = events('compaction');
+    assert.equal(compactions.length, 2);
+    const claudeCompaction = compactions.find((c) => c['langfuse.trace.metadata.runtime'] === 'claude');
+    assert.equal(claudeCompaction['langfuse.observation.type'], 'event');
+    assert.equal(claudeCompaction['langfuse.observation.metadata.trigger'], 'auto');
+    assert.equal(claudeCompaction['langfuse.observation.metadata.preTokens'], '334397');
+    assert.equal(claudeCompaction['langfuse.observation.metadata.postTokens'], '20255');
+    const codexCompaction = compactions.find((c) => c['langfuse.trace.metadata.runtime'] === 'codex');
+    assert.equal(codexCompaction['langfuse.observation.metadata.preTokens'], '240037');
+    assert.equal(codexCompaction['langfuse.observation.metadata.postTokens'], '18000', 'after is the next request input');
+    assert.equal(codexCompaction['langfuse.observation.metadata.trigger'], undefined, 'Codex does not log a trigger');
+    const handoffs = events('handoff');
+    assert.equal(handoffs.length, 1, 'a compacted row before the first model call is a handoff');
+    assert.equal(handoffs[0]['session.id'], `codex:${codexSession}`);
+  } finally { await f.close(); }
+});

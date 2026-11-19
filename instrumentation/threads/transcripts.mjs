@@ -87,6 +87,10 @@ function claudeRow(state) {
         events.push({ kind: 'generation', source: message.id, start: at, end: at, model: state.model, usage, turn: state.turn });
       }
     }
+    if (row.type === 'system' && row.subtype === 'compact_boundary' && row.uuid) {
+      const meta = row.compactMetadata ?? {};
+      events.push({ kind: 'compaction', source: row.uuid, start: at, end: at, trigger: meta.trigger, preTokens: meta.preTokens, postTokens: meta.postTokens, turn: state.turn });
+    }
     return events;
   };
 }
@@ -119,6 +123,21 @@ function codexRow(state) {
       const u = p.usage ?? {};
       const usage = { input: counter(u.input_tokens), output: counter(u.output_tokens), cacheRead: counter(u.cached_input_tokens), cacheWrite: null, cacheWrite5m: null, cacheWrite1h: null, reasoning: counter(u.reasoning_output_tokens), inputIncludesCache: true, outputIncludesReasoning: true };
       events.push({ kind: 'generation', source: p.response_id, start: at, end: at, model: state.model, effort: state.effort, provider: state.provider, usage, turn: p.turn_id ?? state.turn });
+      state.requested = true;
+      // A compaction's size afterwards is the first request's input after it; it is sent again once known.
+      if (state.compaction) {
+        events.push({ ...state.compaction, postTokens: usage.input });
+        state.compaction = null;
+      }
+    }
+    if (row.type === 'compacted') {
+      const source = p.window_id ?? `${at}`;
+      // T3 hands a session over between providers with a compacted row before the first model call. That is no compaction.
+      if (!state.requested) events.push({ kind: 'handoff', source, start: at, end: at, turn: state.turn });
+      else {
+        state.compaction = { kind: 'compaction', source, start: at, end: at, preTokens: p.latest_token_usage_record?.usage?.input_tokens, turn: state.turn };
+        events.push(state.compaction);
+      }
     }
     return events;
   };
