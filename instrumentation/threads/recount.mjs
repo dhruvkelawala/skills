@@ -4,7 +4,6 @@ import { createReadStream } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { basename, dirname, join } from 'node:path';
-import { createInterface } from 'node:readline';
 
 export async function recount({ home, t3Database, from, to }) {
   const start = Date.parse(from), end = Date.parse(to);
@@ -38,7 +37,7 @@ export async function recount({ home, t3Database, from, to }) {
     let named = false;
     // A transcript that vanished or became unreadable since the scan is left out, as the capture leaves it unread.
     try {
-      for await (const line of createInterface({ input: createReadStream(file.path), crlfDelay: Infinity })) {
+      for await (const line of lines(file.path)) {
         let row;
         try { row = JSON.parse(line); } catch { continue; }
         // A Codex transcript names its own session in its first session_meta; a fork copies its parent's later on.
@@ -76,4 +75,15 @@ export async function recount({ home, t3Database, from, to }) {
     totals[session].tokens += usage.get(key);
   }
   return totals;
+}
+
+// JSONL lines split on newlines only. node:readline also splits on U+2028 and U+2029, which may sit inside a JSON string.
+async function* lines(path) {
+  let pending = '';
+  for await (const chunk of createReadStream(path, { encoding: 'utf8' })) {
+    const parts = (pending + chunk).split('\n');
+    pending = parts.pop();
+    yield* parts;
+  }
+  if (pending) yield pending;
 }

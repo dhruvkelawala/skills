@@ -379,3 +379,15 @@ test('a recount skips a transcript it can no longer read instead of failing', as
     assert.deepEqual(Object.keys(totals), ['claude:dededede-0000-4000-8000-000000000001']);
   } finally { await f.close(); }
 });
+
+test('a row holding a Unicode line separator is one row to the recount, as it is to the capture', async () => {
+  const f = await fixture();
+  try {
+    const row = claude.request('2026-11-19T10:00:01Z', 'msg-separator', {}, [{ type: 'text', text: `before${String.fromCharCode(0x2028)}after` }]);
+    await f.write('.claude-test/projects/-w/efefefef-1111-4000-8000-000000000001.jsonl', [row]);
+    await pass(f.config(), { home: f.home });
+    const totals = await recount({ home: f.home, t3Database: f.database, from: '2026-11-01T00:00:00Z', to: '2026-11-20T00:00:00Z' });
+    assert.deepEqual(totals, sessionTotals(f.spans));
+    assert.equal(totals['claude:efefefef-1111-4000-8000-000000000001'].requests, 1);
+  } finally { await f.close(); }
+});
