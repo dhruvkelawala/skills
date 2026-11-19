@@ -32,10 +32,14 @@ export async function pass(config, { home = homedir() } = {}) {
     state.owners = prune(state.owners ?? {}, since, ([, seen]) => seen);
     state.spawns = prune(state.spawns ?? {}, since, (spawn) => spawn.day);
     let t3;
-    try { t3 = readT3(config.t3Database, state.t3); } catch { t3 = readT3(null, state.t3); summary.t3 = 'unavailable'; }
+    const outbox = new Outbox(config);
+    // Without T3, every T3 session would be filed under its native ID for good, so the pass waits for the next one.
+    try { t3 = readT3(config.t3Database, state.t3); } catch {
+      await outbox.deliver();
+      return { ...summary, status: 'unavailable', t3: 'unavailable', ...(await outbox.counts()) };
+    }
     state.t3 = t3.scan;
     const workflows = await issueToPrRuns(home);
-    const outbox = new Outbox(config);
 
     const cursors = {};
     for (const file of await transcripts(home, since)) {

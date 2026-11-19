@@ -353,3 +353,19 @@ test('a backfill after normal passes still sends the older rows those passes ski
     assert.ok(next.bytes < 1000, 'normal passes keep their own cursors after a backfill');
   } finally { await f.close(); }
 });
+
+test('a pass that cannot read T3 sends nothing and waits, so T3 sessions are never filed outside T3', async () => {
+  const f = await fixture();
+  const native = 'cdcdcdcd-0000-4000-8000-000000000001';
+  try {
+    f.thread({ id: 'thread-known', nativeId: native });
+    await f.write(`.claude-test/projects/-w/${native}.jsonl`, [claude.request('2026-11-19T10:00:01Z', 'msg-known')]);
+    const broken = join(f.home, 'broken.sqlite');
+    await writeFile(broken, 'not a database');
+    const skipped = await pass(f.config({ t3Database: broken }), { home: f.home });
+    assert.equal(skipped.t3, 'unavailable');
+    assert.equal(f.spans.length, 0, 'nothing is sent without T3');
+    await pass(f.config(), { home: f.home });
+    assert.deepEqual(Object.keys(sessionTotals(f.spans)), ['thread-known'], 'the next pass files the request under its thread');
+  } finally { await f.close(); }
+});

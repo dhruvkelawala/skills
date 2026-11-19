@@ -169,7 +169,7 @@ function codexRow(state, spawns) {
       if (name) events.push({ kind: 'tool', source: item.id, name, start: time(p.started_at_ms), end: time(p.completed_at_ms), error: item.status === 'failed', turn: p.turn_id ?? state.turn });
       if (item.type === 'SubAgentActivity' && item.agent_thread_id) spawns[item.agent_thread_id] = { turn: p.turn_id ?? state.turn, day: Math.floor(Date.parse(at) / 86400000) };
     }
-    if (row.type === 'event_msg' && ['error', 'stream_error'].includes(p.type)) events.push({ kind: 'api-error', source: `${state.turn}:${at}`, start: at, end: at, turn: state.turn });
+    if (row.type === 'event_msg' && ['error', 'stream_error'].includes(p.type)) events.push({ kind: 'api-error', source: `${state.turn ?? 'session'}:${at}`, start: at, end: at, turn: state.turn });
     if (row.type === 'session_meta') state.provider = p.model_provider ?? state.provider;
     if (row.type === 'turn_context') {
       state.turn = p.turn_id ?? state.turn;

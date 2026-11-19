@@ -23,8 +23,8 @@ export async function recount({ home, t3Database, from, to }) {
     const root = join(home, top, runtime === 'claude' ? 'projects' : 'sessions');
     for (const name of await readdir(root, { recursive: true }).catch(() => [])) {
       if (!name.endsWith('.jsonl')) continue;
-      const info = await stat(join(root, name));
-      if (info.mtimeMs >= start) files.push({ runtime, path: join(root, name), born: info.birthtimeMs });
+      const info = await stat(join(root, name)).catch(() => null);
+      if (info?.isFile() && info.mtimeMs >= start) files.push({ runtime, path: join(root, name), born: info.birthtimeMs });
     }
   }
   files.sort((a, b) => a.born - b.born || a.path.localeCompare(b.path));
