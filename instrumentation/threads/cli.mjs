@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// node instrumentation/threads/cli.mjs pass | backfill <from> | recount <from> <to> | report <from> <to> | status | flush
+// node instrumentation/threads/cli.mjs pass | backfill <from> | recount <from> <to> | report <from> <to> | models | status | flush
 // Reads the private configuration named by T3_THREADS_CONFIG. Prints one JSON result and always exits 0.
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +7,7 @@ import { configuration } from '../cli.mjs';
 import { backfill, pass } from './capture.mjs';
 import { recount } from './recount.mjs';
 import { flush, status } from './outbox.mjs';
+import { defineModels } from './models.mjs';
 import { compactionsPerThread, costPerThread, costPerTree, observations } from './queries.mjs';
 
 export async function main(args, env = process.env) {
@@ -22,9 +23,10 @@ export async function main(args, env = process.env) {
       const rows = await observations(config, { from: args[1], to: args[2] });
       return { threads: costPerThread(rows), trees: costPerTree(rows), compactions: compactionsPerThread(rows) };
     }
+    if (args[0] === 'models') return await defineModels(config);
     if (args[0] === 'status') return await status(config);
     if (args[0] === 'flush') return await flush(config);
-    return { status: 'unavailable', reason: 'usage: pass | backfill <from> | recount <from> <to> | report <from> <to> | status | flush' };
+    return { status: 'unavailable', reason: 'usage: pass | backfill <from> | recount <from> <to> | report <from> <to> | models | status | flush' };
   } catch { return { status: 'unavailable' }; }
 }
 
