@@ -240,3 +240,38 @@ test('tool calls and native subagents arrive as spans, and no content reaches th
     assert.equal(spans.filter((span) => span.attributes['langfuse.observation.metadata.kind'] === 'api-error').length, 1);
   } finally { await f.close(); }
 });
+
+test('a steady-state pass reads only what was appended, carries turn state across reads, and defers past its budget', async () => {
+  const f = await fixture();
+  const session = '01a1eeee-0000-7000-8000-000000000001';
+  const path = `.codex-test/sessions/2026/11/19/rollout-f-${session}.jsonl`;
+  try {
+    await f.write(path, [codex.meta('2026-11-19T10:00:00Z', session), codex.turn('2026-11-19T10:00:00Z', 't1'), codex.request('2026-11-19T10:00:01Z', 'resp-1')]);
+    await f.write('.claude-test/projects/-w/99999999-9999-4999-8999-999999999999.jsonl', [claude.prompt('2026-11-19T10:00:00Z', 'p1'), claude.request('2026-11-19T10:00:01Z', 'msg-1', {}, [{ type: 'tool_use', id: 'toolu_long', name: 'Bash', input: {} }])]);
+    const first = await pass(f.config(), { home: f.home });
+    assert.ok(first.bytes > 0);
+    const posts = f.bodies.length;
+
+    const idle = await pass(f.config(), { home: f.home });
+    assert.equal(idle.bytes, 0, 'unchanged transcripts are not read again');
+    assert.equal(f.bodies.length, posts, 'and nothing is sent again');
+
+    const line = JSON.stringify(codex.request('2026-11-19T10:05:00Z', 'resp-2')) + '\n';
+    await f.append(path, [codex.request('2026-11-19T10:05:00Z', 'resp-2')]);
+    await f.append('.claude-test/projects/-w/99999999-9999-4999-8999-999999999999.jsonl', [{ type: 'user', timestamp: '2026-11-19T10:06:01Z', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_long' }] } }]);
+    const tail = JSON.stringify({ type: 'user', timestamp: '2026-11-19T10:06:01Z', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_long' }] } }) + '\n';
+    await writeFile(join(f.home, path), '{"type":"token_usage_rec', { flag: 'a' });
+    const next = await pass(f.config(), { home: f.home });
+    assert.equal(next.bytes, Buffer.byteLength(line) + Buffer.byteLength(tail), 'only complete appended lines are read');
+    const resp2 = f.spans.find((span) => span.spanId === observationId('generation', 'codex', 'resp-2'));
+    assert.equal(resp2.attributes['langfuse.observation.model.name'], 'gpt-6.1-sol', 'the model from an earlier read carries over');
+    const tool = f.spans.find((span) => span.spanId === observationId('tool', 'claude', 'toolu_long'));
+    assert.equal(Number(BigInt(tool.endTimeUnixNano) - BigInt(tool.startTimeUnixNano)) / 1e9, 360, 'a tool call opened before the cursor closes after it');
+
+    await f.write('.claude-test/projects/-w/aaaaaaaa-9999-4999-8999-999999999999.jsonl', [claude.request('2026-11-19T11:00:00Z', 'msg-late')]);
+    const hurried = await pass(f.config({ budgetMs: 0 }), { home: f.home });
+    assert.ok(hurried.deferred >= 1, 'transcripts past the budget wait for the next pass');
+    await pass(f.config(), { home: f.home });
+    assert.ok(f.spans.some((span) => span.spanId === observationId('generation', 'claude', 'msg-late')));
+  } finally { await f.close(); }
+});

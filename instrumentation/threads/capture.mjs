@@ -11,11 +11,17 @@ import { readT3, runAt, threadFacts } from './t3.mjs';
 import { issueToPrRuns } from './workflows.mjs';
 import { abandoned, adapter, appended, identify, transcripts } from './transcripts.mjs';
 
+const DAY = 86400000;
+
+// A pass stops opening transcripts once `budgetMs` has passed, so it fits the 5-minute schedule; the rest wait for the next.
+// Each transcript has a cursor, so a pass reads only what was appended since the last one.
 export async function pass(config, { home = homedir() } = {}) {
   if (!config.enabled) return { status: 'disabled' };
   return locked(config, async () => {
-    const summary = { status: 'passed', transcripts: 0, events: 0, copied: 0, unavailable: 0, t3: 'available' };
-    const since = Date.parse(config.since);
+    const started = Date.now();
+    const summary = { status: 'passed', transcripts: 0, bytes: 0, events: 0, copied: 0, deferred: 0, unavailable: 0, t3: 'available' };
+    // Rows older than the retention window are never sent, which bounds the ownership the state remembers.
+    const since = Math.max(Date.parse(config.since), started - (config.retentionDays ?? 45) * DAY);
     if (!Number.isFinite(since)) return { status: 'unavailable' };
     const statePath = join(config.directory, 'state.json');
     const state = await readFile(statePath, 'utf8').then(JSON.parse, () => ({}));
@@ -27,14 +33,22 @@ export async function pass(config, { home = homedir() } = {}) {
     const workflows = await issueToPrRuns(home);
     const outbox = new Outbox(config);
 
+    const cursors = {};
     for (const file of await transcripts(home, since)) {
+      const cursor = state.cursors?.[file.path];
+      cursors[file.path] = cursor;
+      if (cursor && cursor.ino === file.ino && cursor.size === file.size && cursor.mtime === file.mtime) continue;
+      if (Date.now() >= started + (config.budgetMs ?? 240000) || await outbox.full()) { summary.deferred++; continue; }
       try {
-        const result = await capture(file, { t3, workflows, outbox, since, owners: state.owners, spawns: state.spawns });
+        const result = await capture(file, cursor, { t3, workflows, outbox, since, owners: state.owners, spawns: state.spawns });
+        cursors[file.path] = result.cursor;
+        summary.bytes += result.bytes;
         summary.events += result.sent;
         summary.copied += result.copied;
         summary.transcripts++;
       } catch { summary.unavailable++; }
     }
+    state.cursors = cursors;
     await outbox.seal();
     await durable(statePath, state);
     await outbox.deliver();
@@ -42,10 +56,13 @@ export async function pass(config, { home = homedir() } = {}) {
   });
 }
 
-async function capture(file, { t3, workflows, outbox, since, owners, spawns }) {
-  const who = await identify(file);
+async function capture(file, cursor, { t3, workflows, outbox, since, owners, spawns }) {
+  // A replaced or truncated transcript starts again from the top; ownership keeps its requests from repeating.
+  const fresh = !cursor || cursor.ino !== file.ino || file.size < cursor.offset;
+  const who = fresh ? await identify(file) : cursor.who;
+  const start = fresh ? 0 : cursor.offset;
+  const progress = fresh ? {} : cursor.progress;
   const session = sessionOf(file.runtime, who.parentNative ?? who.native, t3, workflows);
-  const progress = {};
   const read = adapter(file.runtime, progress, spawns);
   const mine = digest(session.session).slice(0, 12);
   let sent = 0, copied = 0;
@@ -68,7 +85,9 @@ async function capture(file, { t3, workflows, outbox, since, owners, spawns }) {
     sent++;
   };
 
-  for await (const { row } of appended(file.path, 0)) {
+  let offset = start;
+  for await (const { row, offset: next } of appended(file.path, start)) {
+    offset = next;
     if (!row) continue;
     for (const event of read(row)) await send(event);
   }
@@ -76,10 +95,10 @@ async function capture(file, { t3, workflows, outbox, since, owners, spawns }) {
   if (who.parentNative && !who.spawnedBy && progress.first) {
     await send({ kind: 'subagent', source: who.native, start: progress.first, end: progress.last, childSession: who.native, childThread: t3.native.get(who.native), turn: progress.turn });
   }
-  return { sent, copied };
+  return { sent, copied, bytes: offset - start, cursor: { ino: file.ino, size: file.size, mtime: file.mtime, offset, who, progress } };
 }
 
-const day = (time) => Math.floor(Date.parse(time) / 86400000);
+const day = (time) => Math.floor(Date.parse(time) / DAY);
 
 // Entries from before `since` are dropped: rows that old are never sent, so no copy can claim them.
 function prune(entries, since, dayOf) {

@@ -118,8 +118,8 @@ function claudeRow(state, spawns) {
       }
       if (message.id && message.usage) {
         const usage = claudeUsage(message.usage);
-        if (state.last?.id === message.id) for (const key of Object.keys(usage)) if (typeof usage[key] === 'number') usage[key] = Math.max(usage[key], state.last.usage[key] ?? 0);
-        state.last = { id: message.id, usage };
+        if (state.message?.id === message.id) for (const key of Object.keys(usage)) if (typeof usage[key] === 'number') usage[key] = Math.max(usage[key], state.message.usage[key] ?? 0);
+        state.message = { id: message.id, usage };
         events.push({ kind: 'generation', source: message.id, start: at, end: at, model: state.model, usage, turn: state.turn });
       }
     }
