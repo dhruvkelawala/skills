@@ -5,6 +5,7 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
+// The transcripts carry fixed 2026 dates, so retention is set wide enough that they stay inside it on any run date.
 export async function fixture() {
   const home = await mkdtemp(join(tmpdir(), 't3-threads-'));
   const database = join(home, 'statev2.sqlite');
@@ -38,7 +39,7 @@ export async function fixture() {
   return {
     home, database, spans, bodies, endpoint,
     set reject(value) { reject = value; },
-    config: (extra = {}) => ({ enabled: true, directory: join(home, 'outbox'), endpoint, publicKey: 'test', secretKey: 'test', since: '2026-11-01T00:00:00Z', t3Database: database, retryMs: 0, ...extra }),
+    config: (extra = {}) => ({ enabled: true, directory: join(home, 'outbox'), endpoint, publicKey: 'test', secretKey: 'test', since: '2026-11-01T00:00:00Z', t3Database: database, retryMs: 0, retentionDays: 36500, ...extra }),
     project(id, title, root) { db.prepare('INSERT INTO projection_projects VALUES (?, ?, ?)').run(id, title, root); },
     thread({ id, project = 'p1', title = 'Synthetic thread', nativeId, branch = null, worktreePath = null, lineage = {}, createdBy = 'user', creationSource = 'web', runs = [] }) {
       const payload = { id, title, projectId: project, branch, worktreePath, providerInstanceId: 'claude-test', interactionMode: 'default', runtimeMode: 'full-access', createdBy, creationSource, lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: id, ...lineage } };
