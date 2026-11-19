@@ -336,3 +336,20 @@ test('generations carry the context window: Codex from its own log, Claude from 
     assert.equal(window('claude', 'msg-w'), '1000000');
   } finally { await f.close(); }
 });
+
+test('a backfill after normal passes still sends the older rows those passes skipped', async () => {
+  const f = await fixture();
+  const path = '.claude-test/projects/-w/bcbcbcbc-0000-4000-8000-000000000001.jsonl';
+  try {
+    await f.write(path, [claude.prompt('2026-10-25T10:00:00Z', 'p1'), claude.request('2026-10-25T10:00:01Z', 'msg-october'), claude.request('2026-11-19T10:00:01Z', 'msg-november')]);
+    await pass(f.config({ since: '2026-11-19T00:00:00Z' }), { home: f.home });
+    const sent = (source) => f.spans.some((span) => span.spanId === observationId('generation', 'claude', source));
+    assert.ok(sent('msg-november') && !sent('msg-october'));
+    await backfill(f.config({ since: '2026-11-19T00:00:00Z' }), { home: f.home, from: '2026-10-20T00:00:00Z' });
+    assert.ok(sent('msg-october'), 'the backfill reads the transcript from its start');
+    await f.append(path, [claude.request('2026-11-19T11:00:00Z', 'msg-later')]);
+    const next = await pass(f.config({ since: '2026-11-19T00:00:00Z' }), { home: f.home });
+    assert.ok(sent('msg-later'));
+    assert.ok(next.bytes < 1000, 'normal passes keep their own cursors after a backfill');
+  } finally { await f.close(); }
+});

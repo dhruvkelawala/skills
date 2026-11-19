@@ -14,7 +14,8 @@ import { abandoned, adapter, appended, identify, transcripts } from './transcrip
 const DAY = 86400000;
 
 // A backfill is one pass from `from` without a time budget. Its spans stream through the outbox as it reads.
-export const backfill = (config, { home = homedir(), from }) => pass({ ...config, since: from, budgetMs: Infinity }, { home });
+// It keeps its own cursors: the regular passes' cursors sit past rows older than their `since`, which a backfill must read.
+export const backfill = (config, { home = homedir(), from }) => pass({ ...config, since: from, budgetMs: Infinity, stateFile: 'backfill-state.json' }, { home });
 
 // A pass stops opening transcripts once `budgetMs` has passed, so it fits the 5-minute schedule; the rest wait for the next.
 // Each transcript has a cursor, so a pass reads only what was appended since the last one.
@@ -26,7 +27,7 @@ export async function pass(config, { home = homedir() } = {}) {
     // Rows older than the retention window are never sent, which bounds the ownership the state remembers.
     const since = Math.max(Date.parse(config.since), started - (config.retentionDays ?? 45) * DAY);
     if (!Number.isFinite(since)) return { status: 'unavailable' };
-    const statePath = join(config.directory, 'state.json');
+    const statePath = join(config.directory, config.stateFile ?? 'state.json');
     const state = await readFile(statePath, 'utf8').then(JSON.parse, () => ({}));
     state.owners = prune(state.owners ?? {}, since, ([, seen]) => seen);
     state.spawns = prune(state.spawns ?? {}, since, (spawn) => spawn.day);
