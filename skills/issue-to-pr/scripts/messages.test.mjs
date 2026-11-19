@@ -207,6 +207,18 @@ test("a recap's Verifier line gives the verdict and why the verifier ran, or tha
   saved("recap", path, verifier("- Verifier: skipped, rule B doesn't apply: a two-way door, and no authority, data, money or switch.", "🚪 Two-way door, no detour"));
 });
 
+test("a recap names every accepted risk on Couldn't check", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const first = "The live service rejects the score.";
+  const second = "A real phone loses its score on restart.";
+  const path = record(7, { risks: `Risks:\n1. ${first}\n   accepted: no service sandbox.\n2. ${second}\n   accepted: no phone available.` });
+  refused("recap", path, recap(), /Couldn't check:.*accepted risk: The live service/);
+  const lines = (text) => RECAP_LINES.map((line) => line.includes("Couldn't check:") ? `- Couldn't check: ${text}` : line);
+  refused("recap", path, recap({ lines: lines(first) }), /accepted risk: A real phone/);
+  refused("recap", path, recap({ lines: RECAP_LINES.map((line) => line.includes("Built:") ? `${line} ${first} ${second}` : line) }), /accepted risk: The live service/);
+  saved("recap", path, recap({ lines: lines(`${first} No service sandbox. ${second} No phone available.`) }));
+});
+
 test("once the run has a PR, the recap's first line links it and points at a guide written for the head", (t) => {
   const { record, refused, saved } = runRecords(t);
   const pr = 9;

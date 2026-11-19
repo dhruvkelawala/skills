@@ -96,6 +96,12 @@ function recapProblems(message, record, path) {
   const [, verdict, why] = lines.find((line) => line.startsWith("Verifier:"))?.match(VERIFIER) ?? [];
   if (why && !verdict) problems.push("`Verifier:` starts with its verdict, PASS, PASS+NOTES or FAIL, or `skipped`");
   else if (verdict && !why) problems.push("`Verifier:` says why: the rule B reason it ran, or why it was skipped");
+  const unchecked = normalize(lines.find((line) => line.startsWith("Couldn't check:")) ?? "");
+  for (const { text, proofs } of risksOf(record).entries) {
+    if (proofs[0]?.startsWith("accepted:") && !unchecked.includes(normalize(text))) {
+      problems.push(`\`Couldn't check:\` must list accepted risk: ${text}`);
+    }
+  }
   if (lines.some((line) => LOCAL_LINK.test(line))) problems.push("links must open in T3: no local paths, file:// or localhost");
   if (/^spec_mode: stack\b/m.test(record)) problems.push(...ticketLineProblems(lines, ticketsOf(record), dirname(path)));
   return problems;

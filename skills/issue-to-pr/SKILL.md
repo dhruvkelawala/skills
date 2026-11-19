@@ -61,12 +61,14 @@ When the run stops, post the recap: the result first, then one line each for wha
     - Review: <the passes that ran and what they found; extra opinion completed, skipped with reason, or incomplete, and later repairs not re-reviewed>
     - Verifier: <its verdict and the rule B reason it ran, or skipped and why>
     - Evidence: <a link for each criterion, or its exemption>
-    - Couldn't check: <what automation could not check, or nothing>
+    - Couldn't check: <each accepted: risk and its reason, other checks automation could not run, or nothing>
     - Next: <the one thing to do next>
 
     <sign-off>
 
 Once the PR exists, the recap is the intro to the user's review of it in stage 8. Its first line links the PR and points at the PR panel's Guide tab, where T3's review guide holds the tour. Stage 7 writes the guide for the head before the recap posts. When the PR has no guide, the first line says why instead.
+
+List every `accepted:` risk on `Couldn't check:`, with why it could not be proven before merge. The message check refuses a recap that omits one.
 
 When the PR adds a part, changes a flow across parts, or is a stack, follow the recap with an `/eli25` page. When a change the user can see has no recording among its evidence, the `Next:` line suggests `try`, with two to four things to try and the expected result of each.
 
