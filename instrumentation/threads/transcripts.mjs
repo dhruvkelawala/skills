@@ -13,12 +13,15 @@ export async function transcripts(home, since) {
   for (const name of await readdir(home).catch(() => [])) {
     const runtime = name.startsWith('.claude') ? 'claude' : name.startsWith('.codex') ? 'codex' : null;
     if (!runtime) continue;
-    const root = join(home, name, runtime === 'claude' ? 'projects' : 'sessions');
-    for (const relative of await readdir(root, { recursive: true }).catch(() => [])) {
-      if (!relative.endsWith('.jsonl')) continue;
-      const path = join(root, relative);
-      const info = await stat(path).catch(() => null);
-      if (info?.isFile() && info.mtimeMs >= since) found.push({ runtime, path, size: info.size, mtime: info.mtimeMs, born: info.birthtimeMs, ino: info.ino });
+    // Codex moves a finished session from sessions/ to archived_sessions/.
+    for (const folder of runtime === 'claude' ? ['projects'] : ['sessions', 'archived_sessions']) {
+      const root = join(home, name, folder);
+      for (const relative of await readdir(root, { recursive: true }).catch(() => [])) {
+        if (!relative.endsWith('.jsonl')) continue;
+        const path = join(root, relative);
+        const info = await stat(path).catch(() => null);
+        if (info?.isFile() && info.mtimeMs >= since) found.push({ runtime, path, size: info.size, mtime: info.mtimeMs, born: info.birthtimeMs, ino: info.ino });
+      }
     }
   }
   return found.sort((a, b) => a.born - b.born || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));

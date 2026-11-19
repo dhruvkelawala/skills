@@ -439,3 +439,15 @@ test('a pass sends one version of each request, its final counts, even when a ba
     assert.deepEqual(sent.map((span) => JSON.parse(span.attributes['langfuse.observation.usage_details']).output), [319]);
   } finally { await f.close(); }
 });
+
+test('a Codex session moved to archived_sessions is still captured and recounted', async () => {
+  const f = await fixture();
+  const id = '01a1f2f2-0000-7000-8000-000000000001';
+  try {
+    await f.write(`.codex-test/archived_sessions/rollout-2026-11-19T10-00-00-${id}.jsonl`, [codex.meta('2026-11-19T10:00:00Z', id), codex.request('2026-11-19T10:00:01Z', 'resp-archived')]);
+    await pass(f.config(), { home: f.home });
+    assert.equal(sessionTotals(f.spans)[`codex:${id}`]?.requests, 1);
+    const totals = await recount({ home: f.home, t3Database: f.database, from: '2026-11-01T00:00:00Z', to: '2026-11-20T00:00:00Z' });
+    assert.deepEqual(totals, sessionTotals(f.spans));
+  } finally { await f.close(); }
+});
