@@ -79,13 +79,12 @@ test('each request appears once across reruns, resumed sessions and transcripts 
     const postedUnder = (session) => new Set(f.spans.filter((span) => span.attributes['session.id'] === session && span.attributes['langfuse.observation.type'] === 'generation').map((span) => span.spanId)).size;
     assert.equal(postedUnder(`claude:${resumed}`), 1, 'a copied request is never sent under the copying session');
     assert.equal(postedUnder(`codex:${forkCopy}`), 1);
-    const ownersBefore = f.spans.length;
 
     await f.append(`.claude-test/projects/-w/${resumed}.jsonl`, [claude.request('2026-11-19T11:00:05Z', 'msg-4')]);
     await pass(f.config(), { home: f.home });
     assert.equal(generations(f.spans).size, 6);
     assert.equal(sessionTotals(f.spans)[`claude:${original}`]?.requests, 2, 'a later pass does not move copied requests');
-    assert.ok(f.spans.length > ownersBefore);
+    assert.equal(sessionTotals(f.spans)[`claude:${resumed}`].requests, 2, 'the appended request belongs to the resumed session');
   } finally { await f.close(); }
 });
 

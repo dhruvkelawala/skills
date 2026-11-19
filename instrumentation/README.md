@@ -118,7 +118,7 @@ The thread capture sends these fields and drops any other:
 - Session and trace fields: `session`, `t3`, `runtime`, `nativeSession`, `title`, `project`, `projectId`, `branch`, `worktree`, `providerInstance`, `interactionMode`, `runtimeMode`, `createdBy`, `creationSource`, `lineageParent`, `lineageRoot`, `lineageRelationship`, `launcher`, `workflow`, `run`, `turn`
 - Observation fields: `kind`, `name`, `model`, `effort`, `provider`, `contextWindow`, `error`, `trigger`, `preTokens`, `postTokens`, `childSession`, `childThread`
 
-It also sends token usage under Langfuse's price keys, and each observation's start and end time. Thread titles, project names, branch names, worktree paths and tool names leave the machine; that goes beyond the pilot's rule. Prompts, replies, tool input and output, command arguments, file contents and error bodies never do, and the adapters never read those fields. Roles such as orchestrator are left to queries, from these raw facts.
+It also sends token usage under Langfuse's price keys, and each observation's start and end time. Thread titles, project names, branch names, worktree paths and tool names leave the machine; that goes beyond the pilot's rule. T3 can write a thread's title from its first prompt, so a title can carry a few words of that prompt. `launcher` and `lineageParent` are also copied onto each observation's metadata, because observation queries can't read trace metadata. Prompts, replies, tool input and output, command arguments, file contents and error bodies never do, and the adapters never read those fields. Roles such as orchestrator are left to queries, from these raw facts.
 
 ## Disable and clean up
 

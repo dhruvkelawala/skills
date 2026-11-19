@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compactionsPerThread, costPerThread, costPerTree } from '../threads/queries.mjs';
+import { pass } from '../threads/capture.mjs';
+import { claude, fixture } from './threads-fixture.mjs';
 
 // Rows in the shape GET /api/public/v2/observations returns, with repeats as replays can leave them.
 const row = (id, sessionId, type, name, totalCost, metadata = {}) => ({ id, sessionId, type, name, totalCost, metadata });
@@ -25,11 +27,30 @@ test('cost per thread counts each observation once and keeps unpriced threads un
   });
 });
 
-test('cost per lineage tree sums a thread and everything it launched or delegated, at any depth', () => {
-  const trees = costPerTree(rows);
-  assert.deepEqual(trees.root, { threads: ['delegated', 'grandchild', 'launched', 'root'], requests: 4, cost: 4.25 });
-  assert.deepEqual(trees.alone, { threads: ['alone'], requests: 2, cost: null, unpriced: 1 });
-  assert.equal(trees.launched, undefined, 'a launched thread belongs to its launcher tree');
+test('cost per lineage tree groups what a pass sends: a thread plus everything it launched or delegated', async () => {
+  const f = await fixture();
+  const native = (n) => `efefefef-0000-4000-8000-00000000000${n}`;
+  try {
+    f.thread({ id: 'root', nativeId: native(0) });
+    f.thread({ id: 'launched', nativeId: native(1), createdBy: 'agent', creationSource: 'mcp' });
+    f.thread({ id: 'grandchild', nativeId: native(2), createdBy: 'agent', creationSource: 'mcp' });
+    f.thread({ id: 'delegated', nativeId: native(3), lineage: { parentThreadId: 'root', relationshipToParent: 'subagent', rootThreadId: 'root' } });
+    f.thread({ id: 'alone', nativeId: native(4) });
+    f.launch('root', 'launched');
+    f.launch('launched', 'grandchild');
+    for (const n of [0, 1, 2, 3, 4]) await f.write(`.claude-test/projects/-w/${native(n)}.jsonl`, [claude.request('2026-11-19T10:00:01Z', `m${n}`)]);
+    await pass(f.config(), { home: f.home });
+    // GET /api/public/v2/observations returns the session and each observation's own metadata, priced by the backend.
+    const rows = f.spans.map((span) => ({
+      id: span.spanId, sessionId: span.attributes['session.id'], type: span.attributes['langfuse.observation.type'].toUpperCase(), totalCost: 1,
+      metadata: Object.fromEntries(Object.entries(span.attributes).filter(([key]) => key.startsWith('langfuse.observation.metadata.')).map(([key, value]) => [key.slice('langfuse.observation.metadata.'.length), value])),
+    }));
+    const trees = costPerTree(rows);
+    assert.deepEqual(trees.root, { threads: ['delegated', 'grandchild', 'launched', 'root'], requests: 4, cost: 4 });
+    assert.deepEqual(trees.alone, { threads: ['alone'], requests: 1, cost: 1 });
+    assert.equal(trees.launched, undefined, 'a launched thread belongs to its launcher tree');
+    assert.deepEqual(costPerTree([{ id: 'x', sessionId: 'alone', type: 'GENERATION', totalCost: null, metadata: {} }]).alone, { threads: ['alone'], requests: 1, cost: null, unpriced: 1 });
+  } finally { await f.close(); }
 });
 
 test('compactions per thread count compactions apart from handoffs', () => {

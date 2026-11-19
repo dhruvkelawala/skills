@@ -1,5 +1,5 @@
 // The t3-thread/v1 contract: the only fields that leave the machine, and how they map onto OTLP for Langfuse.
-// A field missing from these lists is dropped. instrumentation/README.md names the same list.
+// A field missing from these lists is dropped.
 import { digest } from '../contract.mjs';
 import { usageDetails } from '../delivery.mjs';
 
@@ -26,6 +26,9 @@ export const OBSERVATION_FIELDS = {
   kind: one(KINDS), name: text(300), model: id, effort: id, provider: id, contextWindow: count,
   error: flag, trigger: id, preTokens: count, postTokens: count, childSession: id, childThread: id,
 };
+
+// Session fields also copied onto each observation, so cost per lineage tree works from observation rows.
+export const LINEAGE_EDGES = ['launcher', 'lineageParent'];
 
 const USAGE = ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite5m', 'cacheWrite1h', 'reasoning'];
 
@@ -69,6 +72,8 @@ export function toSpan(event, session) {
   ];
   for (const [key, value] of Object.entries(meta)) attributes.push(attribute('langfuse.trace.metadata.' + key, value));
   for (const [key, value] of Object.entries(observation)) attributes.push(attribute('langfuse.observation.metadata.' + key, value));
+  // Observation queries can't see trace metadata, so the lineage edges ride on every observation too.
+  for (const key of LINEAGE_EDGES) if (meta[key]) attributes.push(attribute('langfuse.observation.metadata.' + key, meta[key]));
   if (observation.kind === 'generation') {
     if (observation.model) attributes.push(attribute('langfuse.observation.model.name', observation.model));
     const details = usageDetails(usage(event.usage));
