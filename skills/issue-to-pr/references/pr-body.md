@@ -57,6 +57,7 @@ Captured at `<capture short sha>`. Run at `<head short sha>` against base `<base
 - Conditional pilot, when enrolled: <saved decision, explicit facts, actual author/reviewer families, retained-opinion duration and downstream accepted P0/P1 findings, or none yet>
 - `/code-review` pass 2 over the repairs: <n fixed, or skipped: light lane or tree unchanged>
 - Review-ready: <clean, exceptions, or skipped: light lane>
+- Handoff review: <reviewed product-code delta and re-driven criteria/risks, or skipped: unchanged tree or tests/docs/config only>
 - Not re-reviewed: <repair commits made after the last pass, or none>
 - Follow-ups, P2 and lower: <one line each, or none>
 

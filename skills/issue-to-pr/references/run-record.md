@@ -23,6 +23,9 @@ branch: <name>
 stage: contract | implemented | reviewed | verified | published | watching | awaiting-human | ready | merged | blocked: <reason>
 head: <sha the stage was proven on>
 tree: <git rev-parse HEAD^{tree} at that head>
+last_reviewed_head: <actual commit covered by the most recent completed review>
+last_reviewed_tree: <tree at that reviewed commit, before its repairs>
+handoff_review: <reviewed head/tree and outcome for this handoff, or skipped: reason>
 repairs: <used>/<budget>   (only repairs.mjs changes it)
 autoreview: <engine and model>, tree <hash>, clean | <n> fixed | skipped: <reason>
 review_policy: conditional-v1   (opt-in at contract pinning only; absent keeps the existing policy)
@@ -44,6 +47,7 @@ Stage reports go below the header, appended in order:
 - the build report
 - each review pass: the tree it reviewed, or the skip and its reason, each reviewer's actual engine and model, any availability fallback and coverage limit, and every finding with its priority, source, the head it was reviewed at, and its repair commit or rejection reason
 - the evidence links, each with the head it was captured at
+- the stage-7 delta review or skip, its reviewed head/tree and findings, any repairs not re-reviewed, and the criteria and risks re-driven at the final head. Keep its once-per-handoff outcome across returns to stage 6; a later user-review handoff starts a new allowance
 - the verifier's verdict and the rule B reason it ran, or why it was skipped
 - each verification disposition, `reused`, `deferred` or `new`, with its reason, published head, criteria source and evidence; for a new child, its task, actual model and effort; for an interrupted attempt, the cancellation reason and validity limits of retained partial evidence
 - the decisions block, at stage 5, before the reset
