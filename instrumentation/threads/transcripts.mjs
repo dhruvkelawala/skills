@@ -118,8 +118,10 @@ function claudeRow(state, spawns) {
       }
       if (message.id && message.usage) {
         const usage = claudeUsage(message.usage);
-        if (state.message?.id === message.id) for (const key of Object.keys(usage)) if (typeof usage[key] === 'number') usage[key] = Math.max(usage[key], state.message.usage[key] ?? 0);
-        state.message = { id: message.id, usage };
+        // Streaming writes a row per content block, and parallel requests can interleave them, so each request keeps its largest counts.
+        const earlier = state.messages?.[message.id];
+        if (earlier) for (const key of Object.keys(usage)) if (typeof usage[key] === 'number') usage[key] = Math.max(usage[key], earlier[key] ?? 0);
+        state.messages = Object.fromEntries([...Object.entries(state.messages ?? {}).filter(([id]) => id !== message.id).slice(-63), [message.id, usage]]);
         events.push({ kind: 'generation', source: message.id, start: at, end: at, model: state.model, contextWindow: claudeWindow(state.model), usage, turn: state.turn });
       }
     }

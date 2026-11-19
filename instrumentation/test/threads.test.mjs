@@ -391,3 +391,17 @@ test('a row holding a Unicode line separator is one row to the recount, as it is
     assert.equal(totals['claude:efefefef-1111-4000-8000-000000000001'].requests, 1);
   } finally { await f.close(); }
 });
+
+test('a Claude request keeps its largest counts when its streamed rows interleave with another request', async () => {
+  const f = await fixture();
+  try {
+    await f.write('.claude-test/projects/-w/efefefef-2222-4000-8000-000000000001.jsonl', [
+      claude.request('2026-11-19T10:00:01Z', 'msg-a', { output_tokens: 500 }),
+      claude.request('2026-11-19T10:00:02Z', 'msg-b'),
+      claude.request('2026-11-19T10:00:03Z', 'msg-a', { output_tokens: 7 }),
+    ]);
+    await pass(f.config(), { home: f.home });
+    const totals = await recount({ home: f.home, t3Database: f.database, from: '2026-11-01T00:00:00Z', to: '2026-11-20T00:00:00Z' });
+    assert.deepEqual(sessionTotals(f.spans), totals);
+  } finally { await f.close(); }
+});
