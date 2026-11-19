@@ -7,8 +7,8 @@
 //   messages.mjs page <record>...   print the taste-check page: each record's latest brief and recap
 //
 // A message with problems is not saved: each problem prints on its own line and the exit code is 1.
-// The brief's plan is checked against the record's `Acceptance criteria:` list, or a spec's `Tickets:`
-// list. A recap is checked against the record's `pr:`, `head:` and `guide:` lines, and a spec's recap
+// The brief's plan matches the contract's criteria and risks, or a spec's tickets.
+// A recap is checked against the record's `pr:`, `head:` and `guide:` lines, and a spec's recap
 // must give each ticket its line. Sign-offs must not repeat any of the last 10 saved in the run
 // records beside this one, which are this repo's runs.
 
@@ -65,7 +65,7 @@ function briefProblems(lines, record) {
     problems.push(...planMismatch(plan.filter((step) => !isRisk(step)), criteria, "criterion"));
     if (riskSteps.length) problems.push(...planMismatch(plan.filter(isRisk), riskSteps, "risk"));
     if (plan.slice(0, criteria.length).some(isRisk)) {
-      problems.push("the plan lists criteria before risks");
+      problems.push("list criteria before risks in the plan");
     }
   }
 
@@ -207,7 +207,7 @@ function criteriaOf(record) {
 }
 
 function contractOf(record) {
-  return record.split(/^## Contract[ \t]*$/m)[1]?.split(/^## /m)[0] ?? record.split(/^## /m)[0];
+  return record.split(/^## Contract\b[^\n]*$/m)[1]?.split(/^## /m)[0] ?? record.split(/^## /m)[0];
 }
 
 function risksOf(record) {
