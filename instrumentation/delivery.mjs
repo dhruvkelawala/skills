@@ -27,7 +27,7 @@ export function ingestion(event) {
   return { trace, scores: [score, measured].filter(Boolean) };
 }
 
-function usageDetails(u) {
+export function usageDetails(u) {
   if (!u) return undefined;
   const details = {};
   if (u.input != null) details.input = Math.max(0, u.input - (u.inputIncludesCache ? u.cacheRead ?? 0 : 0));
@@ -39,7 +39,7 @@ function usageDetails(u) {
   return details;
 }
 
-async function durable(path, value) {
+export async function durable(path, value) {
   const temp = path + '.tmp-' + process.pid;
   const file = await open(temp, 'w', 0o600);
   try { await file.writeFile(JSON.stringify(value)); await file.sync(); } finally { await file.close(); }
@@ -48,7 +48,7 @@ async function durable(path, value) {
   try { await directory.sync(); } finally { await directory.close(); }
 }
 
-async function locked(config, action) {
+export async function locked(config, action) {
   const c = { ...defaults, ...config };
   if (!c.enabled) return { status: 'disabled' };
   let lock;
