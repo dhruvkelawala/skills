@@ -74,13 +74,16 @@ async function capture(file, cursor, { t3, workflows, outbox, since, owners, spa
   const session = sessionOf(file.runtime, who.parentNative ?? who.native, t3, workflows);
   const read = adapter(file.runtime, progress, spawns);
   const mine = digest(file.path).slice(0, 12);
-  let sent = 0, copied = 0;
+  // Streaming writes a request's counts across several rows, so a transcript's spans wait here and only the last
+  // version of each reaches the outbox. Two versions in different batches could land in either order.
+  const spans = new Map();
+  let copied = 0;
 
   // A native subagent's transcript joins its parent's session, under the span that started it and in that span's turn.
   // Claude's Agent tool call is that span; a Codex subagent gets a span of its own covering its transcript.
   const spawnedBy = who.spawnedBy ? observationId('tool', 'claude', who.spawnedBy) : observationId('subagent', file.runtime, who.native);
   const spawn = who.parentNative ? spawns[who.spawnedBy ?? who.native] : null;
-  const send = async (event) => {
+  const send = (event) => {
     if (who.parentNative) event = { ...event, parent: event.kind === 'subagent' ? null : spawnedBy, turn: spawn?.turn ?? event.turn };
     if (!(Date.parse(event.start) >= since)) return;
     const run = session.t3 ? runAt(t3, session.session, event.start) : null;
@@ -91,21 +94,21 @@ async function capture(file, cursor, { t3, workflows, outbox, since, owners, spa
     const owner = owners[span.spanId];
     if (owner && owner[0] !== mine) { copied++; return; }
     owners[span.spanId] = [mine, day(event.start)];
-    await outbox.add(span);
-    sent++;
+    spans.set(span.spanId, span);
   };
 
   let offset = start;
   for await (const { row, offset: next } of appended(file.path, start)) {
     offset = next;
     if (!row) continue;
-    for (const event of read(row)) await send(event);
+    for (const event of read(row)) send(event);
   }
-  for (const event of abandoned(progress)) await send(event);
+  for (const event of abandoned(progress)) send(event);
   if (who.parentNative && !who.spawnedBy && progress.first) {
-    await send({ kind: 'subagent', source: who.native, start: progress.first, end: progress.last, childSession: who.native, childThread: t3.native.get(who.native), turn: progress.turn });
+    send({ kind: 'subagent', source: who.native, start: progress.first, end: progress.last, childSession: who.native, childThread: t3.native.get(who.native), turn: progress.turn });
   }
-  return { sent, copied, bytes: offset - start, cursor: { ino: file.ino, size: file.size, mtime: file.mtime, offset, who, progress } };
+  for (const span of spans.values()) await outbox.add(span);
+  return { sent: spans.size, copied, bytes: offset - start, cursor: { ino: file.ino, size: file.size, mtime: file.mtime, offset, who, progress } };
 }
 
 const day = (time) => Math.floor(Date.parse(time) / DAY);

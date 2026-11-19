@@ -425,3 +425,17 @@ test('a request copied into sibling subagent transcripts of one session is sent 
     assert.deepEqual(totals, sessionTotals(f.spans));
   } finally { await f.close(); }
 });
+
+test('a pass sends one version of each request, its final counts, even when a batch fills between its streamed rows', async () => {
+  const f = await fixture();
+  try {
+    await f.write('.claude-test/projects/-w/f1f1f1f1-0000-4000-8000-000000000001.jsonl', [
+      claude.request('2026-11-19T10:00:01Z', 'msg-streamed', { output_tokens: 35 }),
+      claude.request('2026-11-19T10:00:01Z', 'msg-other'),
+      claude.request('2026-11-19T10:00:02Z', 'msg-streamed', { output_tokens: 319 }),
+    ]);
+    await pass(f.config({ batchSpans: 1 }), { home: f.home });
+    const sent = f.spans.filter((span) => span.spanId === observationId('generation', 'claude', 'msg-streamed'));
+    assert.deepEqual(sent.map((span) => JSON.parse(span.attributes['langfuse.observation.usage_details']).output), [319]);
+  } finally { await f.close(); }
+});
