@@ -34,9 +34,10 @@ Reviewed: <source-review passes and their result; extra opinion completed, inten
 
 ### Criteria
 
-| Criterion | Commit | Test | Evidence |
+| Criterion or risk | Commit | Test | Evidence |
 | --- | --- | --- | --- |
 | <criterion> | `<short sha>` | `<test name>` | [capture](<link>), or exempt |
+| <risk> | `<short sha, for test:>` | `<test name, for test:>` | [drive capture](<link>), red/green proof, or accepted: <reason> |
 
 ```text
 <per criterion: the red line before the change and the green line at head>
@@ -57,6 +58,7 @@ Captured at `<capture short sha>`. Run at `<head short sha>` against base `<base
 - Conditional pilot, when enrolled: <saved decision, explicit facts, actual author/reviewer families, retained-opinion duration and downstream accepted P0/P1 findings, or none yet>
 - `/code-review` pass 2 over the repairs: <n fixed, or skipped: light lane or tree unchanged>
 - Review-ready: <clean, exceptions, or skipped: light lane>
+- Handoff review: <reviewed product-code delta and re-driven criteria/risks, or skipped: unchanged tree or tests/docs/config only>
 - Not re-reviewed: <repair commits made after the last pass, or none>
 - Follow-ups, P2 and lower: <one line each, or none>
 
@@ -92,6 +94,7 @@ node <issue-to-pr>/scripts/pr-body.mjs < <body file>
 ## Rules
 
 - Each criterion has a link to a capture of the feature running, in Evidence or in the Criteria table, or a quoted exemption. Test output alone is the proof only for an exempt criterion.
+- Each risk has a row too: red and green proof for `test:`, a published capture for `drive:`, or its `accepted:` reason. Include drive-risk links in the recap's `Evidence:` line.
 - The top tier names no commit. SHAs, the base and the head, earlier builds and review rounds, red and green lines, log links and verifier output go in `<details>`.
 - Alt text says what the reader sees in the capture, such as "The polaroid fading in with the shared photo already in it".
 - The verification table lists every command `/verify` found, including the ones that could not run.

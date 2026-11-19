@@ -20,7 +20,7 @@ function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // A spec's record lists `tickets` where a build's lists criteria; a ticket's record names its `pr`.
-  const record = (issue, { predecessor, criteria = CRITERIA, tickets, specMode = "stack", pr, head, guide } = {}) => {
+  const record = (issue, { predecessor, criteria = CRITERIA, risks = "Risks: none: only score copy changes.", contractHeading = "## Contract", tickets, specMode = "stack", pr, head, guide } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
@@ -32,12 +32,13 @@ function runRecords(t) {
       `pr: ${pr ? `https://github.com/o/r/pull/${pr}` : "none"}`,
       ...(guide ? [`guide: ${guide}`] : []),
       "",
-      "## Contract",
+      ...(contractHeading ? [contractHeading] : []),
       "",
       ...(tickets
         ? ["Tickets:", ...tickets.flatMap((ticket, i) => [`${i + 1}. ${ticket}`, ...(i ? ["   blocked by: #1"] : [])])]
         : ["Acceptance criteria:", ...criteria.flatMap((criterion, i) => [`${i + 1}. ${criterion}`, "   surface: web. capture: a still of the results screen."])]),
       "",
+      ...(!tickets && risks !== null ? [risks, ""] : []),
       "Human gate: none.",
       "",
     ].join("\n"));
@@ -104,6 +105,46 @@ test("a plan must list each criterion once, in any build order", (t) => {
   saved("brief", path, brief({ plan: [CRITERIA[1], CRITERIA[0]] }));
 });
 
+test("a build brief requires risks in the contract, or none with a reason", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const path = record(7, { risks: null });
+  refused("brief", path, brief(), /contract has no `Risks:`/);
+  const text = readFileSync(path, "utf8");
+  writeFileSync(path, `${text}\n## Build report\nRisks: none: later report.\n`);
+  refused("brief", path, brief(), /contract has no `Risks:`/);
+  for (const [risks, problem] of [["Risks: none", /needs a reason/], ["Risks: none:   ", /needs a reason/], ["Risks:", /one to at most six risks/]]) {
+    refused("brief", record(7, { risks }), brief(), problem);
+  }
+  for (const contractHeading of [false, "## Contract (2026-10-22)", "## Contract, 2026-10-28"]) {
+    saved("brief", record(8, { contractHeading }), brief({ signOff: "📝 A heading stays optional" }));
+  }
+  saved("brief", record(7), brief());
+});
+
+test("risk plans follow the criteria and every risk has one proof, with at most six risks", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const risks = [
+    ["A correction updates the saved score.", "test: save and read through the score store."],
+    ["A Release restart keeps the score.", "drive: save on a phone, restart Release and read it back."],
+    ["The real service accepts the score.", "accepted: the service has no sandbox for this request."],
+  ];
+  const riskList = (entries) => ["Risks:", ...entries.flatMap(([risk, proof], i) => [`${i + 1}. ${risk}`, `   ${proof}`])].join("\n");
+  const path = record(7, { risks: riskList(risks) });
+  refused("brief", path, brief(), /missing risk: A correction/);
+  refused("brief", path, brief({ plan: [risks[0][0], ...CRITERIA, ...risks.slice(1).map(([risk]) => risk)] }), /criteria before risks/);
+  refused("brief", path, brief({ plan: [...CRITERIA, ...risks.map(([risk]) => risk), risks[0][0]] }), /listed twice/);
+  const plan = [...CRITERIA, ...risks.map(([risk]) => risk)];
+  for (const proof of ["", "test:", "test: store.\n   drive: phone.", "later: after launch."]) {
+    const malformed = record(7, { risks: riskList([[risks[0][0], proof], ...risks.slice(1)]) });
+    refused("brief", malformed, brief({ plan }), /one.*test:.*drive:.*accepted:/);
+  }
+  const tooMany = Array.from({ length: 7 }, (_, i) => [`Risk ${i + 1}.`, "test: public score store."]);
+  refused("brief", record(7, { risks: riskList(tooMany) }), brief({ plan: [...CRITERIA, ...tooMany.map(([risk]) => risk)] }), /at most six risks/);
+  const six = tooMany.slice(0, 6);
+  saved("brief", record(8, { risks: riskList(six) }), brief({ plan: [...CRITERIA, ...six.map(([risk]) => risk)], signOff: "🎲 Six chances accounted for" }));
+  saved("brief", record(7, { risks: riskList(risks) }), brief({ plan }));
+});
+
 test("a plan quotes a criterion word for word, even one that names a local path or localhost", (t) => {
   const { record, saved } = runRecords(t);
   const criteria = ["The audit lists each worktree under ~/.t3/worktrees.", "No link in the answer points at localhost."];
@@ -167,6 +208,18 @@ test("a recap's Verifier line gives the verdict and why the verifier ran, or tha
   refused("recap", path, verifier("- Verifier: skipped"), /why/);
   saved("recap", path, verifier("- Verifier: PASS+NOTES, rule B: the PR changes who may delete a project.", "🔐 Checked by fresh eyes"));
   saved("recap", path, verifier("- Verifier: skipped, rule B doesn't apply: a two-way door, and no authority, data, money or switch.", "🚪 Two-way door, no detour"));
+});
+
+test("a recap names every accepted risk on Couldn't check", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const first = "The live service rejects the score.";
+  const second = "A real phone loses its score on restart.";
+  const path = record(7, { risks: `Risks:\n1. ${first}\n   accepted: no service sandbox.\n2. ${second}\n   accepted: no phone available.` });
+  refused("recap", path, recap(), /Couldn't check:.*accepted risk: The live service/);
+  const lines = (text) => RECAP_LINES.map((line) => line.includes("Couldn't check:") ? `- Couldn't check: ${text}` : line);
+  refused("recap", path, recap({ lines: lines(first) }), /accepted risk: A real phone/);
+  refused("recap", path, recap({ lines: RECAP_LINES.map((line) => line.includes("Built:") ? `${line} ${first} ${second}` : line) }), /accepted risk: The live service/);
+  saved("recap", path, recap({ lines: lines(`${first} No service sandbox. ${second} No phone available.`) }));
 });
 
 test("once the run has a PR, the recap's first line links it and points at a guide written for the head", (t) => {

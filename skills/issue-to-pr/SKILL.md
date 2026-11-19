@@ -49,7 +49,7 @@ Once the contract is pinned, post the brief in the thread and keep going. Don't 
 
     <sign-off>
 
-Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own. A spec's brief plans its tickets instead, as [spec](references/spec.md#brief) shows.
+List each acceptance criterion first, in build order, then each risk, worded as the contract words it. With `Risks: none`, the plan has only criteria. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own. A spec's brief plans its tickets instead, as [spec](references/spec.md#brief) shows.
 
 ## Recap
 
@@ -60,13 +60,15 @@ When the run stops, post the recap: the result first, then one line each for wha
     - Built: <what changed, as a user sees it>
     - Review: <the passes that ran and what they found; extra opinion completed, skipped with reason, or incomplete, and later repairs not re-reviewed>
     - Verifier: <its verdict and the rule B reason it ran, or skipped and why>
-    - Evidence: <a link for each criterion, or its exemption>
-    - Couldn't check: <what automation could not check, or nothing>
+    - Evidence: <criterion captures or exemptions, and each drive: risk's capture>
+    - Couldn't check: <each accepted: risk and its reason, other checks automation could not run, or nothing>
     - Next: <the one thing to do next>
 
     <sign-off>
 
 Once the PR exists, the recap is the intro to the user's review of it in stage 8. Its first line links the PR and points at the PR panel's Guide tab, where T3's review guide holds the tour. Stage 7 writes the guide for the head before the recap posts. When the PR has no guide, the first line says why instead.
+
+List every `accepted:` risk on `Couldn't check:`, with why it could not be proven before merge. The message check refuses a recap that omits one.
 
 When the PR adds a part, changes a flow across parts, or is a stack, follow the recap with an `/eli25` page. When a change the user can see has no recording among its evidence, the `Next:` line suggests `try`, with two to four things to try and the expected result of each.
 
@@ -85,11 +87,11 @@ node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief fil
 node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
 ```
 
-The script checks the brief's fields, the length of "What it's about" and that the plan matches the contract's criteria or a spec's tickets. It checks the recap's lines, that its `Verifier:` line gives a verdict or `skipped` and why, that a spec's recap lists every ticket, and, once the record names a PR, that the first line links it and the record's `guide:` line is for the head. It checks the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
+The script checks the brief's fields, the length of "What it's about", the contract's risk list and that the plan lists criteria before risks, or a spec's tickets. It checks the recap's lines, that its `Verifier:` line gives a verdict or `skipped` and why, that a spec's recap lists every ticket, and, once the record names a PR, that the first line links it and the record's `guide:` line is for the head. It checks the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
 ## Taste check
 
-Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. In a copy that names a PR, add the `guide:` line its run would have recorded, or the script refuses every recap. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a build copy whose contract predates the `Acceptance criteria:` and `Risks:` lists that [run record](references/run-record.md) describes, reconstruct them from the work item and touched code, or the script refuses every brief. In a copy that names a PR, add the `guide:` line its run would have recorded, or the script refuses every recap. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
 
 ```bash
 node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html
@@ -118,6 +120,15 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 4. Read `EVIDENCE.md` from the checkout. When the base predates it, read `git show origin/<default-branch>:EVIDENCE.md`. When neither exists, run `/evidence plan` for the touched surface, and say in the report that the repo should adopt `EVIDENCE.md`.
 5. Look for a `/product-description` output (`README.md`, `goal.md` and `glossary.md`) through paths named in `AGENTS.md` or `EVIDENCE.md` and in sibling directories. When one exists for this product, read it and the touched feature documents, use their setup, action and expected result to make vague issue text concrete, and record their paths and source commit. Flag claims that conflict with the issue or the code.
 6. Read enough code to state the contract: in-scope paths, out-of-scope items, acceptance criteria, any human gate the work item names, and for each criterion the surface it lands on and the capture that will prove it.
+
+   After `Acceptance criteria:`, write `Risks:`. Ask five questions about the touched code:
+   - **Other states.** What other states can this be in: empty, last item, retry, correction, restart, two at once?
+   - **Limits and inputs.** Which sizes, lengths, rate limits, times, ranges or input methods could break it?
+   - **The real path.** Does the change run somewhere the tests and usual drive don't reach: deploy, a Release build, a real device, built output, a real third-party service?
+   - **Neighbours.** What else shares a resource, file, limit or rule with it, including a copy of the same rule on another side?
+   - **What the diff removes.** Does any behaviour go away, and was anything relying on it?
+
+   Pick at most six risks with the most to lose. Write each on one numbered line, with exactly one indented proof line: `test: <test seam>` for stage 2, `drive: <the exact steps>` for stage 4, or `accepted: <why it can't be proven before merge>`. When none of the questions applies, write `Risks: none` with a reason, as for a copy or docs change. Each ticket keeps its own list; a whole spec plans tickets instead.
 7. Run `/review-ready` in preflight mode against the contract. The test seam it names becomes `test_seam`.
 8. Append the contract to the run record, post the [brief](#brief), and continue. With `--merge`, hold it as ["land"](references/pr-thread.md#land) says. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
 9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt, so leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
@@ -129,7 +140,7 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 Ask no questions in this stage. Report a blocker instead.
 
 1. Confirm that `git merge-base --is-ancestor <base_sha> HEAD` holds, the current branch is the contract's branch, and `git status` is clean.
-2. Take one acceptance criterion at a time, testing at `test_seam`. Each test passes the `/test-audit` authoring gate before you write it:
+2. Take one acceptance criterion at a time, testing at `test_seam`, then each `test:` risk at its named seam. Build each such risk like a criterion: one failing test, the smallest fix, one commit. Each test passes the `/test-audit` authoring gate before you write it:
    1. Write one failing test that states the criterion, or add a case to the test that already owns that behaviour. Run it, see it go red on its own assertion about the criterion, and keep those assertion lines as the red line. When the code under test does not exist yet, add it as a stub first, so the test reaches that assertion.
    2. Write the smallest code at the real integration point that makes it pass. Keep the passing summary line as the green line.
    3. Run the focused tests for the touched paths, and the typecheck when the project has one.
@@ -142,7 +153,7 @@ Ask no questions in this stage. Report a blocker instead.
    ```md
    build report
    - head: <sha>  base: <base_sha>  files: <count>  changed lines: <count>
-   - <criterion>: <commit> / <test name>, or BLOCKED: <reason>
+   - <criterion or test: risk>: <commit> / <test name>, or BLOCKED: <reason>
      red: <failing assertion lines, trimmed>
      green: <passing summary line>
      reproduce: <command from the repo root>
@@ -152,7 +163,7 @@ Ask no questions in this stage. Report a blocker instead.
 
 5. Set `lane: light` when the diff changes fewer than about 100 lines (`git diff --shortstat <base_sha>...HEAD`). Otherwise set `lane: full`.
 
-**Complete when:** the build report maps every criterion to a commit and a test, or to a blocker, `git status` is clean, and the record shows `implemented` and the lane.
+**Complete when:** the build report maps every criterion and every `test:` risk to a commit and a test with red and green lines, or to a blocker, `git status` is clean, and the record shows `implemented` and the lane.
 
 ## Helper ownership
 
@@ -166,26 +177,30 @@ When a keyed problem fails again after using its allowed attempts, apply the [th
 
 Before each pass, compare `git rev-parse HEAD^{tree}` with the tree the last pass reviewed. When they are the same, as after a pure rebase, skip the pass and record the skip.
 
+After a completed source review or extra opinion, save its actual reviewed commit and tree as `last_reviewed_head` and `last_reviewed_tree`. Save the reviewed basis before making any repairs; a repair does not advance it. Preserve these fields through publication, the context reset and resume.
+
 1. **Pass 1.** Run `/code-review <base_sha>` with the contract as the spec and `<skills-dir>/test-audit/SKILL.md` added to the standards sources, where `<skills-dir>` is the directory that holds this skill's folder. Start its two reviewers with `delegate_task`, on the `reviewers` job's entry in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`), applying [model-policy](../model-policy/SKILL.md) when the preferred family is unavailable. Keep two fresh reviewer contexts on the available family. Record the tree, the model each reviewer ran on and any fallback reason.
+
+   Give the spec reviewer the contract's `Risks:` list and the build report. Add to its prompt: "Check the risk list against the diff using stage 1's five questions. A risk the diff plainly raises that is missing from the list is P1. A listed `test:` risk without its test or a `drive:` risk without an executable drive is P1. Stage 4 captures the drives; an `accepted:` risk needs its reason for why it cannot be proven before merge." This uses the existing spec reviewer and pass.
 2. **Autoreview, once.** Keep this decision between pass 1 and pass 2. If a mandatory source-review axis could not complete after model-policy handling, remain blocked. The extra opinion cannot replace it.
    - In an enrolled run, collect [explicit facts](references/run-record.md#conditional-v1-pilot) from the contract and both reviewers, then run `node <this skill's folder>/scripts/autoreview-plan.mjs stage3 <record> <facts.json>` from the clean checkout. It saves `autoreview_plan` separately from the outcome. `blocked` stops the run. `skip` with `eligible` records `autoreview: skipped: conditional-v1, <reason codes>` and its basis in the stage report, and launches no extra helper. `opinion-already-completed` preserves the completed outcome and discloses later repairs. `run` retains the extra opinion. Post a short review brief naming its concrete reason codes and changed configuration paths. Use its `prompt` below. Missing or unknown eligibility facts retain the opinion; incomplete mandatory source review blocks.
    - Old records and non-pilot runs retain the opinion. A completed extra opinion is never repeated in this run. Before stage 3 completes, rerun the planner after a tree, contract or facts change. Its saved same-basis decision survives retries. Later repairs remain disclosed as not re-reviewed; stage 5 must not launch another opinion.
    - When retained, review `<base_sha>...HEAD` with the `second-opinion` job. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as `/apr` step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base_sha> --engine <engine> $ENGINE_FLAGS --max-priority P1`, adding `--prompt "<planner prompt>"` for the pilot. Register this attempt with role `autoreview` and pass `--status-output <record-without-md>.autoreview-<helper-id>.json`, a private sidecar beside the run record. Preserve a separate sidecar for each availability attempt so its measured usage is retained. Apply existing availability fallback before reporting the review unavailable. A failed availability attempt and its replacement are one review pass; a same-family result counts when the independent helper completes. Record `autoreview: <engine> <model it ran>, tree <hash>, clean | <n> fixed`, with the actual model from `/apr` step 1, and record the reviewed base/head/tree, elapsed duration, fallback and coverage limit in the stage report. On failure, record `autoreview: incomplete: <reason>` and both availability failures, and remain blocked. This thread runs the script itself rather than through `delegate_task`, because it already isolates the reviewer. Keep scratch files outside the checkout until it exits.
 3. **Pass 2, full lane only.** Run `/code-review <pass 1 head>` with its reviewers started the same way. It covers only the repairs since pass 1. Fix its P0 and P1 findings with focused tests. There is no third pass.
 
-Repairs made after the last pass, here or in a later stage, appear in the PR as not re-reviewed.
+Repairs made after the last pass, here or in a later stage, appear in the PR as not re-reviewed until stage 7's delta review covers them.
 
 **Complete when:** pass 1 ran, autoreview ran or has a recorded skip, pass 2 ran or was skipped by lane or tree, no accepted P0 or P1 finding is open, and the record shows `reviewed` at the current head and tree.
 
 ## 4. Verify and prove
 
 1. If the head changed since the build's `/verify`, run `/verify` in full mode again. On red, record the repair with `--problem <stable check key>` and run it again. Apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch when that key fails again after using its allowed attempts, including failures found while capturing evidence or at the final gate. On incomplete, list what could not run for the PR body.
-2. Prove each criterion by running the feature. Launch the surface the way `EVIDENCE.md` says, drive the behaviour the criterion names, and capture it at the current head: a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair when existing behaviour changed.
+2. Prove each criterion by running the feature. Launch the surface the way `EVIDENCE.md` says, drive the behaviour the criterion names, and capture it at the current head: a still for a state, a recording for a flow, a transcript for a CLI or API, and a before and after pair when existing behaviour changed. Run each `drive:` risk's exact steps and capture it the same way.
 3. Publish the captures with `<skills-dir>/evidence/scripts/publish-evidence.sh --repo <owner/repo> --label <issue> <files>`. Keep each returned link with the head it was captured at.
-4. A criterion without a capture needs an exemption quoted word for word from `EVIDENCE.md`, and its red and green lines are then its proof. A criterion with neither a link nor a quoted exemption stops the run as `blocked: evidence`, with the reason the capture failed.
+4. A criterion without a capture needs an exemption quoted word for word from `EVIDENCE.md`, and its red and green lines are then its proof. A criterion with neither a link nor a quoted exemption stops the run as `blocked: evidence`, with the reason the capture failed. Account for every risk too: the build report's red and green lines for `test:`, a published capture for `drive:`, or the contract's `accepted:` reason. A risk without proof or an `accepted:` reason also stops the run as `blocked: evidence`.
 5. Full lane only: run `/review-ready` in final-gate mode over `<base_sha>...HEAD`. Fix a concrete violation as a repair, and record an intentional exception for the PR body.
 
-**Complete when:** `/verify` is green or incomplete at the current head, every criterion has a published link or a quoted exemption, and in the full lane review-ready has no open concrete violation.
+**Complete when:** `/verify` is green or incomplete at the current head, every criterion has a published link or a quoted exemption, every risk has proof or an `accepted:` reason, and in the full lane review-ready has no open concrete violation.
 
 ## 5. Publish
 
@@ -227,15 +242,22 @@ This thread watches its own PR, and T3 wakes it when the PR changes.
 Run this stage once stage 6 records anything but `watching`.
 
 1. Run `gh pr view <n> --json state` (REST: `.merged` from `gh api repos/{owner}/{repo}/pulls/<n>`). When it reports MERGED, clean up as [on merge](references/pr-thread.md#on-merge) says.
-2. **Verifier, under rule B.** At `ready` or `awaiting-human`, decide whether rule B covers the PR, including an existing verdict, as [ship's rules](../ship/SKILL.md#rules) define it. When it does, follow `/ship verify <n>` and its [verification preparation](../ship/references/verification.md): check exact-pushed-head readiness and reuse a current passing verdict before launching a new child. Record reused, deferred or newly run, its reason and the proof. A new child still runs the gates, live behaviour and blast-radius lanes. On FAIL or an accepted repair that invalidates a running verifier, follow the preparation's cancellation and batching rules and record repairs with `--problem <stable verifier criterion or finding key>`. Apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch or push when the problem fails again after using its allowed attempts; record the block, unwatch, and show the attempts and failure evidence. Otherwise push and return to stage 6 before stage 7. If verification is unnecessary, record why it was skipped. Append the verdict and rule B reason for the recap's `Verifier:` line.
-3. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
+2. **One look at later product changes.** At `ready` or `awaiting-human`, compare `last_reviewed_tree` with `HEAD^{tree}` before this handoff. For an older record, recover the actual reviewed basis from its review reports. Inspect the delta and record a skip when the trees match or it changes only tests, docs or config. At `blocked`, retain the blocker and its budget limits.
+
+   First reuse a completed `handoff_review` for this handoff, including after a return from stage 6, so its later repairs do not start another review.
+
+   When product code changed, run one `/code-review` over `git diff <last_reviewed_tree> HEAD^{tree}`, with a single fresh reviewer covering both standards and spec, including the risk list. Use the existing `reviewers` job, helper attribution and model-policy routing. Review all the later changes together, at most once per handoff. Record the reviewed head/tree and findings as `handoff_review`, and advance the reviewed basis only to that reviewed head/tree. Apply stage 3's finding priorities, repair budget and three-strikes rule. An incomplete review blocks the handoff.
+
+   Re-drive every criterion or risk whose code the delta touched, including any resulting repair, at the final head. Use stage 4's proof and capture rules, updating the evidence and PR body. Keep a `test:` risk's red line and rerun its test for green; for an `accepted:` risk, record why proof remains unavailable and keep it on `Couldn't check:`. Missing required proof stops the run as `blocked: evidence`. Run `/verify` after repairs, publish through `/apr --no-watch --skip-review`, and return to stage 6 when the head changed. Keep this handoff's completed review across that return; repairs after it stay disclosed as not re-reviewed. A later user-review handoff gets its own allowance. This step adds no stage-3 pass or extra opinion.
+3. **Verifier, under rule B.** At `ready` or `awaiting-human`, decide whether rule B covers the PR, including an existing verdict, as [ship's rules](../ship/SKILL.md#rules) define it. When it does, follow `/ship verify <n>` and its [verification preparation](../ship/references/verification.md): check exact-pushed-head readiness and reuse a current passing verdict before launching a new child. Record reused, deferred or newly run, its reason and the proof. A new child still runs the gates, live behaviour and blast-radius lanes. On FAIL or an accepted repair that invalidates a running verifier, follow the preparation's cancellation and batching rules and record repairs with `--problem <stable verifier criterion or finding key>`. Apply the [three-strikes stop](references/pr-thread.md#repair-budget) before another patch or push when the problem fails again after using its allowed attempts; record the block, unwatch, and show the attempts and failure evidence. Otherwise push and return to stage 6 before stage 7. If verification is unnecessary, record why it was skipped. Append the verdict and rule B reason for the recap's `Verifier:` line.
+4. At `ready`, when `land.mjs check <record>` exits 0 for a "land" the record holds, as ["land"](references/pr-thread.md#land) says, land the PR through the ship skill:
    1. For a stacked layer, land only when its base is the default branch, which means every PR below it has merged. Otherwise record `ready: waiting on #<predecessor>` and stop; `/ship land <bottom PR>` lands the stack in order.
    2. When the PR body's `**Door:**` line says one-way, stop at `ready` and ask the user to confirm the merge. It is a human gate.
-   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 2 when rule B covers the PR, and confirms the merge.
+   3. Load and follow `/ship land <n>`. On the caller's own PR, the held "land" is the explicit request to land, so it stands in for an approval. ship merges pinned to the checked head, after the verdict from step 3 when rule B covers the PR, and confirms the merge.
    4. Once it merged, record the merge commit and clean up as [on merge](references/pr-thread.md#on-merge) says. Otherwise record `ready` with the blocker ship reports.
 
    Without the ship skill installed, run the gate once more without `--watch`, merge with `gh pr merge <n> --squash --match-head-commit <head>` (REST: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`), and confirm that `gh pr view <n> --json state` reports MERGED (REST: `.merged` is true).
-4. Write the handoff block into the record:
+5. Write the handoff block into the record:
 
    ```md
    handoff
@@ -245,15 +267,15 @@ Run this stage once stage 6 records anything but `watching`.
    - human gates left: <approvals and from whom, a one-way door, the merge>
    ```
 
-5. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
-6. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
-7. Write the report into the record, and post the [recap](#recap). Its `Next:` line names the user's next move, such as reviewing the PR in this thread, and saying "done" on a draft.
+6. If any finding recurred, in a later pass, the watch or another PR, load and follow `/promote --report-only <run record path> <PR URL>`, and put its proposals in the report.
+7. Once the run has a PR, check its guide. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is written for the current head or running for it. A push since stage 5 makes it `stale`. While its run is `Running`, wait a minute and read it again. Record `guide: written for <head>` once it is. The PR has no guide when guides are off (the write fails), its run is `Failed`, or it is still running after about ten minutes: record `guide: none: <reason>`.
+8. Write the report into the record, and post the [recap](#recap). Its `Next:` line names the user's next move, such as reviewing the PR in this thread, and saying "done" on a draft.
 
 ## 8. The user's review
 
 After the recap, the user reviews the PR in this thread, the way `/pr-review` reviews a teammate's PR, with the recap as its intro and the guide as its tour. Their comments become fixes, and no review or comment goes on GitHub, because the PR is their own.
 
-1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Answer "why X?" from the record: every `## Decisions` section, the contract and the findings with their reasons. Quote the line you used, and when the record has none, say so instead of reconstructing a reason. Make each request one fix commit, with its focused tests, and record it with `repairs.mjs add --asked`, the comment as its `--fix`.
+1. Take the user's comments from chat, which works on a phone, from "Ask agent" on a guide excerpt, and from "Add to agent" in the Code tab. Answer a question in chat. Answer "why X?" from the record: every `## Decisions` section, the contract and the findings with their reasons. Quote the line you used, and when the record has none, say so instead of reconstructing a reason. When starting a batch of requested fixes, append the previous handoff outcome to its report and clear the `handoff_review` header for the new handoff. Make each request one fix commit, with its focused tests, and record it with `repairs.mjs add --asked`, the comment as its `--fix`.
 2. Once the comments so far are fixed, run `/verify`, and push through `/apr --no-watch --skip-review --body-file <file>`, with the body refreshed for the new head, the fixes listed as not re-reviewed, and the body [checked](references/pr-body.md#the-check) until it passes. Start the guide for the new head with `write_pull_request_guides` right after the push.
 3. Run stages 6 and 7 again. The recap they end with covers only what changed since the last one: its `Built:` line gives each comment's fix.
 4. Only the user's "done" marks a draft ready. When they say it and the record says `draft: yes`, run `gh pr ready <n>`. It has no REST call, so when the GraphQL quota is spent, wait for it to reset. Record `draft: no`, then run stage 6 again, where the approval GitHub requires comes from someone else.
