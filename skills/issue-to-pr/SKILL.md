@@ -118,6 +118,15 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 4. Read `EVIDENCE.md` from the checkout. When the base predates it, read `git show origin/<default-branch>:EVIDENCE.md`. When neither exists, run `/evidence plan` for the touched surface, and say in the report that the repo should adopt `EVIDENCE.md`.
 5. Look for a `/product-description` output (`README.md`, `goal.md` and `glossary.md`) through paths named in `AGENTS.md` or `EVIDENCE.md` and in sibling directories. When one exists for this product, read it and the touched feature documents, use their setup, action and expected result to make vague issue text concrete, and record their paths and source commit. Flag claims that conflict with the issue or the code.
 6. Read enough code to state the contract: in-scope paths, out-of-scope items, acceptance criteria, any human gate the work item names, and for each criterion the surface it lands on and the capture that will prove it.
+
+   After `Acceptance criteria:`, write `Risks:`. Ask five questions about the touched code:
+   - **Other states.** What other states can this be in: empty, last item, retry, correction, restart, two at once?
+   - **Limits and inputs.** Which sizes, lengths, rate limits, times, ranges or input methods could break it?
+   - **The real path.** Does the change run somewhere the tests and usual drive don't reach: deploy, a Release build, a real device, built output, a real third-party service?
+   - **Neighbours.** What else shares a resource, file, limit or rule with it, including a copy of the same rule on another side?
+   - **What the diff removes.** Does any behaviour go away, and was anything relying on it?
+
+   Pick at most six risks with the most to lose. Write each on one numbered line, with exactly one indented proof line: `test: <test seam>` for stage 2, `drive: <the exact steps>` for stage 4, or `accepted: <why it can't be proven before merge>`. When none of the questions applies, write `Risks: none` with a reason, as for a copy or docs change. Each ticket keeps its own list; a whole spec plans tickets instead.
 7. Run `/review-ready` in preflight mode against the contract. The test seam it names becomes `test_seam`.
 8. Append the contract to the run record, post the [brief](#brief), and continue. With `--merge`, hold it as ["land"](references/pr-thread.md#land) says. Stop only when no acceptance criterion can be stated, the work needs more than one PR, the base cannot be pinned, or the stack cannot be chosen.
 9. Put the branch at `base_sha`. When `git log --oneline <base_ref>..HEAD` prints nothing, the branch has no commits of its own, so when `HEAD` differs from `base_sha`, move it with `git reset --keep <base_sha>`. When it prints commits, the branch holds an earlier attempt, so leave it, record `blocked: branch has earlier commits`, and ask the user. For a layer, record `stack_tracking` as [stacks](references/stacks.md) says.
