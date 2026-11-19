@@ -40,3 +40,17 @@ jq -s '
 ```
 
 A null cost means at least one request has no backend price. Keep it unknown, including partial autoreview attempts. For authoritative token totals keep using `usageQuery`; this cost view uses deduplicated observation prices and can lag ingestion.
+
+## Thread queries
+
+The general thread capture (`threads/`, schema `t3-thread/v1`) writes to its own project. Each Langfuse session is one T3 thread, or `claude:<id>` / `codex:<id>` for a session T3 doesn't know. `node instrumentation/threads/cli.mjs report <from> <to>` reads every `GET /api/public/v2/observations` page for the range and prints all three views below as JSON. They live in `threads/queries.mjs`:
+
+| Question | View | How |
+| --- | --- | --- |
+| Cost per thread | `costPerThread` | Generations grouped by `sessionId`, summing `totalCost` |
+| Cost per lineage tree | `costPerTree` | Each thread climbs `metadata.launcher` (from `t3_thread_launch`, `create_threads` or `delegate_task`), then `metadata.lineageParent`, to its top thread; the tree sums every thread under it |
+| Compactions per thread | `compactionsPerThread` | Events with `metadata.kind = compaction`, with trigger counts and summed `preTokens` and `postTokens`; `handoff` events counted apart |
+
+Each view counts an observation ID once, because rows can repeat while ClickHouse merges a replay. A cost stays null while any request in it has no price, and `unpriced` says how many. Neither runtime logs the usage of the call that writes a compaction summary, so compaction cost is a known gap.
+
+For token totals, sum each generation's `usageDetails` per session. `recount <from> <to>` counts the same totals straight from the transcripts with separate code, so the two can be compared once ClickHouse settles. The thread project sends no `runtime-tokens` scores; at about 290,000 requests a month, one score request per request would not fit the 5-minute schedule.
