@@ -138,7 +138,7 @@ Check it with `html_preview` at phone width, show it with `html_render`, and ask
 Ask no questions in this stage. Report a blocker instead.
 
 1. Confirm that `git merge-base --is-ancestor <base_sha> HEAD` holds, the current branch is the contract's branch, and `git status` is clean.
-2. Take one acceptance criterion at a time, testing at `test_seam`. Each test passes the `/test-audit` authoring gate before you write it:
+2. Take one acceptance criterion at a time, testing at `test_seam`, then each `test:` risk at its named seam. Build each such risk like a criterion: one failing test, the smallest fix, one commit. Each test passes the `/test-audit` authoring gate before you write it:
    1. Write one failing test that states the criterion, or add a case to the test that already owns that behaviour. Run it, see it go red on its own assertion about the criterion, and keep those assertion lines as the red line. When the code under test does not exist yet, add it as a stub first, so the test reaches that assertion.
    2. Write the smallest code at the real integration point that makes it pass. Keep the passing summary line as the green line.
    3. Run the focused tests for the touched paths, and the typecheck when the project has one.
@@ -151,7 +151,7 @@ Ask no questions in this stage. Report a blocker instead.
    ```md
    build report
    - head: <sha>  base: <base_sha>  files: <count>  changed lines: <count>
-   - <criterion>: <commit> / <test name>, or BLOCKED: <reason>
+   - <criterion or test: risk>: <commit> / <test name>, or BLOCKED: <reason>
      red: <failing assertion lines, trimmed>
      green: <passing summary line>
      reproduce: <command from the repo root>
@@ -161,7 +161,7 @@ Ask no questions in this stage. Report a blocker instead.
 
 5. Set `lane: light` when the diff changes fewer than about 100 lines (`git diff --shortstat <base_sha>...HEAD`). Otherwise set `lane: full`.
 
-**Complete when:** the build report maps every criterion to a commit and a test, or to a blocker, `git status` is clean, and the record shows `implemented` and the lane.
+**Complete when:** the build report maps every criterion and every `test:` risk to a commit and a test with red and green lines, or to a blocker, `git status` is clean, and the record shows `implemented` and the lane.
 
 ## Helper ownership
 
