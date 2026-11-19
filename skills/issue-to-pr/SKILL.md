@@ -49,7 +49,7 @@ Once the contract is pinned, post the brief in the thread and keep going. Don't 
 
     <sign-off>
 
-Each plan step is one acceptance criterion, worded as the contract words it. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own. A spec's brief plans its tickets instead, as [spec](references/spec.md#brief) shows.
+List each acceptance criterion first, in build order, then each risk, worded as the contract words it. With `Risks: none`, the plan has only criteria. The lane is the one the contract expects. Stage 2 sets the real lane, and the recap says when it changed. Put a blank line before `Plan:` and before `Stacked on:`, so the thread keeps them on lines of their own. A spec's brief plans its tickets instead, as [spec](references/spec.md#brief) shows.
 
 ## Recap
 
@@ -85,11 +85,11 @@ node <this skill's folder>/scripts/messages.mjs brief <record path> < <brief fil
 node <this skill's folder>/scripts/messages.mjs recap <record path> < <recap file>
 ```
 
-The script checks the brief's fields, the length of "What it's about" and that the plan matches the contract's criteria or a spec's tickets. It checks the recap's lines, that its `Verifier:` line gives a verdict or `skipped` and why, that a spec's recap lists every ticket, and, once the record names a PR, that the first line links it and the record's `guide:` line is for the head. It checks the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
+The script checks the brief's fields, the length of "What it's about", the contract's risk list and that the plan lists criteria before risks, or a spec's tickets. It checks the recap's lines, that its `Verifier:` line gives a verdict or `skipped` and why, that a spec's recap lists every ticket, and, once the record names a PR, that the first line links it and the record's `guide:` line is for the head. It checks the sign-off rules and repeats. When it lists problems, it saved nothing, so fix the text and run it again. Post the text it saved, word for word.
 
 ## Taste check
 
-Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a copy whose contract predates the `Acceptance criteria:` list that [run record](references/run-record.md) describes, rewrite its criteria into that list, or the script refuses every brief. In a copy that names a PR, add the `guide:` line its run would have recorded, or the script refuses every recap. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
+Whenever the brief, recap or sign-off text changes, the user judges the new text on five past runs: a bug, a feature, a stacked layer, a light-lane fix and a spec-mode run. Copy those run records into a scratch directory. In a build copy whose contract predates the `Acceptance criteria:` and `Risks:` lists that [run record](references/run-record.md) describes, reconstruct them from the work item and touched code, or the script refuses every brief. In a copy that names a PR, add the `guide:` line its run would have recorded, or the script refuses every recap. Write the brief and recap each run would get under the new text, and save them into the copies with the script. Then render the page:
 
 ```bash
 node <this skill's folder>/scripts/messages.mjs page <the five copies> > <scratch>/taste.html

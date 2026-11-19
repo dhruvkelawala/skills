@@ -20,7 +20,7 @@ function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // A spec's record lists `tickets` where a build's lists criteria; a ticket's record names its `pr`.
-  const record = (issue, { predecessor, criteria = CRITERIA, tickets, specMode = "stack", pr, head, guide } = {}) => {
+  const record = (issue, { predecessor, criteria = CRITERIA, risks = "Risks: none: only score copy changes.", tickets, specMode = "stack", pr, head, guide } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
@@ -38,6 +38,7 @@ function runRecords(t) {
         ? ["Tickets:", ...tickets.flatMap((ticket, i) => [`${i + 1}. ${ticket}`, ...(i ? ["   blocked by: #1"] : [])])]
         : ["Acceptance criteria:", ...criteria.flatMap((criterion, i) => [`${i + 1}. ${criterion}`, "   surface: web. capture: a still of the results screen."])]),
       "",
+      ...(!tickets && risks !== null ? [risks, ""] : []),
       "Human gate: none.",
       "",
     ].join("\n"));
@@ -102,6 +103,43 @@ test("a plan must list each criterion once, in any build order", (t) => {
   refused("brief", path, brief({ plan: [CRITERIA[0], "Add a leaderboard."] }),
     /missing criterion: A round with no score shows a dash[\s\S]*not a criterion: Add a leaderboard/);
   saved("brief", path, brief({ plan: [CRITERIA[1], CRITERIA[0]] }));
+});
+
+test("a build brief requires risks in the contract, or none with a reason", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const path = record(7, { risks: null });
+  refused("brief", path, brief(), /contract has no `Risks:`/);
+  const text = readFileSync(path, "utf8");
+  writeFileSync(path, `${text}\n## Build report\nRisks: none: later report.\n`);
+  refused("brief", path, brief(), /contract has no `Risks:`/);
+  for (const risks of ["Risks: none", "Risks: none:   ", "Risks:"]) {
+    refused("brief", record(7, { risks }), brief(), /Risks/);
+  }
+  saved("brief", record(7), brief());
+});
+
+test("risk plans follow the criteria and every risk has one proof, with at most six risks", (t) => {
+  const { record, refused, saved } = runRecords(t);
+  const risks = [
+    ["A correction updates the saved score.", "test: save and read through the score store."],
+    ["A Release restart keeps the score.", "drive: save on a phone, restart Release and read it back."],
+    ["The real service accepts the score.", "accepted: the service has no sandbox for this request."],
+  ];
+  const riskList = (entries) => ["Risks:", ...entries.flatMap(([risk, proof], i) => [`${i + 1}. ${risk}`, `   ${proof}`])].join("\n");
+  const path = record(7, { risks: riskList(risks) });
+  refused("brief", path, brief(), /missing risk: A correction/);
+  refused("brief", path, brief({ plan: [risks[0][0], ...CRITERIA, ...risks.slice(1).map(([risk]) => risk)] }), /criteria before risks/);
+  refused("brief", path, brief({ plan: [...CRITERIA, ...risks.map(([risk]) => risk), risks[0][0]] }), /listed twice/);
+  const plan = [...CRITERIA, ...risks.map(([risk]) => risk)];
+  for (const proof of ["", "test:", "test: store.\n   drive: phone.", "later: after launch."]) {
+    const malformed = record(7, { risks: riskList([[risks[0][0], proof], ...risks.slice(1)]) });
+    refused("brief", malformed, brief({ plan }), /one.*test:.*drive:.*accepted:/);
+  }
+  const tooMany = Array.from({ length: 7 }, (_, i) => [`Risk ${i + 1}.`, "test: public score store."]);
+  refused("brief", record(7, { risks: riskList(tooMany) }), brief({ plan: [...CRITERIA, ...tooMany.map(([risk]) => risk)] }), /at most six risks/);
+  const six = tooMany.slice(0, 6);
+  saved("brief", record(8, { risks: riskList(six) }), brief({ plan: [...CRITERIA, ...six.map(([risk]) => risk)], signOff: "🎲 Six chances accounted for" }));
+  saved("brief", record(7, { risks: riskList(risks) }), brief({ plan }));
 });
 
 test("a plan quotes a criterion word for word, even one that names a local path or localhost", (t) => {

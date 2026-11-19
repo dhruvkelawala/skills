@@ -54,8 +54,20 @@ function briefProblems(lines, record) {
   else if (sentences(about) > 2) problems.push(`\`What it's about:\` has ${sentences(about)} sentences; keep it to one or two`);
 
   const plan = planSteps(lines);
+  const risks = tickets.length ? { entries: [], problems: [] } : risksOf(record);
+  problems.push(...risks.problems);
   if (!plan.length) problems.push(`the brief has no plan: list each ${shape.step} under \`Plan:\` as a numbered step`);
-  else problems.push(...planMismatch(plan, tickets.length ? tickets : criteriaOf(record), shape.step));
+  else if (tickets.length) problems.push(...planMismatch(plan, tickets, shape.step));
+  else {
+    const criteria = criteriaOf(record);
+    const riskSteps = risks.entries.map(({ text }) => text);
+    const isRisk = (step) => riskSteps.some((risk) => normalize(risk) === normalize(step));
+    problems.push(...planMismatch(plan.filter((step) => !isRisk(step)), criteria, "criterion"));
+    if (riskSteps.length) problems.push(...planMismatch(plan.filter(isRisk), riskSteps, "risk"));
+    if (plan.slice(0, criteria.length).some(isRisk)) {
+      problems.push("the plan lists criteria before risks");
+    }
+  }
 
   const lane = shape.lanes.length > 1 ? `<${shape.lanes.join(" | ")}>` : shape.lanes[0];
   const stacked = lines.find((line) => line.startsWith("Stacked on:"));
@@ -176,7 +188,7 @@ function stackedOnMismatch(value, record) {
 }
 
 function criteriaOf(record) {
-  const lines = record.split("\n");
+  const lines = contractOf(record).split("\n");
   const from = lines.findIndex((line) => /^Acceptance criteria:\s*$/.test(line));
   if (from < 0) return [];
   const criteria = [];
@@ -186,6 +198,37 @@ function criteriaOf(record) {
     else if (line.trim() && !/^\s/.test(line)) break;
   }
   return criteria;
+}
+
+function contractOf(record) {
+  return record.split(/^## Contract[ \t]*$/m)[1]?.split(/^## /m)[0] ?? "";
+}
+
+function risksOf(record) {
+  const lines = contractOf(record).split("\n");
+  const from = lines.findIndex((line) => /^Risks:/.test(line));
+  const entries = [];
+  const problems = [];
+  if (from < 0) return { entries, problems: ["the contract has no `Risks:` list or `Risks: none` with a reason"] };
+  const none = lines[from].match(/^Risks:\s*none\b(.*)$/);
+  if (none) {
+    if (!none[1].replace(/^[\s:,.—-]+/, "").trim()) problems.push("`Risks: none` needs a reason");
+    return { entries, problems };
+  }
+  if (lines[from].trim() !== "Risks:") problems.push("use `Risks:` with a numbered list, or `Risks: none` with a reason");
+  for (const line of lines.slice(from + 1)) {
+    const entry = line.match(/^\d+\.\s+(.+)$/);
+    if (entry) entries.push({ text: entry[1], proofs: [] });
+    else if (line.trim() && !/^\s/.test(line)) break;
+    else if (line.trim() && entries.length) entries.at(-1).proofs.push(line.trim());
+  }
+  if (!entries.length || entries.length > 6) problems.push("`Risks:` lists one to at most six risks");
+  for (const { text, proofs } of entries) {
+    if (proofs.length !== 1 || !/^(test|drive|accepted):\s*\S/.test(proofs[0])) {
+      problems.push(`risk needs exactly one indented test:, drive: or accepted: proof: ${text}`);
+    }
+  }
+  return { entries, problems };
 }
 
 function savedMessages(text) {
