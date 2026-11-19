@@ -6,7 +6,8 @@ import { basename, dirname, join } from 'node:path';
 const CHUNK = 4 * 1024 * 1024;
 const counter = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
 
-// Every transcript under the home directory's Claude and Codex folders modified since `since`.
+// Every transcript under the home directory's Claude and Codex folders modified since `since`, oldest first.
+// A resumed or forked session copies earlier history into a newer file, so creation order decides who made a request.
 export async function transcripts(home, since) {
   const found = [];
   for (const name of await readdir(home).catch(() => [])) {
@@ -17,10 +18,10 @@ export async function transcripts(home, since) {
       if (!relative.endsWith('.jsonl')) continue;
       const path = join(root, relative);
       const info = await stat(path).catch(() => null);
-      if (info?.isFile() && info.mtimeMs >= since) found.push({ runtime, path, size: info.size, mtime: info.mtimeMs, ino: info.ino });
+      if (info?.isFile() && info.mtimeMs >= since) found.push({ runtime, path, size: info.size, mtime: info.mtimeMs, born: info.birthtimeMs, ino: info.ino });
     }
   }
-  return found;
+  return found.sort((a, b) => a.born - b.born || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 // The session a transcript records, from its path and first row. A native subagent names its parent session.
