@@ -8,6 +8,7 @@ Prove behavior through the runnable command or API and retain a sanitized transc
 | --- | --- | --- | --- | --- |
 | Metadata CLI and provider hook | `instrumentation/cli.mjs` | `node instrumentation/cli.mjs status` | CLI commands and generated project hooks | JSON status, exact command and sanitized result |
 | Langfuse ingestion, reads and predicates | `instrumentation/pilot/` | [isolated startup](instrumentation/pilot/README.md) | repository probes through real HTTP APIs | sanitized seed/read/replay/outage JSON and webhook receipts |
+| General thread capture | `instrumentation/threads/` | `T3_THREADS_CONFIG=<private> node instrumentation/threads/cli.mjs status` | `pass`, `backfill`, `recount`, `report` against the thread project | pass JSON with counts and timing, recount-versus-backend comparison as counts and hashes only, query output with thread IDs hashed |
 | issue-to-pr workflow | `skills/issue-to-pr/` | owning T3 build thread with opt-in config | existing pipeline and `scripts/observe.mjs` | real lifecycle markers, run-record owner/head and backend readback |
 | Outside research workflow | installed research skill | T3 research child with project hook | installed skill and `instrumentation/external.mjs` | artifact hash, source references, actual revision and live readback |
 | Existing skill scripts | `skills/*/scripts`, `scripts` | documented Node command | each script's CLI | trimmed terminal transcript when behavior changes |
