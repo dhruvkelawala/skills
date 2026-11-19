@@ -20,7 +20,7 @@ function runRecords(t) {
   const dir = mkdtempSync(join(tmpdir(), "issue-to-pr-messages-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // A spec's record lists `tickets` where a build's lists criteria; a ticket's record names its `pr`.
-  const record = (issue, { predecessor, criteria = CRITERIA, risks = "Risks: none: only score copy changes.", tickets, specMode = "stack", pr, head, guide } = {}) => {
+  const record = (issue, { predecessor, criteria = CRITERIA, risks = "Risks: none: only score copy changes.", contractHeading = true, tickets, specMode = "stack", pr, head, guide } = {}) => {
     const path = join(dir, `${issue}.md`);
     writeFileSync(path, [
       `issue: https://github.com/o/r/issues/${issue}`,
@@ -32,7 +32,7 @@ function runRecords(t) {
       `pr: ${pr ? `https://github.com/o/r/pull/${pr}` : "none"}`,
       ...(guide ? [`guide: ${guide}`] : []),
       "",
-      "## Contract",
+      ...(contractHeading ? ["## Contract"] : []),
       "",
       ...(tickets
         ? ["Tickets:", ...tickets.flatMap((ticket, i) => [`${i + 1}. ${ticket}`, ...(i ? ["   blocked by: #1"] : [])])]
@@ -112,9 +112,10 @@ test("a build brief requires risks in the contract, or none with a reason", (t) 
   const text = readFileSync(path, "utf8");
   writeFileSync(path, `${text}\n## Build report\nRisks: none: later report.\n`);
   refused("brief", path, brief(), /contract has no `Risks:`/);
-  for (const risks of ["Risks: none", "Risks: none:   ", "Risks:"]) {
-    refused("brief", record(7, { risks }), brief(), /Risks/);
+  for (const [risks, problem] of [["Risks: none", /needs a reason/], ["Risks: none:   ", /needs a reason/], ["Risks:", /one to at most six risks/]]) {
+    refused("brief", record(7, { risks }), brief(), problem);
   }
+  saved("brief", record(8, { contractHeading: false }), brief({ signOff: "📝 A heading stays optional" }));
   saved("brief", record(7), brief());
 });
 

@@ -207,7 +207,7 @@ function criteriaOf(record) {
 }
 
 function contractOf(record) {
-  return record.split(/^## Contract[ \t]*$/m)[1]?.split(/^## /m)[0] ?? "";
+  return record.split(/^## Contract[ \t]*$/m)[1]?.split(/^## /m)[0] ?? record.split(/^## /m)[0];
 }
 
 function risksOf(record) {
