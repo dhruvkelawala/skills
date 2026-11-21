@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a PR or a stack, or the current project's review queue in one sitting, one PR at a time. It owns the review queue, and /pr-review queue starts at its top. /code-review and an independent second opinion find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, asks what to review next or for the review queue, or asks to walk their own open PRs.
+description: Review a PR or a stack, or the current project's review queue in one sitting, one PR at a time. It owns the review queue, and /pr-review queue starts at its top. /code-review and an independent second opinion find the problems first while T3 writes the tour in the PR's Guide tab; the agent then explains the PR in an intro and a wrap-up with a suggested verdict, and posts one review only on the user's word. Use when the user invokes /pr-review, asks to review, walk through or test a PR, a stack or a diff before approving, asks what to review next or for the review queue, or asks to review their own open PRs or PRs by an author.
 compatibility: Requires git and gh.
 ---
 
@@ -8,7 +8,7 @@ compatibility: Requires git and gh.
 
 The reviewers find the problems, and you explain them. On every PR, `/code-review` and an independent second opinion read the change before you write about it. Prefer the other model family for that opinion, with [model-policy](../model-policy/SKILL.md) keeping reviews on the available family during an outage or rate limit. You read everything too, implementation included, and sort what they found. T3 writes the tour as the PR's review guide, which the user reads in the PR panel's Guide tab with each stop's lines in place, and your message in chat is the intro and the wrap-up. The user decides, and nothing reaches GitHub until they say so.
 
-Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue [--mine]]`.
+Invoke as `/pr-review [<PR> | <PR in a stack> | <base>..<head> | queue [--mine | --author <login>]]`. "Review PRs by <author>" starts `queue --author <login>` directly.
 
 For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch/references/github-api.md). Keep using the queue script for its ordering and selection rules.
 
@@ -20,6 +20,7 @@ For GitHub calls, use GraphQL or REST within the shared [API limits](../pr-watch
 | `<base>..<head>` | The changes in that range |
 | `queue` | A sitting over the current project's queue, from its top |
 | `queue --mine` | A sitting over the user's own open PRs in the current project |
+| `queue --author <login>` | A sitting over that author's ready PRs, including PRs without a review request |
 
 ## The queue
 
@@ -27,13 +28,15 @@ The queue is every open PR waiting on the user's review. `node <this skill's fol
 
 - **In the queue:** PRs that ask for the user's review, and PRs the user reviewed before that have moved since. Drafts, the user's own PRs and archived repositories stay out.
 - **With `--mine`:** the user's own open PRs instead, every one of them, in the same order and with the same entries. Drafts and archived repositories still stay out.
+- **With `--author <login>`:** that author's open, ready PRs instead, regardless of review requests or earlier reviews. It can name the user too. Drafts and archived repositories stay out; use either `--mine` or `--author`.
+- **With `--ready-since <ISO timestamp>`:** only PRs with a GitHub `ready_for_review` event at or after that timestamp that are still open and ready. This finds newly ready PRs without a review request. It accepts the same repository and author selectors, excludes the user's PRs by default, and adds `readyAt` to each entry. Use a timestamp with a timezone, such as `2026-11-18T09:00:00Z`. With `--repo`, it reads the current open PRs directly; without it, GitHub search first narrows candidates by update date.
 - **The order:** return visits first, then stack bottoms (PRs that don't sit on another open PR), then the PR that unblocks the most (the open PRs stacked on it), then the smallest.
 
 Each entry has `repo`, `number`, `url`, `title`, `author`, `base`, `head`, `size`, `files`, `returnVisit`, `stackBottom` and `unblocks`.
 
-A **sitting** is `/pr-review queue`, over the current project's queue, or `/pr-review queue --mine`, over the user's own open PRs there. It runs in one thread, with no time cap.
+A **sitting** walks the selected queue in one thread, with no time cap. At the start of every review session, record its UTC start timestamp and the repository and author selectors. Keep the PRs and heads reviewed during the session for the closing refresh in Report.
 
-1. Read the queue with `--repo` set to the current checkout's repository, from `gh api repos/{owner}/{repo} --jq .full_name`, and with `--mine` for `queue --mine`. When it is empty, say so in one line and stop.
+1. Read the queue with `--repo` set to the current checkout's repository, from `gh api repos/{owner}/{repo} --jq .full_name`, and with the requested `--mine` or `--author` selector. When it is empty, run Report's closing refresh before saying the session is done.
 2. Walk it from the top, one PR at a time, until the user says `stop` or the queue runs out.
 3. The user doesn't see the script's output, so the first PR's review opens with the queue: one table in the queue's order, with a row per PR giving the PR (repository and number), title, author, size, and whether it is a return visit or sits on another PR.
 
@@ -67,33 +70,40 @@ If `refs/pr-review/<n>-seen` exists and differs from the head, the user has seen
 
 ## 2. Prep
 
-Prep comes before the PR's review (step 3), on every PR. A PR whose prep record (item 7) is already written for its current head, by background prep (step 3) or by another skill, is prepped, and its reviewers have reported: start no reviewer, check its guide as item 6 does, then go to step 3.
+Prep comes before the PR's review (step 3), on every PR. A prep record (item 7) is complete only when it contains completed Standards, Spec and second-opinion reports for the current head. If complete, start no reviewer, check its guide as item 6 does, and complete item 3's presentation check if it is missing for this head, then go to step 3. Otherwise run prep below, retaining completed reports for this head and starting the missing reviews.
 
-1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it.
+1. **Start the guide.** It takes a few minutes, so start it first. Read it with `read_pull_request_guide`, and call `write_pull_request_guides` unless it is already written for the PR's head. A guide written for an older head is `stale` after any push, a rebase included, and is written again. For a stack or a sitting, name every PR in scope that needs a guide in one call (up to 20), so each one is written before the walk reaches it. T3 writes it on the model its own settings name, and the models file has no job for it. When the guide tools are unavailable or require a T3 thread credential, mark the PR as having no guide and use the chat tour.
 2. Start both reviewers at once, from the PR's review checkout. Each runs on its job in the models file, `models.json` in the real directory that holds this skill's folder (`cd -P <this skill's folder>/.. && pwd`):
-   - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job.
-   - **The second opinion,** on the `second-opinion` job, preferably from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS` from the review checkout.
+   Compare the PR author's login with `gh api user --jq .login`. On someone else's PR, include this scope in every reviewer brief, including `/code-review`'s Standards and Spec children: "Standards = only this repo's checked-in instructions and docs plus the spec; ignore personal/global files such as `~/.claude/CLAUDE.md`, `~/.agents`, and memory, even if already in context." Set `$REVIEW_SCOPE` to that text for the second opinion, or to an empty string on the user's own PR.
+
+   - **`/code-review`.** Load and follow `/code-review refs/pr-review/<n>-base`, with the PR body and the issue it closes as the spec. Run its Standards and Spec reviewers as `delegate_task` children on the `reviewers` job when T3 delegation is available. Otherwise use the local route below.
+   - **The second opinion,** on the `second-opinion` job, preferably from the other model family than this thread's. Resolve `$AUTOREVIEW`, the engine and `$ENGINE_FLAGS` as [apr](../apr/SKILL.md) step 1 does, then run `"$AUTOREVIEW" --mode branch --base <base SHA> --engine <engine> $ENGINE_FLAGS --prompt "$REVIEW_SCOPE"` from the review checkout.
+
+   **Local reviewers.** When `delegate_task` is unavailable, the session is outside a T3 thread, or delegation fails with a thread/credential error such as `thread_credential_required`, start fresh local `Agent` subagents for Standards and Spec in parallel in the foreground, using the `reviewers` job's model. Resolve the local `Agent.model` alias from that entry. This is the default route in that case; start it without asking the user. Give each the same `/code-review` brief, pinned base and head, review checkout, spec, and repo-scope rule. Include the full smell baseline in the Standards brief. Keep completed reports if only one axis needs replacement, and stop any still-running attempt before replacing it. The second opinion remains required. If local subagents cannot run, record the missing reports and leave prep incomplete.
 
    When a job's model can't run, apply model-policy and its `ifUnavailable` on the available family, retaining fresh reviewer contexts. Record the fallback and coverage limit. If neither family can complete a required review, report that gap without claiming prep complete.
 3. While they run, read the whole diff, the PR body, the issue it closes, the CI state, the approvals and the `**Door:**` line. Lockfiles, generated files, snapshots and pure renames (`R100` in `git diff -M --name-status`) carry no design. Compare what the body claims with what it proves: a claimed behaviour backed only by tests is "tests only". For an agent-written PR, note the commits made after the PR opened and the files they touched.
-4. Once both reviewers have reported, check each finding against the code at the head, then sort it: a P0 or P1, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
+
+   **Presentation.** When a PR changes what people see, including Slack messages, cards, buttons or app UI, open and inspect the PR's evidence screenshots for the changed states. Judge the presentation yourself: hierarchy, wording, spacing, density and action clarity. Standards, Spec and the second opinion cover code and requirements; their reports do not establish that the result looks good. Record the images opened, which changed states they cover, any known capture revision and your visual findings in the prep record. Identify missing, unreadable or stale evidence and request current screenshots or suggest `try`; keep approval conditional until the changed presentation has been inspected.
+
+4. Once Standards, Spec and the second opinion have all reported, check each finding against the code at the head, then sort it: a correctness bug, a design finding, a question for the author, or a style or smell note. Keep the priority the reviewer gave. For a confirmed P2 correctness bug, check the production path and any feature flag's current state to establish whether it goes live at merge. Record the evidence in the prep record. When the code shows a finding is wrong, keep it for the wrap-up with your reason.
 5. When the PR needs the verifier (step 3), start it now.
-6. Check the guide with `read_pull_request_guide`. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
-7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported with their actual models and any fallback reason, and each finding with its reviewer, priority, `file:line` and how you sorted it. A return visit reads it.
+6. Check the guide with `read_pull_request_guide`, unless item 1 already established there is no guide. While its run is `Running`, wait a minute and read it again. It is ready when it is written for the PR's head. The PR has no guide when guides are off (`write_pull_request_guides` fails), its run is `Failed`, or it is still running after about ten minutes. Then step 3 writes the tour in chat.
+7. Write the prep record, `$HOME/.agent/pr-review/<repo>/<n>.md`: the head, the patch ID from `git diff refs/pr-review/<n>-base...refs/pr-review/<n>-head | git patch-id --stable`, which reviewers reported with their actual models and any fallback reason, and each finding with its reviewer, priority, `file:line` and how you sorted it. For local reviewers, record `local Agent`, each axis's model, and why T3 delegation was unavailable. A return visit reads it.
 
 For a stack, start with one table, from the bottom: order, PR, title, author, size, risk, state (CI, approvals, verdict) and minutes. Risk is high when a design change touches authority, data, money or a production switch. For a stack of more than about five PRs, offer `/eli25` for an overview page before the walk.
 
-**Complete when** both reviewers have reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide.
+**Complete when** Standards, Spec and the second opinion have all reported on the PR's head, you have read every changed file, every finding is sorted and in the prep record, and the guide is written for the head or the PR has no guide. For user-facing changes, record the presentation assessment or its evidence gap too. Until then, report the pending prep without a suggested verdict. A single-pass review by this thread never substitutes for either axis.
 
 ## 3. Walk one PR at a time
 
 Send each PR's review as one message: the intro, then the wrap-up. In a sitting, the first one opens with the queue table. The tour is the guide, so chat lists no stops and no file links. When the PR has no guide (step 2), the chat tour goes between the intro and the wrap-up.
 
-**The next PR's prep runs while the user reads.** In a sitting or a stack, when the walk reaches a PR, start the next PR's prep in the background, unless its prep record is already written for its head:
+**The next PR's prep runs while the user reads.** In a sitting or a stack, when the walk reaches a PR, start the next PR's prep in the background, unless its prep record is complete for its head as step 2 defines:
 
 - Give it to one `delegate_task` child, async, on the `teammate-prep` job in the models file for someone else's PR, or on the thread's model for the user's own. When the job's model can't run, do what its `ifUnavailable` says.
 - Its task names the PR's URL and head. The child loads this skill, runs step 1 and prep for that PR only (step 2, or step 4's for a return visit), the reviewers included, and adds a draft of the review message to the prep record. It sends the user nothing, posts nothing, and leaves the `seen` ref alone.
-- On `next`, wait for the child if it is still running, then start the next PR from its prep record, and from its draft when it has one. When it failed, prep the PR yourself.
+- On `next`, wait for the child if it is still running, then start the next PR from its completed prep record, and from its draft when it has one. When it failed or its record is incomplete, finish prep yourself.
 - A background prep still running at `stop` finishes on its own, and its record lets the next sitting start that PR without rerunning its reviewers.
 
 **Intro.**
@@ -101,7 +111,8 @@ Send each PR's review as one message: the intro, then the wrap-up. In a sitting,
 1. The PR link, `https://github.com/<owner>/<repo>/pull/<n>`, first. In T3 it opens the PR panel beside the thread. Then say that the tour is in that panel's Guide tab or, when the PR has no guide, why the tour is in chat.
 2. What the PR is and why, in a short paragraph of plain English, with one real example that uses real names and values.
 3. One extra line only when something changes how you review: red CI, a claim backed by tests only, a one-way door or no `**Door:**` line, or review churn on an agent-written PR.
-4. When the PR changes something a user sees or does and shows no recording of it, only tests, one line suggesting `try`.
+   When local reviewers ran, include one line naming their route, actual model and the T3 failure reason.
+4. For user-facing changes, give your presentation judgment from the opened screenshots in one or two sentences, naming the evidence and the concrete strengths or problems. Put it here in the intro, before any suggested verdict. When presentation evidence is missing, unreadable or stale, say what remains unassessed and suggest current screenshots or `try`.
 
 When the change can't be followed from the intro and the diff, such as a new subsystem, a flow across several parts or a PR over about 2,000 changed lines, follow the message with an `/eli25` page.
 
@@ -128,14 +139,18 @@ Each stop is one numbered item: the file and lines, the name the lines define (a
 
 **Wrap-up.**
 
-1. **Findings.** The reviewers' P0 and P1 findings and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer, and its file and line. A finding you think is wrong stays here with your reason.
-2. **Questions for the author.** What neither the reviewers nor the code could settle.
+1. **Findings.** The reviewers' P0 and P1 findings, confirmed P2 correctness bugs that go live at merge, and their design findings, such as a wrong owner, a missing seam, more parts than the job needs, or a promise the code does not keep. Give each its priority, its reviewer, and its file and line. A finding you think is wrong stays here with your reason.
+2. **Questions.** Ask the author about facts neither the reviewers nor the code could settle. For an ADR, contract or product decision only Dhruv can make, ask Dhruv and give the suggested verdict for each possible answer in this same message, with its reason. Write one conditional verdict per line beside the question, once prep's reviewer completion gate passes. Keep the decision open until Dhruv answers.
 3. **Verifier.** Its result, when it ran.
-4. **Suggested verdict.** One line with the reason. Choose one of:
+4. **Suggested verdict.** Only after the prep completion gate in step 2 passes, one line with the reason, or refer to the conditional verdict lines beside an unresolved Dhruv-only question. Choose one of:
    - approve
    - approve with "please fix before <flag> is enabled", for features shipped behind a switch
-   - request changes, only for a P0 or P1, or a change to production authority
+   - request changes, for a P0 or P1, a change to production authority, or a confirmed P2 correctness bug that goes live at merge because no feature flag guards it or its flag is already enabled. State that go-live reason in the verdict line, for example "request changes: P2 loses the saved selection on refresh; this path has no feature flag and ships at merge."
+
+   A P2 style note or missing test alone does not qualify. For a P2 behind a flag confirmed off, use "please fix before <flag> is enabled". When its state is unknown, name that uncertainty and ask the author rather than assume the bug is live.
 5. One line that counts the style and smell notes, such as "4 style and smell notes; say `what else` to see them".
+
+**Verdict options.** Before offering alternatives, separate "Fixable in this PR" from "Needs a separate issue" and name what belongs in each. Give each option on its own line, with its action, scope, verdict and reason. Keep conditional verdicts beside their decision question. Filing a separate issue does not clear a merge-blocking finding.
 
 Keep the intro and the wrap-up under about 300 words together, not counting the queue table.
 
@@ -147,8 +162,10 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 | Word | What you do |
 | --- | --- |
-| `next` or `approve` | Record the decision, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR from its background prep. Nothing is posted. |
-| "post", "approve and post" or "request changes and post" | Post the review as in step 5, then do the same as `next` |
+| `next` | Record progress, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR from its background prep. |
+| `approve` or `request changes`, with or without "and post" | Record the verdict and follow step 5's confirmation and posting flow. After posting, do the same as `next`. |
+| `post` | Follow step 5 to confirm and post a COMMENT review, then do the same as `next`. |
+| `draft it` or `don't post` | Keep the review unposted, even when the message also names a verdict. Show the draft and wait. |
 | `what else` | List the style and smell notes that were only counted |
 | `verify` | Run the verifier on this PR and add its result to the wrap-up |
 | `how` | Explain one part in full with `/how`, or the whole change with `/explain-diff` |
@@ -168,10 +185,10 @@ Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 ## 4. Return visits
 
-When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Then start and check its guide as prep's items 1 and 6 do. A pure rebase needs a new guide too.
+When a PR's head has moved since `refs/pr-review/<n>-seen`, move its review checkout to the new head as in step 1, and read its prep record. Then start and check its guide as prep's items 1 and 6 do. A pure rebase needs a new guide too. Carry forward a presentation assessment only when its screenshots still cover the changed UI; otherwise repeat prep's item 3 check, including after a pure rebase.
 
 1. **Your earlier comments.** Open with one status line on what the user said last time, from the ledger and their comments on GitHub: how many are fixed, answered or still open, with a link to each open one.
-2. **A pure rebase.** Compute the patch ID as prep does. When it matches the record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour.
+2. **A pure rebase.** Compute the patch ID as prep does. When it matches a completed prep record's, the branch was only rebased: say so in one line, skip both reviewers, and keep the earlier findings as they stand. In chat, that line is the whole tour. Complete any missing reviews in a partial record as step 2 requires before giving a verdict.
 3. **A real change** reruns both reviewers on the new head, over the whole PR, as in step 2. Show only the new findings, and mark each earlier one fixed or still open. Say what changed since the user last looked: `git range-diff <old base>..<seen> <base>..<head>` when the branch was also rebased, otherwise `git diff <seen>..<head>`. A chat tour covers only those changes. Then the wrap-up, as in step 3.
 4. Update the prep record to the new head.
 
@@ -190,11 +207,14 @@ What happens next depends on whose PR it is:
 - **The user's own PR** (the PR author equals `gh api user --jq .login`). Each item becomes a fix for the agent that owns the branch, or for you when they ask. Nothing is posted.
 - **Someone else's PR.** Draft one review in the user's voice: a short body that opens with pr-watch's [label](../pr-watch/SKILL.md#the-label), the verifier's result when it ran, and inline comments anchored on added lines.
   - Write like the user: short and direct, with "Nit:", "Non-blocking:" and "Please fix before X is enabled" where they fit.
-  - Show the draft, and post it only on the user's word for this PR: "post" sends it as COMMENT, "approve and post" as APPROVE, and "request changes and post" as REQUEST_CHANGES, through `gh api repos/<owner>/<repo>/pulls/<n>/reviews` with `commit_id` set to the reviewed head. Check the body first with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`.
+  - In Dhruv's sessions, `approve` means record and post APPROVE, and `request changes` means record and post REQUEST_CHANGES. "And post" is optional; `post` alone sends COMMENT. `draft it` or `don't post` overrides posting intent. Other sessions follow their user's posting convention.
+  - Check the draft with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`. Show the exact review, inline comments, PR and verdict in the host's usual confirmation card. In OpenBot use `openbot.ask_ui` with Send, Edit and Keep draft buttons. After Send, post that review once through `gh api repos/<owner>/<repo>/pulls/<n>/reviews`, with `commit_id` set to the reviewed head. Edit revises the draft and presents it again; Keep draft, cancellation or a declined confirmation leaves it unposted. A recorded verdict alone does not mean a review was posted. Report the posted review URL only after GitHub confirms it.
 
 **Complete when** every ledger item is fixed, posted, or dropped by the user.
 
 ## Report
+
+Before ending any session, including an initially empty queue, an exhausted queue or `stop`, re-run the queue with its original repository and author selectors. Then run it again with those selectors and `--ready-since <session-start>`. Combine and deduplicate by repository and PR number; leave out heads already reviewed in this session. Offer the remaining PR links, naming any that became ready during the session. Keep the refreshed queue in its normal order. A user who said `stop` gets the offer only; start no new prep or review. If a refresh fails, report that the closing queue could not be checked.
 
 First remove the review checkouts of PRs that were approved, merged or closed: `git worktree remove "$HOME/.agent/pr-review/<repo>/<n>"`. Keep the checkout of a PR still waiting on changes, for the return visit.
 
