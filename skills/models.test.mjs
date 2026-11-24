@@ -13,6 +13,13 @@ test("Codex builds use the high-effort independent verifier and retain the revie
   assert.equal(jobs.reviewers.use.model, "claude-opus-5-5");
 });
 
+test("council includes Neon High on Antigravity alongside Claude and Codex members", () => {
+  assert.deepEqual(
+    jobs.council.members.find((m) => m.name === "Neon"),
+    { name: "Neon", driver: "antigravity", model: "gemini-4-neon", effort: "high" },
+  );
+});
+
 test("skill jobs continue on the thread's family when their preferred family is unavailable", () => {
   for (const [name, job] of Object.entries(jobs)) {
     assert.equal(job.ifUnavailable, job.members ? "skip" : "thread", name);
