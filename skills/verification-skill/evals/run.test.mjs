@@ -159,7 +159,7 @@ test("Codex is the default, with isolated homes, linked sign-in, configured mode
   assert.equal(new Set(demo.agents.map((a) => a.home)).size, 2);
   for (const a of demo.agents) {
     assert.equal(a.linkedAuth, true);
-    assert.equal(a.model, "gpt-6.1-sol");
+    assert.equal(a.model, "gpt-6.2-sol");
     assert.equal(a.effort, 'model_reasoning_effort="xhigh"');
     assert.ok(a.skills.includes(join("verification-skill", "SKILL.md")));
   }
