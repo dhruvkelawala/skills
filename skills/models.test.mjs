@@ -15,6 +15,14 @@ test("Codex builds use the high-effort independent verifier and retain the revie
 
 test("council includes Neon High on Antigravity alongside Claude and Codex members", () => {
   assert.deepEqual(
+    jobs.council.members.find((m) => m.name === "Sol"),
+    { name: "Sol", driver: "codex", model: "gpt-6.2-sol", effort: "xhigh" },
+  );
+  assert.deepEqual(
+    jobs.council.members.find((m) => m.name === "Astra"),
+    { name: "Astra", driver: "codex", model: "gpt-6.2-astra", effort: "xhigh" },
+  );
+  assert.deepEqual(
     jobs.council.members.find((m) => m.name === "Neon"),
     { name: "Neon", driver: "antigravity", model: "gemini-4-neon", effort: "high" },
   );
