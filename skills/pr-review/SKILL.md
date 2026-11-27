@@ -158,12 +158,14 @@ Keep the intro and the wrap-up under about 300 words together, not counting the 
 
 Write a code reference as plain text, the file and line in backticks such as `src/runtime/reminders/store.ts:88`, never as a link. A local path doesn't open on a phone, and a GitHub link leaves T3.
 
+**One PR at a time.** In a session with several PRs, review them one by one: never put the reviews of several PRs into one message or a batch table unless the user asks for one. In OpenBot, end each PR with a verdict card (`openbot.ask_ui`) with the buttons Approve and post, Approve, Request changes and post, and Next. Approve and post, and Request changes and post, post that verdict's review straight away with no second confirmation card; Approve records the verdict and posts nothing; Next does what `next` does. Typed words below work the same way.
+
 Show progress with each PR ("3 of 6"), then wait for the user's word:
 
 | Word | What you do |
 | --- | --- |
 | `next` | Record progress, run `git update-ref refs/pr-review/<n>-seen <head>`, and start the next PR from its background prep. |
-| `approve` or `request changes`, with or without "and post" | Record the verdict and follow step 5's confirmation and posting flow. After posting, do the same as `next`. |
+| `approve` or `request changes`, with or without "and post" | Record the verdict and post it as step 5 describes, with no second confirmation card. After posting, do the same as `next`. |
 | `post` | Follow step 5 to confirm and post a COMMENT review, then do the same as `next`. |
 | `draft it` or `don't post` | Keep the review unposted, even when the message also names a verdict. Show the draft and wait. |
 | `what else` | List the style and smell notes that were only counted |
@@ -208,7 +210,8 @@ What happens next depends on whose PR it is:
 - **Someone else's PR.** Draft one review in the user's voice: a short body that opens with pr-watch's [label](../pr-watch/SKILL.md#the-label), the verifier's result when it ran, and inline comments anchored on added lines.
   - Write like the user: short and direct, with "Nit:", "Non-blocking:" and "Please fix before X is enabled" where they fit.
   - In Dhruv's sessions, `approve` means record and post APPROVE, and `request changes` means record and post REQUEST_CHANGES. "And post" is optional; `post` alone sends COMMENT. `draft it` or `don't post` overrides posting intent. Other sessions follow their user's posting convention.
-  - Check the draft with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`. Show the exact review, inline comments, PR and verdict in the host's usual confirmation card. In OpenBot use `openbot.ask_ui` with Send, Edit and Keep draft buttons. After Send, post that review once through `gh api repos/<owner>/<repo>/pulls/<n>/reviews`, with `commit_id` set to the reviewed head. Edit revises the draft and presents it again; Keep draft, cancellation or a declined confirmation leaves it unposted. A recorded verdict alone does not mean a review was posted. Report the posted review URL only after GitHub confirms it.
+  - **A verdict approves the verdict only.** Before posting, check the review body and inline comments for any decision, policy, commitment or question in Dhruv's name that he has not already stated himself in this session or on the PR (for example "strip private and Slack Connect quotes until this is settled"). When there is any, show him that exact text and get his OK or his edit before posting, even after "and post" or a verdict button. Otherwise word it as the reviewer's question to the author, or leave it out.
+  - Check the draft with `node <this skill's folder>/../pr-watch/scripts/held.mjs check --body-file <file>`. When the user has already given a posting verdict (`approve` or `request changes` in Dhruv's sessions, "and post", or a verdict card's posting button), post it now without a further confirmation card. Otherwise show the exact review, inline comments, PR and verdict in the host's usual confirmation card. In OpenBot use `openbot.ask_ui` with Send, Edit and Keep draft buttons. After Send, post that review once through `gh api repos/<owner>/<repo>/pulls/<n>/reviews`, with `commit_id` set to the reviewed head. Edit revises the draft and presents it again; Keep draft, cancellation or a declined confirmation leaves it unposted. A recorded verdict alone does not mean a review was posted. Report the posted review URL only after GitHub confirms it.
 
 **Complete when** every ledger item is fixed, posted, or dropped by the user.
 
