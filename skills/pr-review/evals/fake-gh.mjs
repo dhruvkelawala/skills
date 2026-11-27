@@ -148,6 +148,7 @@ function api(path) {
   if (route === `repos/${OWNER}/${REPO}/issues/${ISSUE}`) return print({ number: ISSUE, title: ISSUE_TITLE, body: ISSUE_BODY, state: "open", user: { login: AUTHOR } });
   if (route === `repos/${OWNER}/${REPO}/pulls` && method === "GET") return printList(prs.map(restPr));
   if (route === `repos/${OWNER}/${REPO}/issues/${ISSUE}/comments` || (prs.includes(n) && route === `repos/${OWNER}/${REPO}/issues/${n}/comments`)) return printList([]);
+  if (prs.includes(n) && route === `repos/${OWNER}/${REPO}/issues/${n}/timeline`) return printList([]);
   if (route.startsWith(`repos/${OWNER}/${REPO}/commits/`) && route.endsWith("/check-runs")) return print({ total_count: 1, check_runs: [{ name: "test", status: "completed", conclusion: "success" }] });
   if (!prs.includes(n)) fail(`fake gh: api ${method} ${route} is not modelled`);
   if (route === pr) return print(restPr(n));
@@ -187,7 +188,7 @@ else if (group === "issue" && command === "view" && Number(String(positionals[2]
   if (has("--json")) print(prs.map((n) => pick(prJson(n), flag("--json"))));
   else process.stdout.write(prs.map((n) => `${n}\t${PRS[n].title}\t${PRS[n].branch}\tOPEN\n`).join(""));
 } else if (group === "search" && command === "prs" && flag("--state") === "open") {
-  const hits = flag("--review-requested") === "@me" ? prs : flag("--reviewed-by") === "@me" ? prs.filter((n) => reviewsOf(n).length) : null;
+  const hits = flag("--review-requested") === "@me" || flag("--updated") || flag("--author") === AUTHOR ? prs : flag("--reviewed-by") === "@me" ? prs.filter((n) => reviewsOf(n).length) : null;
   if (!hits) fail(`fake gh: ${args.join(" ")} is not modelled`);
   print(hits.map((n) => (has("--json") ? pick(searchHit(n), flag("--json")) : searchHit(n))));
 } else fail(`fake gh: ${args.join(" ")} is not modelled`);
